@@ -30,7 +30,12 @@ dist-ssr
 
 # Database
 test.db
+test.db.bak
+*.db
 
 # Python cache
 __pycache__/
 *.pyc
+
+# Miscellaneous
+$null
