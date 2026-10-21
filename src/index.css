@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+body,
+html,
+* {
+  font-family: 'Calibri', 'Candara', 'Segoe UI', sans-serif !important;
+}
+
+body {
+  background: var(--tg-theme-secondary-bg-color, white);
+  padding: 0;
+  margin: 0;
+}
