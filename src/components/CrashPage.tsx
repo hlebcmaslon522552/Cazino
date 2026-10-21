@@ -25,13 +25,6 @@ type Phase = 'setup' | 'playing' | 'crashed' | 'won';
    =================================================================== */
 
 const MIN_BET = 0.1;
-const TICK_MS = 150;          // такт роста множителя (150ms)
-const CHART_W = 820;
-const CHART_H = 420;
-const CANDLE_SEC = 0.6;       // длительность одной свечи
-const CANDLE_W = 150;         // ширина тела свечи
-const VIEW_SEC = 2.4;         // сколько секунд истории видно (~4 свечи, чтобы не накладывались)
-const WICK_W = 30;            // толщина фитиля
 
 /* ===================================================================
    Страница «Crash»
@@ -41,7 +34,7 @@ export function CrashPage({ onBack, onToast }: Props) {
   const [phase, setPhase] = useState<Phase>('setup');
   const [betAmount, setBetAmount] = useState('0.1');
   const [multiplier, setMultiplier] = useState(1);
-  const [isGameStarted, setIsGameStarted] = useState(false);
+  const [, setIsGameStarted] = useState(false);
   const [rugPulled, setRugPulled] = useState(false);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [autoCashout, setAutoCashout] = useState(false);

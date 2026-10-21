@@ -20,8 +20,6 @@ interface HeaderProps {
  */
 export function Header({ refreshVersion = 0, onNavigate }: HeaderProps) {
   const [balanceTon, setBalanceTon] = useState(0);
-  const [balanceStars, setBalanceStars] = useState(0);
-  const [inventoryCount, setInventoryCount] = useState(0);
   const { initData } = useTelegram();
 
   useEffect(() => {
@@ -31,8 +29,6 @@ export function Header({ refreshVersion = 0, onNavigate }: HeaderProps) {
       .then((data) => {
         if (cancelled) return;
         setBalanceTon(data.balance_ton);
-        setBalanceStars(data.balance_stars);
-        setInventoryCount(data.inventory_count);
       })
       .catch((err) => {
         console.error('Header: fetchUserData error', err);

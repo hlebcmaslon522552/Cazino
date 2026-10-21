@@ -9,12 +9,6 @@ interface Props {
 
 const TOTAL_SECTORS = 1000;
 
-function calcWinChance(bet: number, floor: number, marketFee = 0.15, casinoFee = 0.05): number {
-  if (floor <= 0) return 0;
-  const payout = bet * (1 - marketFee - casinoFee);
-  return Math.min(Math.max(payout / floor, 0), 0.95);
-}
-
 function Wheel({ winSectors, totalSectors }: { winSectors: number; totalSectors: number }) {
   const cx = 150, cy = 150, r = 140;
   const paths = [];

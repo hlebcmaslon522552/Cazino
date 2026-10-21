@@ -32,8 +32,8 @@ export function ProfilePage({ onNavigate }: Props) {
     Promise.all([fetchUserData(initData), fetchInventory(initData)])
       .then(([userData, inventory]) => {
         if (cancelled) return;
-        setBalanceTon(userData.balance_ton);
-        setBalanceStars(userData.balance_stars);
+        setBalanceTon((userData as any).balance_ton ?? 0);
+        setBalanceStars((userData as any).balance_stars ?? 0);
         setItems(inventory);
         setLoading(false);
       })

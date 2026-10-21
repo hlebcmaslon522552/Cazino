@@ -48,13 +48,13 @@ export async function fetchInventory(initData: string): Promise<InventoryItem[]>
   }
 }
 
-export async function topUpTon(initData: string, amount: number): Promise<boolean> {
+export async function topUpTon(_initData: string, amount: number): Promise<boolean> {
   // ЗАГЛУШКА
   console.log('topUpTon', amount);
   return new Promise((resolve) => setTimeout(() => resolve(true), 500));
 }
 
-export async function topUpStars(initData: string, amount: number): Promise<boolean> {
+export async function topUpStars(_initData: string, amount: number): Promise<boolean> {
   console.log('topUpStars', amount);
   return new Promise((resolve) => setTimeout(() => resolve(true), 500));
 }
@@ -120,11 +120,11 @@ export async function withdrawNft(itemId: number, initData: string): Promise<boo
 }
 let mockBalance = 15.0; // Стартовый баланс (15 TON)
 
-export async function getBalance(initData: string): Promise<number> {
+export async function getBalance(_initData: string): Promise<number> {
   return mockBalance;
 }
 
-export async function updateBalance(initData: string, amount: number): Promise<number> {
+export async function updateBalance(_initData: string, amount: number): Promise<number> {
   mockBalance += amount;
   return mockBalance;
 }

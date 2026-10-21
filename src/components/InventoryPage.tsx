@@ -3,7 +3,7 @@ import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
-import { sellNft, withdrawNft, fetchInventory, getFloorPrice } from '../api';
+import { sellNft, withdrawNft, getFloorPrice } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 
