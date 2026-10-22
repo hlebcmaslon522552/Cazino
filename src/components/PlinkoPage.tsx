@@ -122,7 +122,8 @@ export function PlinkoPage({ onBack, onToast }: Props) {
   /* ── Геометрия поля ────────────────────── */
   const slotsCfg = useMemo(() => buildSlots(rows), [rows]);
   const n = slotsCfg.length;
-  const spacingX = boardW > 0 ? boardW / (rows + 1) : 0;
+  // Ширина одного слота = ширина поля / количество слотов (n)
+  const slotW = boardW > 0 ? boardW / n : 0;
   const slotTop = TOP_OFFSET + rows * ROW_GAP + 2;
   const totalH = slotTop + SLOT_H + 14;
 
@@ -163,7 +164,9 @@ export function PlinkoPage({ onBack, onToast }: Props) {
   /* ── Завершение полёта шарика: фиксируем слот и начисляем выигрыш ── */
   const finishBall = (b: Ball) => {
     if (b.finished) return;
-    const idx = clamp(Math.floor(b.x / spacingX), 0, n - 1);
+    // Индекс слота из координаты X: floor(ball.x / ширина_слота)
+    // и зажимаем в допустимые пределы [0, n-1], чтобы не выйти за массив
+    const idx = clamp(Math.floor(b.x / slotW), 0, n - 1);
     b.slot = idx;
     b.multiplier = slotsCfg[idx].mult;
     b.finished = true;
@@ -193,9 +196,7 @@ export function PlinkoPage({ onBack, onToast }: Props) {
     let changed = false;
     const step = () => {
       const active = ballsRef.current;
-      if (active.length === 0) return;
 
-      let anyActive = false;
       const now = performance.now();
       changed = false;
 
@@ -204,7 +205,6 @@ export function PlinkoPage({ onBack, onToast }: Props) {
 
         // задержка появления: шарики запускаются по очереди
         if (now - b.startTime < b.spawnDelay) {
-          anyActive = true;
           continue;
         }
 
@@ -237,8 +237,6 @@ export function PlinkoPage({ onBack, onToast }: Props) {
         if (b.y > slotTop + SLOT_H * 0.25) {
           finishBall(b);
           changed = true;
-        } else {
-          anyActive = true;
         }
       }
 
@@ -257,15 +255,13 @@ export function PlinkoPage({ onBack, onToast }: Props) {
         setIsDropping(false);
       }
 
-      // планируем следующий кадр, только пока есть активные (летящие/ожидающие) шарики
-      if (anyActive) {
-        raf = requestAnimationFrame(step);
-      }
+      // Всегда планируем следующий кадр, чтобы цикл не останавливался
+      raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pegs, spacingX, slotTop, slotsCfg, n, boardW]);
+  }, [pegs, slotW, slotTop, slotsCfg, n, boardW]);
 
   /* ── Запуск партии ────────────────────── */
   const drop = () => {
@@ -477,9 +473,9 @@ export function PlinkoPage({ onBack, onToast }: Props) {
                 key={i}
                 style={{
                   position: 'absolute',
-                  left: i * spacingX,
+                  left: i * slotW,
                   top: slotTop,
-                  width: spacingX,
+                  width: slotW,
                   height: SLOT_H,
                   boxSizing: 'border-box',
                   background: s.color,

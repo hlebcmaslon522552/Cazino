@@ -2,49 +2,49 @@
   {
     "id": 1,
     "name": "Plush Pepe",
-    "image": "https://nft.fragment.com/gift/plushpepe-1.webp",
+    "image": "/nft_images/plush_pepe.webp",
     "floor": 5.0
   },
   {
     "id": 2,
     "name": "Hex Pot",
-    "image": "https://nft.fragment.com/gift/hexpot-1.webp",
+    "image": "/nft_images/astral_shard.webp",
     "floor": 7.5
   },
   {
     "id": 3,
     "name": "Loot Bag",
-    "image": "https://nft.fragment.com/gift/lootbag-1.webp",
+    "image": "/nft_images/loot_bag.webp",
     "floor": 10.0
   },
   {
     "id": 4,
     "name": "Jolly Chimp",
-    "image": "https://nft.fragment.com/gift/jollychimp-1.webp",
+    "image": "/nft_images/jolly_chimp.webp",
     "floor": 12.5
   },
   {
     "id": 5,
     "name": "Durov Cap",
-    "image": "https://nft.fragment.com/gift/durovcap-1.webp",
+    "image": "/nft_images/durovs_cap.webp",
     "floor": 15.0
   },
   {
     "id": 6,
     "name": "Astral Shard",
-    "image": "https://nft.fragment.com/gift/astralshard-1.webp",
+    "image": "/nft_images/astral_shard.webp",
     "floor": 17.5
   },
   {
     "id": 7,
     "name": "Vice Cream",
-    "image": "https://nft.fragment.com/gift/vicecream-1.webp",
+    "image": "/nft_images/vice_cream.webp",
     "floor": 20.0
   },
   {
     "id": 8,
     "name": "Swiss Watch",
-    "image": "https://nft.fragment.com/gift/swisswatch-1.webp",
+    "image": "/nft_images/swiss_watch.webp",
     "floor": 22.5
   }
 ]

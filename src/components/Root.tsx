@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppRoot } from '@telegram-apps/telegram-ui';
 import { useToast } from './ui/Toast';
 import { Header } from './Header';
@@ -19,6 +19,8 @@ import { ReferralPage } from './ReferralPage';
 import { AdminPage } from './AdminPage';
 import { BottomNav } from './BottomNav';
 import { publicUrl } from '../helpers/publicUrl';
+import { getBalance, updateBalance } from '../api';
+import { useTelegram } from '../hooks/useTelegram';
 
 export type Tab = 'home' | 'game' | 'profile' | 'inventory' | 'topup' | 'news' | 'referral' | 'admin';
 export type GameScreen = 'menu' | 'upgrader' | 'case' | 'mines' | 'pvp' | 'plinko' | 'crash';
@@ -28,6 +30,16 @@ export function Root() {
   const [gameScreen, setGameScreen] = useState<GameScreen>('menu');
   const [caseData, setCaseData] = useState<CaseItem | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
+const { initData } = useTelegram();
+  const [balance, setBalance] = useState(0);
+
+  useEffect(() => {
+    getBalance(initData).then(setBalance).catch(() => setBalance(0));
+  }, [initData]);
+
+  const handleUpdateBalance = (newBalance: number) => {
+    setBalance(newBalance);
+  };
   const { render: renderToast, show: showToast } = useToast();
 
   const handleTabChange = (tab: Tab) => {
@@ -76,9 +88,9 @@ export function Root() {
             ? <CasePage caseData={caseData} onBack={() => setGameScreen('menu')} onToast={showToast} />
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
-          {gameScreen === 'pvp' && <PvPPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
+          {gameScreen === 'pvp' && <PvPPage />}
           {gameScreen === 'plinko' && <PlinkoPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
-          {gameScreen === 'crash' && <CrashPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
+          {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
         </>
       )}
       {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} />}

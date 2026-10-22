@@ -59,7 +59,7 @@ function NftGridCard({
       }}
     >
       <img
-        src={nft.image}
+        src={publicUrl(nft.image.replace(/^\//, ''))}
         alt={nft.name}
         style={{
           width: '100%',
@@ -68,6 +68,7 @@ function NftGridCard({
           borderRadius: 8,
           minHeight: 0,
         }}
+        onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
       />
       <div
         style={{
@@ -235,7 +236,12 @@ function NftSlot({ label, nft, onClick }: { label: string; nft: Nft | null; onCl
         <div style={{ fontSize: 10, color: colors.textMuted, marginBottom: 6 }}>{label}</div>
         {nft ? (
           <>
-            <img src={nft.image} alt="" style={{ width: 54, height: 54, objectFit: 'contain', borderRadius: 8 }} />
+            <img
+                src={publicUrl(nft.image.replace(/^\//, ''))}
+                alt=""
+                style={{ width: 54, height: 54, objectFit: 'contain', borderRadius: 8 }}
+                onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
+              />
             <div style={{ fontSize: 12, fontWeight: 'bold', color: colors.text, marginTop: 4 }}>{nft.name}</div>
             <div style={{ fontSize: 11, color: colors.accent, marginTop: 2 }}>{nft.floor.toFixed(2)} TON</div>
           </>
@@ -544,9 +550,10 @@ return (
           </div>
           {result === 'win' && targetNft && (
             <img
-              src={targetNft.image}
+              src={publicUrl(targetNft.image.replace(/^\//, ''))}
               alt=""
               style={{ width: 90, height: 90, objectFit: 'contain', borderRadius: 12, border: '3px solid rgba(255,255,255,0.25)', marginTop: 14 }}
+              onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
             />
           )}
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 18 }}>Нажмите, чтобы закрыть</div>

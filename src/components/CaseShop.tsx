@@ -2,12 +2,6 @@ import { useState } from 'react';
 import { colors } from '../theme';
 import { Button } from './ui/Button';
 import { publicUrl } from '../helpers/publicUrl';
-import imgWood from '../../public/CaseWOOD.png';
-import imgCopper from '../../public/CASE_COPPER.png';
-import imgSilver from '../../public/Silver.png';
-import imgGold from '../../public/GOLD.png';
-import imgTest from '../../public/case-test.png';
-import imgFallback from '../../public/NO_Inventory.png';
 
 interface Props {
   onBack: () => void;
@@ -22,30 +16,37 @@ export interface CaseItem {
   image: string;
 }
 
-const cases: CaseItem[] = [
-  { id: "case_wood", name: "Деревянный кейс", image: imgWood, price: 1.00 },
-  { id: "case_copper", name: "Медный кейс", image: imgCopper, price: 5.00 },
-  { id: "case_silver", name: "Серебряный кейс", image: imgSilver, price: 10.00 },
-  { id: "case_gold", name: "Золотой кейс", image: imgGold, price: 50.00 },
-  { id: "case_test", name: "Тестовый кейс", image: imgTest, price: 100.00 }
+const CASES_RAW: { id: string; name: string; price: number; image: string }[] = [
+  { id: "case_wood", name: "Деревянный кейс", image: "CaseWOOD.png", price: 1.00 },
+  { id: "case_copper", name: "Медный кейс", image: "CASE_COPPER.png", price: 5.00 },
+  { id: "case_silver", name: "Серебряный кейс", image: "Silver.png", price: 10.00 },
+  { id: "case_gold", name: "Золотой кейс", image: "GOLD.png", price: 50.00 },
+  { id: "case_test", name: "Тестовый кейс", image: "case-test.png", price: 100.00 }
 ];
 
+const CASES_FALLBACK = publicUrl('NO_Inventory.png');
+
+function caseWithUrl(raw: typeof CASES_RAW[number]): CaseItem {
+  return { ...raw, image: publicUrl(raw.image) };
+}
+
 const handleImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-  e.currentTarget.src = imgFallback;
+  e.currentTarget.src = CASES_FALLBACK;
 };
 
 /* Загружаем кейсы, добавленные через админ-панель (localStorage) */
 function loadAllCases(): CaseItem[] {
+  const base = CASES_RAW.map(caseWithUrl);
   try {
     const raw = localStorage.getItem('custom_cases');
     if (raw) {
       const custom = JSON.parse(raw);
       if (Array.isArray(custom) && custom.length > 0) {
-        return [...cases, ...custom];
+        return [...base, ...custom];
       }
     }
   } catch { /* ignore */ }
-  return cases;
+  return base;
 }
 
 export function CaseShop({ onBack, onOpenCase }: Props) {

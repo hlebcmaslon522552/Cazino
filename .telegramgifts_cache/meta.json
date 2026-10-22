@@ -1,0 +1,16 @@
+{
+  "json": {
+    "https://raw.githubusercontent.com/ssamy2/TelegramGiftsAssests/main/Gifts_Details.json": {
+      "etag": "W/\"ddfa2105d2571f13bfca6ad48a64a8ba9310d65302a5bfee57ea545ac63a4c2b\"",
+      "fetched_at": 1792694792.0227456,
+      "last_modified": null,
+      "path": "adaa0eb1a5d07f98b1d285f07001e6bb0e4ce12d68897311121adc5de4e955d9.json"
+    },
+    "https://raw.githubusercontent.com/ssamy2/TelegramGiftsAssests/main/ss.json": {
+      "etag": "W/\"25b8e5d899ab0cdf3d04b4be31cbf7c21467d156372cae0b45f0b43a5dd56e16\"",
+      "fetched_at": 1792694792.4968803,
+      "last_modified": null,
+      "path": "ebb0f8ed27114343a9e6b652057b948c8e07fbc0174b3dac5d3c8fb4e71231b8.json"
+    }
+  }
+}

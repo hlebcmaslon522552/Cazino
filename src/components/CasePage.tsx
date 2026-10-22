@@ -188,8 +188,8 @@ return (
         }}
       >
         <img
-          src={displayImg}
-          onError={(e) => { e.currentTarget.src = '/NO_Inventory.png'; }}
+          src={publicUrl(displayImg.replace(/^\//, ''))}
+          onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
           alt="item"
           style={{
             width: 140,
@@ -274,8 +274,8 @@ return (
             }}
           >
             <img
-              src={wonItem.image}
-              onError={(e) => { e.currentTarget.src = '/NO_Inventory.png'; }}
+              src={publicUrl(wonItem.image.replace(/^\//, ''))}
+              onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
               alt={wonItem.name}
               style={{ width: 120, height: 120, objectFit: 'contain', marginBottom: 12 }}
             />
