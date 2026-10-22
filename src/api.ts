@@ -14,7 +14,7 @@ export interface InventoryItem {
   floor: number;
 }
 
-const API_URL = 'http://192.168.31.221:8000';
+const API_URL = 'https://jubilant-muscular-regulator.ngrok-free.dev';
 
 /**
  * fetchUserData — запрашивает баланс пользователя по user_id.
@@ -130,7 +130,7 @@ export async function updateBalance(_initData: string, amount: number): Promise<
 }
 
 export const getFloorPrice = async (collectionName: string) => {
-  const res = await fetch(`http://localhost:8000/api/get_floor?collection=${collectionName}`);
+  const res = await fetch(`${API_URL}/api/get_floor?collection=${collectionName}`);
   if (!res.ok) {
     throw new Error(`getFloorPrice failed: ${res.status} ${res.statusText}`);
   }
