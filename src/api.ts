@@ -21,7 +21,12 @@ const API_URL = 'https://jubilant-muscular-regulator.ngrok-free.dev';
  * Сервер возвращает { balance_ton: number }.
  */
 export const fetchUserData = async (userId: string) => {
-  const res = await fetch(`${API_URL}/api/balance?user_id=${userId}`);
+  const res = await fetch(`${API_URL}/api/balance?user_id=${userId}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    },
+  });
   if (!res.ok) {
     throw new Error(`fetchUserData failed: ${res.status} ${res.statusText}`);
   }
@@ -31,7 +36,11 @@ export const fetchUserData = async (userId: string) => {
 export async function fetchInventory(initData: string): Promise<InventoryItem[]> {
   try {
     const res = await fetch(`${API_URL}/api/inventory`, {
-      headers: { 'X-Init-Data': initData },
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        'X-Init-Data': initData,
+      },
     });
     if (!res.ok) {
       throw new Error(`fetchInventory failed: ${res.status} ${res.statusText}`);
@@ -94,6 +103,7 @@ export async function sellNft(itemId: number, initData: string): Promise<{ stars
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       'X-Init-Data': initData,
     },
     body: JSON.stringify({ item_id: itemId }),
@@ -109,6 +119,7 @@ export async function withdrawNft(itemId: number, initData: string): Promise<boo
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       'X-Init-Data': initData,
     },
     body: JSON.stringify({ item_id: itemId }),
@@ -130,7 +141,12 @@ export async function updateBalance(_initData: string, amount: number): Promise<
 }
 
 export const getFloorPrice = async (collectionName: string) => {
-  const res = await fetch(`${API_URL}/api/get_floor?collection=${collectionName}`);
+  const res = await fetch(`${API_URL}/api/get_floor?collection=${collectionName}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    },
+  });
   if (!res.ok) {
     throw new Error(`getFloorPrice failed: ${res.status} ${res.statusText}`);
   }
