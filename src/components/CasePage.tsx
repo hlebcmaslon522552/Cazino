@@ -9,6 +9,7 @@ interface Props {
   caseData: CaseItem;
   onBack: () => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onUpdateBalance: (amount: number) => void;
 }
 
 /* ─── Пул предметов ─── */
@@ -50,7 +51,7 @@ function rarityColor(rarity: string): string {
   }
 }
 
-export function CasePage({ caseData, onBack, onToast }: Props) {
+export function CasePage({ caseData, onBack, onToast, onUpdateBalance }: Props) {
   const { haptic, vibrate, user } = useTelegram();
 
   const [spinning, setSpinning] = useState(false);
@@ -100,11 +101,19 @@ export function CasePage({ caseData, onBack, onToast }: Props) {
       const data = await response.json();
 
       if (data.success === true) {
-        /* Сервер подтвердил — списываем цену локально */
+        /* Сервер подтвердил — списываем цену кейса «дельтой» */
+        onUpdateBalance(-caseData.price);
+
+        /* Списываем цену локально */
         const newBalance = fakeBalance - caseData.price;
         localStorage.setItem('fake_balance', newBalance.toFixed(4));
 
         const winner: DropItem = data.item;
+
+        /* Начисляем стоимость выпавшего предмета «дельтой» */
+        const itemWorth = winner.price || (winner as Partial<DropItem> & { floor?: number }).floor || 0;
+        onUpdateBalance(itemWorth);
+
         setWonItem(winner);
         setSpinning(true);
 

@@ -5,7 +5,6 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
-import { updateBalance } from '../api';
 
 /* ===================================================================
    Интерфейсы
@@ -96,7 +95,7 @@ function buildSlots(rows: number): SlotConfig[] {
    =================================================================== */
 
 export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props) {
-  const { haptic, initData } = useTelegram();
+  const { haptic } = useTelegram();
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardW, setBoardW] = useState(0);
@@ -181,8 +180,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
 
     const win = round2(b.bet * b.multiplier);
     const won = b.multiplier > 1;
-    onUpdateBalance(round2(balance + win));
-    updateBalance(initData, win).catch(() => {});
+    onUpdateBalance(win);
     if (won) {
       haptic('medium');
       setLastWin({ id: b.id, multiplier: b.multiplier, win, won: true });
@@ -282,8 +280,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     }
 
     haptic('medium');
-    setBalance((prev) => round2(prev - totalStake));
-    updateBalance(initData, -totalStake).catch(() => {});
+    onUpdateBalance(-totalStake);
     setIsDropping(true);
     isDroppingRef.current = true;
     ballsFinishedRef.current = 0;

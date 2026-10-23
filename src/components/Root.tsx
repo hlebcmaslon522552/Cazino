@@ -42,6 +42,26 @@ export function Root() {
   const handleUpdateBalance = (newBalance: number) => {
     setBalance(newBalance);
   };
+
+  /**
+   * Изменение баланса «дельтой»: применяет дельту относительно текущего значения
+   * и синхронизирует новый баланс с сервером (Ngrok).
+   * Функция не возвращает Promise — fetch уходит «в фоне», баланс обновляется мгновенно.
+   */
+  const changeBalance = (amount: number) => {
+    setBalance(prev => {
+      const newBalance = prev + amount;
+      // Отправляем на сервер (Ngrok)
+      const userId = String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id ?? '6267608438');
+      fetch(`${CONFIG.API_URL}/api/update_balance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({ user_id: userId, balance: newBalance }),
+      }).catch(console.error);
+
+      return newBalance;
+    });
+  };
   const { render: renderToast, show: showToast } = useToast();
 
   const handleTabChange = (tab: Tab) => {
@@ -88,12 +108,12 @@ export function Root() {
           {gameScreen === 'menu' && <GamePage onOpen={setGameScreen} />}
           {gameScreen === 'upgrader' && <UpgraderPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'case' && (caseData
-            ? <CasePage caseData={caseData} onBack={() => setGameScreen('menu')} onToast={showToast} />
+            ? <CasePage caseData={caseData} onBack={() => setGameScreen('menu')} onToast={showToast} onUpdateBalance={changeBalance} />
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'pvp' && <PvPPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
-          {gameScreen === 'plinko' && <PlinkoPage balance={balance} onUpdateBalance={handleUpdateBalance} onBack={() => setGameScreen('menu')} onToast={showToast} />}
-          {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
+          {gameScreen === 'plinko' && <PlinkoPage balance={balance} onUpdateBalance={changeBalance} onBack={() => setGameScreen('menu')} onToast={showToast} />}
+          {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={changeBalance} onToast={showToast} />}
         </>
       )}
       {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} />}

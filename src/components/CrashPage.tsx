@@ -46,7 +46,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     if (bet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
     if (bet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
 
-    onUpdateBalance(balance - bet);
+    onUpdateBalance(-bet);
     setMultiplier(1.00);
     setCrashPoint(generateCrashPoint());
     setHasCashedOut(false);
@@ -61,7 +61,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       const winAmount = bet * multiplier;
       setHasCashedOut(true);
       setCashedOutAt(multiplier);
-      onUpdateBalance(balance + winAmount);
+      onUpdateBalance(winAmount);
       onToast?.(`Вы забрали ${winAmount.toFixed(2)} TON по ${multiplier.toFixed(2)}x`, 'success');
     }
   };
