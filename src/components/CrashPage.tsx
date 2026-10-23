@@ -32,8 +32,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const startTimeRef = useRef<number>();
   const lastCandleTimeRef = useRef<number>(0);
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
-  const startGameRef = useRef(startGame);
-const generateCrashPoint = (): number => {
+  const generateCrashPoint = (): number => {
     const e = Math.pow(2, 32);
     const h = Math.floor(Math.random() * e);
     const houseEdge = 0.03;
@@ -43,7 +42,7 @@ const generateCrashPoint = (): number => {
     return point;
   };
 
-  const startGame = () => {
+  const startGame = React.useCallback(() => {
     if (bet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
     if (bet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
 
@@ -55,8 +54,7 @@ const generateCrashPoint = (): number => {
     setGameState('playing');
     startTimeRef.current = performance.now();
     lastCandleTimeRef.current = performance.now();
-  };
-  startGameRef.current = startGame;
+  }, [bet, balance, onUpdateBalance, onToast]);
 
   const cashOut = () => {
     if (gameState === 'playing' && !hasCashedOut) {
@@ -129,7 +127,7 @@ useEffect(() => {
       setCountdown(prev => {
         if (prev <= 1) {
           if (countdownRef.current) clearInterval(countdownRef.current);
-          startGameRef.current();
+          startGame();
           return 0;
         }
         return prev - 1;
