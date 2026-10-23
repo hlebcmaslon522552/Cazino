@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AppRoot } from '@telegram-apps/telegram-ui';
+import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import { useToast } from './ui/Toast';
 import { Header } from './Header';
 import { HomePage } from './HomePage';
@@ -19,8 +20,9 @@ import { ReferralPage } from './ReferralPage';
 import { AdminPage } from './AdminPage';
 import { BottomNav } from './BottomNav';
 import { publicUrl } from '../helpers/publicUrl';
-import { getBalance, updateBalance } from '../api';
+import { getBalance } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
+import { CONFIG } from '../config';
 
 export type Tab = 'home' | 'game' | 'profile' | 'inventory' | 'topup' | 'news' | 'referral' | 'admin';
 export type GameScreen = 'menu' | 'upgrader' | 'case' | 'mines' | 'pvp' | 'plinko' | 'crash';
@@ -29,8 +31,8 @@ export function Root() {
   const [activeTab, setActiveTab] = useState<Tab>('game');
   const [gameScreen, setGameScreen] = useState<GameScreen>('menu');
   const [caseData, setCaseData] = useState<CaseItem | null>(null);
-  const [refreshVersion, setRefreshVersion] = useState(0);
-const { initData } = useTelegram();
+  const [refreshVersion] = useState(0);
+  const { initData } = useTelegram();
   const [balance, setBalance] = useState(0);
 
   useEffect(() => {
@@ -61,19 +63,20 @@ const { initData } = useTelegram();
   };
 
   return (
-    <AppRoot
-      appearance="dark"
-      style={{
-        paddingBottom: '120px',
-        minHeight: '100vh',
-        backgroundImage: `url("${publicUrl('BackGrand.png')}")`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed',
-        // Полупрозрачный слой поверх фона, чтобы текст был читаемым
-        boxShadow: 'inset 0 0 0 2000px rgba(0,0,0,0.7)',
-      }}
-    >
+    <TonConnectUIProvider manifestUrl={`${CONFIG.APP_URL}/tonconnect-manifest.json`}>
+      <AppRoot
+        appearance="dark"
+        style={{
+          paddingBottom: '120px',
+          minHeight: '100vh',
+          backgroundImage: `url("${publicUrl('BackGrand.png')}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          // Полупрозрачный слой поверх фона, чтобы текст был читаемым
+          boxShadow: 'inset 0 0 0 2000px rgba(0,0,0,0.7)',
+        }}
+      >
       {renderToast}
 
       {/* Верхняя панель с балансом — видна на всех страницах */}
@@ -97,7 +100,14 @@ const { initData } = useTelegram();
       {activeTab === 'inventory' && (
         <InventoryPage onToast={showToast} onBalanceChange={refreshBalance} />
       )}
-      {activeTab === 'topup' && <TopUpPage onNavigate={handleTabChange} onToast={showToast} />}
+      {activeTab === 'topup' && (
+        <TopUpPage
+          onNavigate={handleTabChange}
+          onToast={showToast}
+          balance={balance}
+          onUpdateBalance={handleUpdateBalance}
+        />
+      )}
       {activeTab === 'news' && <NewsPage onBack={() => handleTabChange('profile')} />}
       {activeTab === 'referral' && (
         <ReferralPage onBack={() => handleTabChange('profile')} onToast={showToast} />
@@ -105,6 +115,7 @@ const { initData } = useTelegram();
       {activeTab === 'admin' && <AdminPage onBack={() => handleTabChange('profile')} />}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
-    </AppRoot>
+      </AppRoot>
+    </TonConnectUIProvider>
   );
 }

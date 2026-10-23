@@ -1,47 +1,62 @@
 import { useState } from 'react';
+import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react';
 import { colors, spacing } from '../theme';
 import { useTelegram } from '../hooks/useTelegram';
-import { topUpTon, topUpStars } from '../api';
+import { topUpStars } from '../api';
 import { publicUrl } from '../helpers/publicUrl';
+import { CONFIG } from '../config';
 
 interface Props {
   onNavigate?: (tab: any) => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  balance?: number;
+  onUpdateBalance?: (newBalance: number) => void;
 }
 
-export function TopUpPage({ onNavigate, onToast }: Props) {
+export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }: Props) {
   const [tab, setTab] = useState<'ton' | 'stars'>('ton');
-  const [tonAmount, setTonAmount] = useState('');
   const [starsAmount, setStarsAmount] = useState('');
   const { haptic, initData } = useTelegram();
 
-  /* ── Helpers ──────────────────────────────────── */
-  const getTonAmount = (): number => {
-    const val = parseFloat(tonAmount);
-    return isNaN(val) ? 0 : val;
-  };
+  /* ── TON Connect ──────────────────────────────── */
+  const [tonConnectUI] = useTonConnectUI();
+  const userAddress = useTonAddress();
 
+  /* ── Helpers ──────────────────────────────────── */
   const getStarsAmount = (): number => {
     const val = parseInt(starsAmount, 10);
     return isNaN(val) ? 0 : val;
   };
 
-  const isPayDisabled = (): boolean => {
-    if (tab === 'ton') return getTonAmount() < 0.1;
-    return getStarsAmount() < 50;
+  const isPayDisabled = (): boolean => getStarsAmount() < 50;
+
+  const handleTopUp = async () => {
+    if (!userAddress) {
+      tonConnectUI.openModal();
+      return;
+    }
+    try {
+      const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 60,
+        messages: [{
+          address: CONFIG.TON_WALLET, // Берем из конфига
+          amount: (CONFIG.TOP_UP_AMOUNT_TON * 1000000000).toString(),
+        }],
+      };
+      await tonConnectUI.sendTransaction(transaction);
+      onUpdateBalance?.(balance + CONFIG.TOP_UP_AMOUNT_TON); // Обновляем баланс
+      onToast('Баланс пополнен', 'success');
+    } catch (e) {
+      console.error(e);
+      onToast('Ошибка при пополнении', 'error');
+    }
   };
 
   const handlePay = async () => {
     haptic('medium');
-    const amount = tab === 'ton' ? getTonAmount() : getStarsAmount();
-
-    if (tab === 'ton') {
-      await topUpTon(initData, amount);
-      onToast(`Пополнение TON на ${amount.toFixed(2)}`, 'success');
-    } else {
-      await topUpStars(initData, amount);
-      onToast(`Пополнение Stars на ${amount}`, 'success');
-    }
+    const amount = getStarsAmount();
+    await topUpStars(initData, amount);
+    onToast(`Пополнение Stars на ${amount}`, 'success');
   };
 
   /* ── Render ────────────────────────────────────── */
@@ -112,31 +127,23 @@ export function TopUpPage({ onNavigate, onToast }: Props) {
         </div>
       </div>
 
-      {/* ── Tab: TON ──────────────────────────────── */}
+      {/* ── Tab: TON (через TON Connect) ───────────── */}
       {tab === 'ton' && (
         <div style={{ marginBottom: spacing.lg }}>
           <div style={{ fontSize: 14, color: colors.textMuted, marginBottom: 8 }}>
-            Введите сумму в TON (минимум 0.1)
+            Подключи кошелёк, чтобы пополнить баланс TON в один клик
           </div>
-          <input
-            type="number"
-            value={tonAmount}
-            onChange={(e) => setTonAmount(e.target.value)}
-            placeholder="0.1"
-            min={0.1}
-            step={0.1}
-            style={{
-              width: '100%',
-              padding: 16,
-              fontSize: 20,
-              background: '#111',
-              color: colors.text,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              marginTop: 8,
-              boxSizing: 'border-box',
-            }}
-          />
+          <button
+            onClick={handleTopUp}
+            className="w-full bg-blue-500 text-white p-4 rounded-xl font-bold"
+          >
+            {userAddress ? `Пополнить на ${CONFIG.TOP_UP_AMOUNT_TON} TON` : 'Подключить кошелек'}
+          </button>
+          {userAddress && (
+            <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 8, wordBreak: 'break-all' }}>
+              Кошелёк: {userAddress}
+            </div>
+          )}
         </div>
       )}
 
