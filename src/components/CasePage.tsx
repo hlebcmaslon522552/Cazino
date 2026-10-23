@@ -74,8 +74,8 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance }: Props) 
     if (spinning || loading) return;
 
     /* Проверка баланса */
-    const fakeBalance = parseFloat(localStorage.getItem('fake_balance') || '0');
-    if (fakeBalance < caseData.price) {
+    const balance = localStorage.getItem('fake_balance');
+    if (!balance || Number(balance) < Number(caseData.price)) {
       haptic('medium');
       onToast('❌ Недостаточно TON на балансе!', 'error');
       return;
@@ -105,7 +105,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance }: Props) 
         onUpdateBalance(-caseData.price);
 
         /* Списываем цену локально */
-        const newBalance = fakeBalance - caseData.price;
+        const newBalance = Number(balance) - caseData.price;
         localStorage.setItem('fake_balance', newBalance.toFixed(4));
 
         const winner: DropItem = data.item;
