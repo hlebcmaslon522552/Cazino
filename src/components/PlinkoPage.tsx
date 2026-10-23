@@ -76,7 +76,6 @@ const MULT_COLORS = [
   '#ef4444', '#d946ef', '#a855f7', '#7c3aed',
 ];
 
-const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** Строит конфигурацию слотов из заранее заданных массивов множителей. */
@@ -121,7 +120,8 @@ export function PlinkoPage({ onBack, onToast }: Props) {
 
   /* ── Геометрия поля ────────────────────── */
   const slotsCfg = useMemo(() => buildSlots(rows), [rows]);
-  const n = slotsCfg.length;
+  const multipliers = useMemo(() => slotsCfg.map(s => s.mult), [slotsCfg]);
+  const n = multipliers.length;
   // Ширина одного слота = ширина поля / количество слотов (n)
   const slotW = boardW > 0 ? boardW / n : 0;
   const slotTop = TOP_OFFSET + rows * ROW_GAP + 2;
@@ -164,15 +164,25 @@ export function PlinkoPage({ onBack, onToast }: Props) {
   /* ── Завершение полёта шарика: фиксируем слот и начисляем выигрыш ── */
   const finishBall = (b: Ball) => {
     if (b.finished) return;
-    // Индекс слота из координаты X: floor(ball.x / ширина_слота)
-    // и зажимаем в допустимые пределы [0, n-1], чтобы не выйти за массив
-    const idx = clamp(Math.floor(b.x / slotW), 0, n - 1);
-    b.slot = idx;
-    b.multiplier = slotsCfg[idx].mult;
+
+    const totalSlots = multipliers.length;
+    const slotWidth = boardW / totalSlots;
+    let slotIndex = Math.floor(b.x / slotWidth);
+
+    // Защита от вылета за пределы массива
+    if (slotIndex < 0) slotIndex = 0;
+    if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
+
+    const winMultiplier = multipliers[slotIndex];
+
+    b.slot = slotIndex;
+    b.multiplier = winMultiplier;
     b.finished = true;
     b.y = slotTop + SLOT_H / 2 - BALL_R; // шарик ложится на дно слота
     b.vy = 0;
     b.vx = 0;
+
+    console.log("Шарик упал в слот:", slotIndex, "Множитель:", winMultiplier);
 
     // считаем выполненный шарик
     ballsFinishedRef.current++;
