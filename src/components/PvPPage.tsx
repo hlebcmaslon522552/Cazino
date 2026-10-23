@@ -3,6 +3,44 @@ import { Coins, Play, Users, Clock, Plus } from 'lucide-react';
 
 const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+const PVP_STORAGE_KEY = 'pvp_lobby_state';
+
+interface LobbyState {
+  myStatus: 'idle' | 'waiting' | 'playing';
+  playersCount: number;
+  bet: number;
+}
+
+function saveLobbyState(state: LobbyState): void {
+  try {
+    localStorage.setItem(PVP_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
+
+function loadLobbyState(): LobbyState | null {
+  try {
+    const raw = localStorage.getItem(PVP_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.myStatus === 'string' && typeof parsed.playersCount === 'number' && typeof parsed.bet === 'number') {
+      return parsed as LobbyState;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function clearLobbyState(): void {
+  try {
+    localStorage.removeItem(PVP_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 interface PvPPageProps {
   balance: number;
   onUpdateBalance: (newBalance: number) => void;
@@ -20,7 +58,53 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
   const [bet, setBet] = useState(10);
 
   const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const statusRef = useRef(myStatus);
+  const playersRef = useRef(playersCount);
+  const betRef = useRef(bet);
+  const balanceRef = useRef(balance);
 
+  // Синхронизируем refs при каждом рендере
+  statusRef.current = myStatus;
+  playersRef.current = playersCount;
+  betRef.current = bet;
+  balanceRef.current = balance;
+
+  // Восстанавливаем состояние лобби при монтировании
+  useEffect(() => {
+    const saved = loadLobbyState();
+    if (saved && saved.myStatus === 'waiting') {
+      setMyStatus('waiting');
+      setPlayersCount(saved.playersCount);
+      setBet(saved.bet);
+    } else if (saved) {
+      // Если статус не 'waiting' — чистим мусор
+      clearLobbyState();
+    }
+  }, []);
+
+  // Синхронизируем с localStorage при изменении ключевых полей
+  useEffect(() => {
+    const state: LobbyState = { myStatus, playersCount, bet };
+    saveLobbyState(state);
+  }, [myStatus, playersCount, bet]);
+
+  // При размонтировании (переключение вкладки) — возвращаем ставку, если игрок один
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = undefined;
+      }
+      // Если игрок в ожидании и соперников меньше 2 — возвращаем ставку
+      if (statusRef.current === 'waiting' && playersRef.current < 2 && betRef.current > 0) {
+        onUpdateBalance(balanceRef.current + betRef.current);
+        onToast?.('Ставка возвращена, так как вы покинули лобби', 'info');
+      }
+      clearLobbyState();
+    };
+  }, []);
+
+  // Таймер запускается только когда playersCount >= 2
   useEffect(() => {
     if (playersCount >= 2 && !isSpinning && myStatus === 'waiting') {
       setTimer(15);
@@ -51,6 +135,8 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
     setTimeout(() => {
       setIsSpinning(false);
       setWinner({ id: 'me', name: 'Вы', color: COLORS[0] });
+      // Игра завершена — чистим localStorage, чтобы при возврате начать с чистого листа
+      clearLobbyState();
     }, 4000);
   };
 
@@ -93,6 +179,16 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
     });
   };
 
+  const returnToLobby = () => {
+    clearLobbyState();
+    setMyStatus('idle');
+    setPlayersCount(0);
+    setWinner(null);
+    setRotation(0);
+    setIsSpinning(false);
+    setTimer(15);
+  };
+
   const renderLobbyStatus = () => {
     if (myStatus === 'idle' && playersCount === 0) {
       return (
@@ -133,6 +229,12 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
         <h2 className="text-3xl font-black bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent italic">PVP АРЕНА</h2>
       </div>
 
+      {myStatus === 'idle' && playersCount > 0 && (
+        <div className="text-center py-2 mb-2 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+          <p className="text-yellow-400 text-sm font-bold">В лобби уже есть игроки! Присоединяйся!</p>
+        </div>
+      )}
+
       <div className="relative flex-1 flex items-center justify-center min-h-[300px]">
         <div className="absolute left-2 z-20 flex items-center justify-center" style={{ left: '10px' }}>
           <svg width="65" height="65" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.3))' }}>
@@ -164,7 +266,7 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
         </div>
       </div>
 
-      {winner && (
+      {winner && !isSpinning && (
         <div className="absolute top-1/3 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/80 backdrop-blur-md px-6 py-3 rounded-2xl border-2 z-30 animate-bounce"
           style={{ borderColor: winner.color }}>
           <p className="text-center text-sm text-gray-300">Победитель:</p>
@@ -214,12 +316,46 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
         </button>
       )}
 
+      {myStatus === 'waiting' && (
+        <button onClick={() => {
+          // Выход из лобби — возвращаем ставку
+          if (playersCount < 2) {
+            onUpdateBalance(balance + bet);
+            onToast?.('Вы вышли из лобби, ставка возвращена', 'info');
+          } else {
+            onToast?.('Игра уже началась, выход невозможен', 'error');
+            return;
+          }
+          clearLobbyState();
+          setMyStatus('idle');
+          setPlayersCount(0);
+          setWinner(null);
+          setRotation(0);
+          setIsSpinning(false);
+          setTimer(15);
+        }}
+          className="w-full mt-3 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700">
+          Выйти из лобби
+        </button>
+      )}
+
       {isSpinning && (
         <button disabled
           className="w-full mt-3 py-4 rounded-xl font-black text-xl flex items-center justify-center gap-2 bg-gray-700 text-gray-400 cursor-not-allowed">
           Крутится...
         </button>
       )}
+
+      {winner && !isSpinning && (
+        <button onClick={returnToLobby}
+          className="w-full mt-3 py-4 rounded-xl font-black text-xl flex items-center justify-center gap-2 transition-all active:scale-95 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]">
+          Играть снова
+        </button>
+      )}
     </div>
   );
 };
+
+
+
+

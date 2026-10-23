@@ -144,11 +144,11 @@ useEffect(() => {
   const isCrashed = gameState === 'crashed';
 
   const renderCandles = () => {
-    if (candles.length === 0) return null;
+    if (!candles || candles.length === 0) return null;
     
     const maxVal = Math.max(...candles.map(c => c.high), 1.1);
     const minVal = Math.min(...candles.map(c => c.low), 1.0);
-    const range = maxVal - minVal;
+    const range = maxVal - minVal || 1; // Защита от деления на 0
 
     const totalCandles = 6;
     const candleWidth = 100 / totalCandles; 
