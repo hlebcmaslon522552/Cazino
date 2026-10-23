@@ -91,7 +91,6 @@ export function CasePage({ caseData, onBack, onToast }: Props) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
         },
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
@@ -160,7 +159,30 @@ export function CasePage({ caseData, onBack, onToast }: Props) {
   };
 return (
     <div style={{ padding: spacing.md, color: colors.text, overflow: 'hidden' }}>
-      <Button variant="ghost" onClick={onBack} size="sm">← Назад</Button>
+      {/* ─── Кнопка "Назад" в левом верхнем углу ─── */}
+      <div
+        onClick={onBack}
+        style={{
+          position: 'fixed',
+          top: 12,
+          left: 12,
+          zIndex: 100,
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: '#fff',
+          fontSize: 20,
+          backdropFilter: 'blur(4px)',
+        }}
+        aria-label="Назад"
+      >
+        ←
+      </div>
 
       <h1 style={{ marginTop: spacing.md, marginBottom: 4 }}>🎁 {caseData.name}</h1>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>

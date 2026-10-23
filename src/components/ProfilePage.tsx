@@ -108,7 +108,7 @@ export function ProfilePage({ onNavigate }: Props) {
         {loading ? (
           <p style={{ color: colors.textMuted, textAlign: 'center', padding: 20 }}>Загрузка...</p>
         ) : items.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', padding: 20 }}>
             <img src={publicUrl('NO_Inventory.png')} alt="" style={{ width: 80, height: 80, marginBottom: 8, opacity: 0.6 }} />
             <div style={{ color: colors.textMuted, fontSize: 14 }}>Нет NFT</div>
           </div>

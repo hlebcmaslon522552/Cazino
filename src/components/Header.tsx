@@ -47,13 +47,13 @@ export function Header({ refreshVersion = 0, onNavigate }: HeaderProps) {
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        background: colors.bgCard,
+        background: '#1a1a2e',
         padding: '8px 16px',
-        margin: spacing.sm,
-        borderRadius: 12,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        borderBottom: '1px solid rgba(139, 92, 246, 0.5)',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
       }}
     >
       {/* Left: Logo */}
