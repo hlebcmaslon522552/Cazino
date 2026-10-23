@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TrendingUp, RefreshCw, Coins } from 'lucide-react';
+import { TrendingUp, RefreshCw, Coins, Clock } from 'lucide-react';
 
 interface CrashPageProps {
   balance: number;
@@ -26,10 +26,13 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   
   const [history, setHistory] = useState<number[]>([1.2, 5.4, 1.0, 14.2, 2.1, 1.8]);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [countdown, setCountdown] = useState<number>(30);
   
   const requestRef = useRef<number>();
   const startTimeRef = useRef<number>();
   const lastCandleTimeRef = useRef<number>(0);
+  const countdownRef = useRef<ReturnType<typeof setInterval>>();
+  const startGameRef = useRef(startGame);
 const generateCrashPoint = (): number => {
     const e = Math.pow(2, 32);
     const h = Math.floor(Math.random() * e);
@@ -53,6 +56,7 @@ const generateCrashPoint = (): number => {
     startTimeRef.current = performance.now();
     lastCandleTimeRef.current = performance.now();
   };
+  startGameRef.current = startGame;
 
   const cashOut = () => {
     if (gameState === 'playing' && !hasCashedOut) {
@@ -111,6 +115,31 @@ useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
   }, [gameState, crashPoint]);
+
+  // Countdown timer in waiting state
+  useEffect(() => {
+    if (gameState !== 'waiting') {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      return;
+    }
+
+    setCountdown(30);
+
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          startGameRef.current();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [gameState]);
 
   const isCrashed = gameState === 'crashed';
 
@@ -249,9 +278,15 @@ return (
         )}
 
         {gameState === 'waiting' && (
-          <button onClick={startGame} className="w-full bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-black text-xl py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-            <TrendingUp size={24} /> Играть
-          </button>
+          <>
+            <div className="flex items-center justify-center gap-2 mb-3 text-gray-400">
+              <Clock size={16} />
+              <span className="text-sm font-semibold">Следующая игра через {countdown}с</span>
+            </div>
+            <button onClick={startGame} className="w-full bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-black text-xl py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+              <TrendingUp size={24} /> Играть
+            </button>
+          </>
         )}
 
         {gameState === 'playing' && (

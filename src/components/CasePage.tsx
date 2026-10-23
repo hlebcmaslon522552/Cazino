@@ -89,7 +89,10 @@ export function CasePage({ caseData, onBack, onToast }: Props) {
       /* Запрос к серверу */
       const response = await fetch('http://localhost:8000/api/open_case', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
           case_price: caseData.price,
