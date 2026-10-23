@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useTonConnectUI, useTonAddress } from '@tonconnect/ui-react';
 import { colors, spacing } from '../theme';
 import { useTelegram } from '../hooks/useTelegram';
-import { topUpStars } from '../api';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 
@@ -16,7 +15,8 @@ interface Props {
 export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }: Props) {
   const [tab, setTab] = useState<'ton' | 'stars'>('ton');
   const [starsAmount, setStarsAmount] = useState('');
-  const { haptic, initData } = useTelegram();
+  const { haptic, initData, user } = useTelegram();
+  const userId = user?.id?.toString() || '6267608438';
 
   /* ── TON Connect ──────────────────────────────── */
   const [tonConnectUI] = useTonConnectUI();
@@ -55,8 +55,38 @@ export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }:
   const handlePay = async () => {
     haptic('medium');
     const amount = getStarsAmount();
-    await topUpStars(initData, amount);
-    onToast(`Пополнение Stars на ${amount}`, 'success');
+    try {
+      // Запрашиваем инвойс-ссылку у бэкенда
+      const res = await fetch(`${CONFIG.API_URL}/api/create_invoice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({ user_id: userId, amount }),
+      });
+      const data = await res.json();
+      if (!data.invoiceLink) {
+        onToast?.(data.error || 'Ошибка при создании инвойса', 'error');
+        return;
+      }
+      // Открываем окно оплаты Telegram
+      if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.openInvoice(data.invoiceLink, (status) => {
+          if (status === 'paid') {
+            onUpdateBalance?.(balance + amount * 0.01);
+            onToast?.('Баланс успешно пополнен!', 'success');
+          } else if (status === 'cancelled') {
+            onToast?.('Оплата отменена', 'error');
+          }
+        });
+      } else {
+        onToast?.('Telegram WebApp недоступен', 'error');
+      }
+    } catch (e) {
+      console.error(e);
+      onToast?.('Ошибка при оплате', 'error');
+    }
   };
 
   /* ── Render ────────────────────────────────────── */
