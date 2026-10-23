@@ -5,13 +5,15 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
-import { getBalance, updateBalance } from '../api';
+import { updateBalance } from '../api';
 
 /* ===================================================================
    Интерфейсы
    =================================================================== */
 
 interface Props {
+  balance: number;
+  onUpdateBalance: (newBalance: number) => void;
   onBack: () => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -93,7 +95,7 @@ function buildSlots(rows: number): SlotConfig[] {
    Страница «Плинко»
    =================================================================== */
 
-export function PlinkoPage({ onBack, onToast }: Props) {
+export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props) {
   const { haptic, initData } = useTelegram();
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -108,7 +110,6 @@ export function PlinkoPage({ onBack, onToast }: Props) {
   const [balls, setBalls] = useState<Ball[]>([]);
   const [isDropping, setIsDropping] = useState(false);
   const [lastWin, setLastWin] = useState<Result | null>(null);
-  const [balance, setBalance] = useState(15);
 
   const ballsRef = useRef<Ball[]>([]);
   const nextId = useRef(1);
@@ -139,15 +140,6 @@ export function PlinkoPage({ onBack, onToast }: Props) {
     }
     return list;
   }, [boardW, rows]);
-
-  // Загрузка баланса
-  useEffect(() => {
-    let cancelled = false;
-    getBalance(initData)
-      .then((b) => { if (!cancelled) setBalance(b); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [initData]);
 
   // Замер ширины поля
   useEffect(() => {
@@ -189,7 +181,7 @@ export function PlinkoPage({ onBack, onToast }: Props) {
 
     const win = round2(b.bet * b.multiplier);
     const won = b.multiplier > 1;
-    setBalance((prev) => round2(prev + win));
+    onUpdateBalance(round2(balance + win));
     updateBalance(initData, win).catch(() => {});
     if (won) {
       haptic('medium');

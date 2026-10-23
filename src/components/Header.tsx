@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { fetchUserData } from '../api';
-import { useTelegram } from '../hooks/useTelegram';
 import { colors, spacing } from '../theme';
 import { publicUrl } from '../helpers/publicUrl';
 
 interface HeaderProps {
+  /** Текущий баланс пользователя, приходит из родительского компонента (Root). */
+  balance: number;
   /**
    * Счётчик для принудительного обновления.
    * Увеличь на 1, когда нужно перезапросить данные (например, после продажи NFT).
@@ -14,32 +13,10 @@ interface HeaderProps {
 }
 
 /**
- * Верхняя панель с реальным балансом из API.
- * - Автоматически запрашивает данные в useEffect.
- * - При изменении refreshVersion (или initData) выполняет повторный запрос.
+ * Верхняя панель с балансом.
+ * Баланс приходит через пропсы из Root и обновляется автоматически при его изменении.
  */
-export function Header({ refreshVersion = 0, onNavigate }: HeaderProps) {
-  const [balanceTon, setBalanceTon] = useState(0);
-  const { initData } = useTelegram();
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetchUserData(initData)
-      .then((data) => {
-        if (cancelled) return;
-        setBalanceTon(data.balance_ton);
-      })
-      .catch((err) => {
-        console.error('Header: fetchUserData error', err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // Перезапрашиваем при изменении refreshVersion или initData
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshVersion, initData]);
+export function Header({ balance, refreshVersion = 0, onNavigate }: HeaderProps) {
 
   return (
     <div
@@ -68,7 +45,7 @@ export function Header({ refreshVersion = 0, onNavigate }: HeaderProps) {
       >
         <img src={publicUrl('TON.png')} alt="TON" style={{ width: 24, height: 24 }} />
         <span style={{ fontWeight: 'bold', fontSize: 15, color: colors.text }}>
-          {balanceTon.toFixed(4)}
+          {balance.toFixed(4)}
         </span>
       </div>
     </div>

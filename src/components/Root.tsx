@@ -77,7 +77,7 @@ const { initData } = useTelegram();
       {renderToast}
 
       {/* Верхняя панель с балансом — видна на всех страницах */}
-      <Header refreshVersion={refreshVersion} onNavigate={handleTabChange} />
+      <Header balance={balance} refreshVersion={refreshVersion} onNavigate={handleTabChange} />
 
       {activeTab === 'home' && <HomePage onNavigate={handleTabChange} />}
       {activeTab === 'game' && (
@@ -89,7 +89,7 @@ const { initData } = useTelegram();
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'pvp' && <PvPPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
-          {gameScreen === 'plinko' && <PlinkoPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
+          {gameScreen === 'plinko' && <PlinkoPage balance={balance} onUpdateBalance={handleUpdateBalance} onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
         </>
       )}
