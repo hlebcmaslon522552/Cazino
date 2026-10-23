@@ -54,10 +54,10 @@ const { initData } = useTelegram();
 
   /**
    * Вызывается после действий, которые меняют баланс (продажа NFT, пополнение и т.д.),
-   * чтобы Header перезапросил данные из API.
+   * чтобы перезапросить баланс из API и Header обновился автоматически.
    */
   const refreshBalance = () => {
-    setRefreshVersion((v) => v + 1);
+    getBalance(initData).then(setBalance).catch(() => {});
   };
 
   return (
