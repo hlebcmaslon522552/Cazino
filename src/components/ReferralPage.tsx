@@ -37,6 +37,22 @@ export function ReferralPage({ onBack, onToast }: Props) {
     }
   };
 
+  const handleShare = () => {
+    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    const userId = tgUser ? tgUser.id : '6267608438';
+    const botUsername = 'GAMERR_BOT';
+
+    const refLink = `https://t.me/${botUsername}?startapp=ref_${userId}`;
+    const shareText = `🎁 Открывай бесплатный кейс — каждые 24 часа!\n\nПолучи +20% к удаче на первое открытие по ссылке ниже 👇`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
+
+    if (window.Telegram?.WebApp) {
+      window.Telegram.WebApp.openTelegramLink(shareUrl);
+    } else {
+      window.open(shareUrl, '_blank');
+    }
+  };
+
   return (
     <div
       style={{
@@ -110,6 +126,22 @@ export function ReferralPage({ onBack, onToast }: Props) {
 
         <Button variant="primary" size="md" fullWidth onClick={handleCopy}>
           📋 Скопировать
+        </Button>
+
+        <div style={{ marginTop: spacing.md }} />
+
+        <img
+          src="/RefAd.png"
+          alt="Ref Ad"
+          className="w-full rounded-xl mb-4"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+          style={{ width: '100%', borderRadius: '12px', marginBottom: spacing.md }}
+        />
+
+        <Button variant="secondary" size="md" fullWidth onClick={handleShare}>
+          🤝 Пригласить
         </Button>
 
         {/* Статистика */}
