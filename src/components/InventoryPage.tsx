@@ -158,9 +158,8 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   // Если пусто
   if (items.length === 0) {
     return (
-      <div style={{ padding: spacing.md, color: colors.text }}>
-        <h1 style={{ marginTop: 0 }}>🎒 Инвентарь</h1>
-        <div style={{ textAlign: 'center', marginTop: 40 }}>
+      <div style={{ padding: spacing.md, color: colors.text, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop: 20 }}>
+        <div style={{ textAlign: 'center' }}>
           <img
             src={publicUrl('NO_Inventory.png')}
             alt="Нет предметов"

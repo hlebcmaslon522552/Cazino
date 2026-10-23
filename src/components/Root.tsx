@@ -88,7 +88,7 @@ const { initData } = useTelegram();
             ? <CasePage caseData={caseData} onBack={() => setGameScreen('menu')} onToast={showToast} />
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
-          {gameScreen === 'pvp' && <PvPPage />}
+          {gameScreen === 'pvp' && <PvPPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
           {gameScreen === 'plinko' && <PlinkoPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
         </>

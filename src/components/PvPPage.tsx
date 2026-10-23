@@ -1,9 +1,15 @@
 import { useState } from 'react';
-import { Coins, Play, Users } from 'lucide-react';
+import { Coins, Play, Users, TrendingUp } from 'lucide-react';
 
 const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
-export const PvPPage = () => {
+interface PvPPageProps {
+  balance: number;
+  onUpdateBalance: (newBalance: number) => void;
+  onToast?: (msg: string, type: 'success' | 'error' | 'info') => void;
+}
+
+export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => {
   // Тестовые данные (потом заменишь на реальных игроков с бэкенда)
   const [players, _setPlayers] = useState([
     { id: '1', name: 'Вы', bet: 15.0, color: COLORS[0], isMe: true, winChance: 0.3 },
@@ -14,6 +20,7 @@ export const PvPPage = () => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [winner, setWinner] = useState<any>(null);
   const [rotation, setRotation] = useState(0);
+  const [bet, setBet] = useState(10);
 
   const getWheelSectors = () => {
     let currentAngle = 0;
@@ -46,6 +53,24 @@ export const PvPPage = () => {
 
   const startGame = () => {
     if (isSpinning) return;
+
+    // Проверка баланса
+    if (balance <= 0) {
+      onToast?.('Недостаточно средств', 'error');
+      return;
+    }
+    if (bet > balance) {
+      onToast?.('Недостаточно средств', 'error');
+      return;
+    }
+    if (bet <= 0) {
+      onToast?.('Ставка должна быть больше 0', 'error');
+      return;
+    }
+
+    // Списываем ставку
+    onUpdateBalance(balance - bet);
+
     setIsSpinning(true);
     setWinner(null);
 
@@ -157,6 +182,34 @@ export const PvPPage = () => {
         </div>
       </div>
 
+      {/* ПОЛЕ СТАВКИ */}
+      <div className="mt-3 bg-[#1a1a2e] rounded-2xl p-3 border border-gray-800">
+        <div className="relative">
+          <input
+            type="number"
+            value={bet}
+            onChange={(e) => setBet(Number(e.target.value))}
+            className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-3 text-lg font-bold text-white focus:outline-none focus:border-purple-500 transition-colors pl-10"
+          />
+          <Coins className="absolute left-3 top-1/2 -translate-y-1/2 text-yellow-500" size={20} />
+        </div>
+        <div className="flex gap-2 mt-2">
+          {[5, 10, 25, 50].map(val => (
+            <button
+              key={val}
+              onClick={() => setBet(val)}
+              className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm transition-colors"
+            >
+              {val} TON
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 mt-2 text-sm text-gray-400">
+          <span>Баланс:</span>
+          <span className="text-yellow-500 font-bold">{balance.toFixed(2)} TON</span>
+        </div>
+      </div>
+
       {/* КНОПКА ВНИЗУ */}
       <button
         onClick={startGame}
@@ -169,7 +222,7 @@ export const PvPPage = () => {
       >
         {isSpinning ? 'Крутится...' : (
           <>
-            <Play size={24} /> Сделать ставку
+            <Play size={24} /> Войти в игру
           </>
         )}
       </button>
