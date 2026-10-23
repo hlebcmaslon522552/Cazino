@@ -66,8 +66,8 @@ const ROWS_OPTIONS = [8, 12, 16];
 const BALLS_OPTIONS = [1, 3, 5, 10, 30];
 
 /* Честные множители как в Stake. Симметричные массивы: центр → край  */
-const MULTIS_8  = [5.6, 2.1, 1.1, 1.0, 0.5, 1.0, 1.1, 2.1, 5.6];
-const MULTIS_12 = [10.0, 3.0, 1.6, 1.4, 1.1, 1.0, 0.5, 1.0, 1.1, 1.4, 1.6, 3.0, 10.0];
+const MULTIS_8  = [5.6, 2.1, 0.8, 0.5, 0.5, 0.5, 0.8, 2.1, 5.6];
+const MULTIS_12 = [10.0, 3.0, 1.6, 1.4, 0.8, 0.5, 0.5, 0.5, 0.8, 1.4, 1.6, 3.0, 10.0];
 const MULTIS_16 = [15.0, 5.0, 2.0, 1.6, 1.2, 1.0, 0.8, 0.5, 0.3, 0.5, 0.8, 1.0, 1.2, 1.6, 2.0, 5.0, 15.0];
 
 /* Цвета для групп множителей: низкие зелёные → средние жёлтые → высокие красные → легендарные */
@@ -231,11 +231,12 @@ export function PlinkoPage({ onBack, onToast }: Props) {
           const dy = b.y - p.y;
           const dist = Math.hypot(dx, dy);
           if (dist > 0.0001 && dist < COLLIDE_DIST) {
-            const overlap = COLLIDE_DIST - dist;
+            const overlap = (BALL_R + PEG_R) - dist;
             b.x += (dx / dist) * overlap;
             b.y += (dy / dist) * overlap;
-            b.vx += (dx / dist) * 0.5 + (Math.random() - 0.5) * 0.8;
-            b.vy *= 0.5;
+            const randomBounce = (Math.random() - 0.5) * 2;
+            b.vx = (dx / dist) * 2 + randomBounce;
+            b.vy = Math.abs(b.vy) * 0.5;
           }
         }
 
@@ -304,7 +305,7 @@ export function PlinkoPage({ onBack, onToast }: Props) {
         id: nextId.current++,
         x: boardW / 2,
         y: DROP_START_Y,
-        vx: 0,
+        vx: (Math.random() - 0.5) * 2,
         vy: 0,
         slot: null,
         multiplier: 0,
