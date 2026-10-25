@@ -6,6 +6,10 @@ import os
 import random
 import json
 import sqlite3
+import threading
+import time
+from datetime import datetime, timedelta
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -17,6 +21,36 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "test.db")
 
 # Активные игры в Mines (серверный анти-чит)
 active_mines_games = {}
+
+# ── Leaderboard / Prizes Config ─────────────────────────────────────
+LEADERBOARD_PRIZES = {
+    1: 500.0,
+    2: 250.0,
+    3: 100.0,
+    4: 75.0,
+    5: 50.0,
+    6: 40.0,
+    7: 30.0,
+    8: 25.0,
+    9: 20.0,
+    10: 15.0,
+    11: 10.0,
+    12: 8.0,
+    13: 6.0,
+    14: 4.0,
+    15: 2.0,
+}
+
+# Интервал сброса лидерборда (по умолчанию 7 дней)
+RESET_INTERVAL_DAYS = int(os.environ.get("LEADERBOARD_RESET_DAYS", 7))
+# Час дня, в который происходит сброс (0-23)
+RESET_HOUR = int(os.environ.get("LEADERBOARD_RESET_HOUR", 0))
+# Как часто проверять время сброса (в секундах)
+CHECK_INTERVAL_SEC = int(os.environ.get("LEADERBOARD_CHECK_INTERVAL", 3600))
+
+# ── Telegram Admin Notifications ────────────────────────────────────
+TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
+TG_ADMIN_CHAT_ID = os.environ.get("TG_ADMIN_CHAT_ID", "")
 
 
 def init_db():
@@ -42,6 +76,26 @@ def init_db():
             c.execute(col_def)
         except sqlite3.OperationalError:
             pass  # колонка уже существует
+    # Таблица депозитов (для лидерборда)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS deposits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            amount REAL NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            prize_paid INTEGER DEFAULT 0
+        )
+    """)
+    # Таблица конфигов (для хранения времени последнего сброса)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    # Инициализация времени последнего сброса (если нет — ставим сейчас)
+    c.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('last_reset', datetime('now'))")
+
     # Пользователь по умолчанию (id из браузера)
     c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
     conn.commit()
@@ -87,6 +141,167 @@ def pick_case_item():
         if roll <= cumulative:
             return item
     return CASE_POOL[-1]
+# ── Telegram Notification ──────────────────────────────────────────
+def send_telegram_notification(message: str):
+    """Отправляет сообщение админу в Telegram."""
+    if not TG_BOT_TOKEN or not TG_ADMIN_CHAT_ID:
+        print(f"[TG] Not configured, skipping notification. Message: {message}")
+        return False
+    try:
+        url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TG_ADMIN_CHAT_ID,
+            "text": message,
+            "parse_mode": "HTML",
+        }
+        resp = requests.post(url, json=payload, timeout=10)
+        if resp.status_code == 200:
+            print("[TG] Notification sent successfully")
+            return True
+        else:
+            print(f"[TG] Failed: {resp.status_code} {resp.text}")
+            return False
+    except Exception as e:
+        print(f"[TG] Error: {e}")
+        return False
+
+
+# ── Leaderboard Reset ──────────────────────────────────────────────
+def get_total_deposits_by_user():
+    """Возвращает топ-15 пользователей по сумме депозитов."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT user_id, SUM(amount) as total
+        FROM deposits
+        WHERE prize_paid = 0
+        GROUP BY user_id
+        ORDER BY total DESC
+        LIMIT 15
+    """)
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+
+def award_prizes(top_users: list) -> str:
+    """
+    Начисляет призы топ-15 пользователям.
+    Возвращает строку с отчетом для Telegram.
+    """
+    if not top_users:
+        return "Нет пользователей для награждения."
+
+    report_lines = ["🏆 <b>Топ обнулён! Призы выданы:</b>"]
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    for rank, (user_id, total_deposited) in enumerate(top_users, start=1):
+        prize = LEADERBOARD_PRIZES.get(rank, 0.0)
+        if prize <= 0:
+            continue
+
+        # Начисляем приз на баланс пользователя
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if row:
+            new_balance = row[0] + prize
+            c.execute("UPDATE users SET balance_ton = ? WHERE id = ?", (new_balance, user_id))
+        else:
+            # Создаём пользователя, если его нет
+            c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?)", (user_id, prize))
+
+        report_lines.append(
+            f"  {rank}. <code>{user_id}</code> — {prize} TON (депозит: {total_deposited:.2f} TON)"
+        )
+
+    # Очищаем таблицу депозитов
+    c.execute("DELETE FROM deposits")
+    conn.commit()
+    conn.close()
+
+    return "\n".join(report_lines)
+
+
+def should_reset_now() -> bool:
+    """
+    Проверяет, пора ли сбрасывать лидерборд.
+    Сброс происходит каждые RESET_INTERVAL_DAYS дней в RESET_HOUR часов.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT value FROM config WHERE key = 'last_reset'")
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        return False
+
+    last_reset_str = row[0]
+    try:
+        last_reset = datetime.strptime(last_reset_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return False
+
+    now = datetime.now()
+    next_reset = last_reset + timedelta(days=RESET_INTERVAL_DAYS)
+    next_reset = next_reset.replace(hour=RESET_HOUR, minute=0, second=0, microsecond=0)
+
+    # Если next_reset уже в прошлом — пора сбрасывать
+    return now >= next_reset
+
+
+def update_last_reset_time():
+    """Обновляет время последнего сброса на текущее."""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("UPDATE config SET value = ? WHERE key = 'last_reset'", (now_str,))
+    conn.commit()
+    conn.close()
+
+
+def check_and_reset_leaderboard():
+    """
+    Фоновая задача: проверяет каждые CHECK_INTERVAL_SEC секунд,
+    не пора ли сбросить лидерборд и выдать призы.
+    """
+    print(f"[Leaderboard] Фоновая задача запущена. "
+          f"Интервал сброса: {RESET_INTERVAL_DAYS} дн., "
+          f"час: {RESET_HOUR}:00, "
+          f"проверка каждые {CHECK_INTERVAL_SEC} сек.")
+
+    while True:
+        try:
+            if should_reset_now():
+                print("[Leaderboard] Время сброса! Начинаем...")
+
+                # 1. Получаем топ-15
+                top_users = get_total_deposits_by_user()
+
+                # 2. Выдаём призы и очищаем депозиты
+                report = award_prizes(top_users)
+                print(f"[Leaderboard] {report}")
+
+                # 3. Обновляем время последнего сброса
+                update_last_reset_time()
+
+                # 4. Уведомление админу
+                send_telegram_notification(report)
+
+                print("[Leaderboard] Сброс завершён успешно.")
+            else:
+                # Лёгкое логирование раз в сутки (каждый 24-й цикл при CHECK_INTERVAL_SEC=3600)
+                now = datetime.now()
+                if now.hour == RESET_HOUR and now.minute == 0:
+                    print(f"[Leaderboard] Следующая проверка через {CHECK_INTERVAL_SEC} сек. "
+                          f"(сейчас {now.strftime('%Y-%m-%d %H:%M')})")
+        except Exception as e:
+            print(f"[Leaderboard] Ошибка: {e}")
+
+        time.sleep(CHECK_INTERVAL_SEC)
+
+
 # ── Баланс ───────────────────────────────────────────────────────────
 @app.route("/api/balance", methods=["GET"])
 def get_balance():
@@ -463,6 +678,17 @@ def mines_click():
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "cazino-game-server"})
+
+
+# ── Запуск фоновой задачи сброса лидерборда ───────────────────────────
+def start_leaderboard_reset_worker():
+    """Запускает фоновый поток для автоматического сброса лидерборда."""
+    thread = threading.Thread(target=check_and_reset_leaderboard, daemon=True)
+    thread.start()
+    print("[Server] Фоновый поток сброса лидерборда запущен.")
+
+
+start_leaderboard_reset_worker()
 
 
 if __name__ == "__main__":
