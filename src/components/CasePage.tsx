@@ -25,9 +25,9 @@ interface DropItem {
 }
 
 const DEFAULT_POOL: DropItem[] = [
-  { name: 'Plush Pepe', image: '/GOLD.png', rarity: 'legendary', chance: 1, price: 500 },
-  { name: 'Durov Cap', image: '/Silver.png', rarity: 'epic', chance: 4, price: 200 },
-  { name: 'Astral Shard', image: '/CASE_COPPER.png', rarity: 'rare', chance: 10, price: 80 },
+  { name: 'Plush Pepe', image: '/nft_images/plush_pepe.webp', rarity: 'legendary', chance: 1, price: 500 },
+  { name: 'Durov Cap', image: '/nft_images/durovs_cap.webp', rarity: 'epic', chance: 4, price: 200 },
+  { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'rare', chance: 10, price: 80 },
   { name: 'Golden Fish', image: '/CaseWOOD.png', rarity: 'rare', chance: 10, price: 75 },
   { name: 'Shadow Veil', image: '/case-test.png', rarity: 'uncommon', chance: 15, price: 40 },
   { name: 'Ruby Heart', image: '/GOLD.png', rarity: 'uncommon', chance: 15, price: 35 },
@@ -220,7 +220,13 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       setIsSpinning(false);
 
       const userId = String(user?.id ?? '6267608438');
-      await addToInventory(serverItem, userId);
+      const saved = await addToInventory(serverItem, userId);
+
+      if (!saved) {
+        onToast('Ошибка сохранения. Деньги возвращены', 'error');
+        onUpdateBalance(price);
+        return;
+      }
 
       setWonItem(serverItem);
       setShowResult(true);
