@@ -25,7 +25,7 @@ import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
 export type Tab = 'home' | 'game' | 'profile' | 'inventory' | 'topup' | 'news' | 'referral' | 'admin';
-export type GameScreen = 'menu' | 'upgrader' | 'case' | 'mines' | 'pvp' | 'plinko' | 'crash';
+export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
 
 export function Root() {
   const [activeTab, setActiveTab] = useState<Tab>('game');
@@ -108,8 +108,9 @@ export function Root() {
           {gameScreen === 'menu' && <GamePage onOpen={setGameScreen} />}
           {gameScreen === 'upgrader' && <UpgraderPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'case' && (caseData
-            ? <CasePage caseData={caseData} onBack={() => setGameScreen('menu')} onToast={showToast} onUpdateBalance={changeBalance} balance={balance} />
+            ? <CasePage caseData={caseData} onBack={() => setGameScreen('cases')} onToast={showToast} onUpdateBalance={changeBalance} balance={balance} />
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
+          {gameScreen === 'cases' && <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'pvp' && <PvPPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
           {gameScreen === 'plinko' && <PlinkoPage balance={balance} onUpdateBalance={changeBalance} onBack={() => setGameScreen('menu')} onToast={showToast} />}

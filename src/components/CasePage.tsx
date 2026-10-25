@@ -94,14 +94,17 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     onUpdateBalance(-price); // Списываем цену кейса
 
     try {
+      const tg = (window as any).Telegram?.WebApp;
+      const initDataVal = tg?.initData || '';
+      const userId = tg?.initDataUnsafe?.user?.id ?? 'unknown';
       const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({
-          user_id: user?.id ?? 'unknown',
-          game_type: 'case',
-          bet_amount: price,
-          initData: initData
+        body: JSON.stringify({ 
+          user_id: userId, 
+          game_type: 'case', 
+          bet_amount: Number(caseData.price),
+          initData: initDataVal
         })
       });
       const data = await res.json();
