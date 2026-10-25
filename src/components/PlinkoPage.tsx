@@ -44,6 +44,8 @@ interface Ball {
   startTime: number;          // performance.now() в момент запуска партии
   spawnDelay: number;         // мс до появления шарика (очередь)
   targetSlot: number | null;  // целевой слот от сервера (если есть)
+  pattern: number[];          // последовательность отскоков для визуального паттерна
+  patternIdx: number;         // текущий индекс в паттерне отскоков
 }
 
 interface Peg {
@@ -73,6 +75,16 @@ const BALLS_OPTIONS = [1, 3, 5, 10, 30];
 const MULTIS_8  = [5.6, 2.1, 0.8, 0.5, 0.5, 0.5, 0.8, 2.1, 5.6];
 const MULTIS_10 = [8.0, 2.8, 1.4, 1.0, 0.6, 0.5, 0.6, 1.0, 1.4, 2.8, 8.0];
 const MULTIS_12 = [10.0, 3.0, 1.6, 1.4, 0.8, 0.5, 0.5, 0.5, 0.8, 1.4, 1.6, 3.0, 10.0];
+
+/* Паттерны отскоков для визуального разнообразия падения (-1 = влево, 1 = вправо) */
+const BOUNCE_PATTERNS: number[][] = [
+  [-1,  1,  1, -1, -1,  1],
+  [ 1, -1, -1,  1,  1, -1],
+  [-1, -1,  1,  1, -1,  1],
+  [ 1,  1, -1, -1,  1, -1],
+  [-1,  1, -1,  1, -1,  1],
+  [ 1, -1,  1, -1,  1, -1],
+];
 
 /* Цвета для групп множителей: низкие зелёные → средние жёлтые → высокие красные → легендарные */
 const MULT_COLORS = [
@@ -214,14 +226,31 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             const overlap = (BALL_R + PEG_R) - dist;
             b.x += (dx / dist) * overlap;
             b.y += (dy / dist) * overlap;
-            // Гасим горизонтальную скорость — шарик плавно огибает колышек
-            b.vx *= 0.5;
+            // Направление отскока: паттерн + случайный фактор
+            const patternDir = b.pattern.length > 0
+              ? b.pattern[b.patternIdx % b.pattern.length]
+              : (Math.random() > 0.5 ? 1 : -1);
+            const randFactor = (Math.random() - 0.5) * 1.5;
+            b.vx += patternDir * 0.8 + randFactor * 0.5;
+            b.vx = Math.max(-3, Math.min(3, b.vx));
+            b.patternIdx++;
           }
         }
 
         // боковые стенки (упругость ≈ 0, шарик не отлетает)
         if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * 0.1; }
         if (b.x + BALL_R > boardW) { b.x = boardW - BALL_R; b.vx = -Math.abs(b.vx) * 0.1; }
+
+        // Коррекция курса: последние 20% — плавно направляем в целевой слот
+        if (b.targetSlot !== null) {
+          const progress = (b.y - DROP_START_Y) / (slotTop - DROP_START_Y);
+          if (progress > 0.8) {
+            const targetX = (b.targetSlot + 0.5) * (boardW / multipliers.length);
+            const diff = targetX - b.x;
+            b.vx += diff * 0.03;
+            b.vx *= 0.9;
+          }
+        }
 
         // падение в слот
         if (b.y > slotTop + SLOT_H * 0.25) {
@@ -367,21 +396,29 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     setLastWin(null);
 
     const now = performance.now();
-    const totalSlots = multipliers.length;
-    const fallDistance = Math.max(slotTop - DROP_START_Y, 1);
-    const timeToFall = Math.sqrt(2 * fallDistance / GRAVITY);
-
     const created: Ball[] = [];
     for (let i = 0; i < ballsCount; i++) {
       const sd = serverData[i] || { slotIndex: null, multiplier: null };
       let startX = boardW / 2;
       let startVx = 0;
 
+      // Выбираем случайный паттерн отскоков для этого шарика
+      const pattern = BOUNCE_PATTERNS[Math.floor(Math.random() * BOUNCE_PATTERNS.length)];
+
       if (sd.slotIndex !== null) {
-        // Рассчитываем целевую X — центр слота
-        const targetX = (sd.slotIndex + 0.5) * (boardW / totalSlots);
-        // Начальная скорость X = смещение / время полёта
-        startVx = (targetX - boardW / 2) / timeToFall;
+        const totalSlots = multipliers.length;
+        const third = totalSlots / 3;
+        // Определяем начальную скорость по положению целевого слота
+        if (sd.slotIndex < third) {
+          // Левая треть — импульс влево
+          startVx = -2;
+        } else if (sd.slotIndex >= totalSlots - third) {
+          // Правая треть — импульс вправо
+          startVx = 2;
+        } else {
+          // Центр — небольшой случайный импульс
+          startVx = (Math.random() - 0.5) * 0.5;
+        }
       } else {
         // Нет сервера — случайный разброс (как было)
         startX = boardW / 2 + (Math.random() - 0.5) * 10;
@@ -402,6 +439,8 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
         startTime: now,
         spawnDelay: i * SPAWN_STEP, // очередь: каждый следующий на 300 мс позже
         targetSlot: sd.slotIndex,
+        pattern: pattern,
+        patternIdx: 0,
       });
     }
     ballsRef.current = [...ballsRef.current, ...created];
