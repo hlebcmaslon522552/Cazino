@@ -483,11 +483,16 @@ def open_case():
 @app.route("/api/inventory", methods=["GET"])
 def get_inventory():
     user_id = request.args.get("user_id", "6267608438")
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        conn.close()
+    except Exception as e:
+        print(f"[get_inventory] error: {e}")
+        return jsonify([])
+
     if row and row[0]:
         try:
             items = json.loads(row[0])
@@ -510,10 +515,21 @@ def inventory_add():
     if not item:
         return jsonify({"error": "item is required"}), 400
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+    except Exception as e:
+        print(f"[inventory_add] connect error: {e}")
+        return jsonify({"error": "Database connection error"}), 500
+
+    try:
+        c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+    except Exception as e:
+        print(f"[inventory_add] select error: {e}")
+        conn.close()
+        return jsonify({"error": "Database error"}), 500
+
     if row and row[0]:
         try:
             items = json.loads(row[0])
@@ -531,9 +547,15 @@ def inventory_add():
         items.append(item)
 
     inventory_json = json.dumps(items, ensure_ascii=False)
-    c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
-              (user_id, inventory_json, inventory_json))
-    conn.commit()
+    try:
+        c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
+                  (user_id, inventory_json, inventory_json))
+        conn.commit()
+    except Exception as e:
+        print(f"[inventory_add] insert/update error: {e}")
+        conn.close()
+        return jsonify({"error": "Database error"}), 500
+
     conn.close()
     return jsonify({"success": True, "inventory": items})
 
@@ -550,10 +572,21 @@ def inventory_remove():
     if item_id is None:
         return jsonify({"error": "item_id is required"}), 400
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+    except Exception as e:
+        print(f"[inventory_remove] connect error: {e}")
+        return jsonify({"error": "Database connection error"}), 500
+
+    try:
+        c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+    except Exception as e:
+        print(f"[inventory_remove] select error: {e}")
+        conn.close()
+        return jsonify({"error": "Database error"}), 500
+
     if row and row[0]:
         try:
             items = json.loads(row[0])
@@ -566,9 +599,15 @@ def inventory_remove():
     items = [i for i in items if isinstance(i, dict) and i.get("id") != item_id]
 
     inventory_json = json.dumps(items, ensure_ascii=False)
-    c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
-              (user_id, inventory_json, inventory_json))
-    conn.commit()
+    try:
+        c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
+                  (user_id, inventory_json, inventory_json))
+        conn.commit()
+    except Exception as e:
+        print(f"[inventory_remove] insert/update error: {e}")
+        conn.close()
+        return jsonify({"error": "Database error"}), 500
+
     conn.close()
     return jsonify({"success": True, "inventory": items})
 

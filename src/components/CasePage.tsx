@@ -22,6 +22,7 @@ interface DropItem {
   rarity: string;
   chance: number;
   price: number;
+  floor?: number;
 }
 
 const DEFAULT_POOL: DropItem[] = [
@@ -109,12 +110,12 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
 
     for (let i = 0; i < count; i++) {
       if (i === winIndex) {
-        arr.push(winningItem);
+        arr.push({ ...winningItem, floor: winningItem.floor ?? winningItem.price });
       } else if (triggerNearMiss && i === winIndex - 1) {
-        /* Дорогой предмет прямо перед выигрышем — психологический подъёб */
-        arr.push(mostExpensive);
+        arr.push({ ...mostExpensive, floor: mostExpensive.floor ?? mostExpensive.price });
       } else {
-        arr.push(pickRandomItem(pool));
+        const randItem = pickRandomItem(pool);
+        arr.push({ ...randItem, floor: randItem.floor ?? randItem.price });
       }
     }
 
@@ -204,7 +205,9 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       // Ищем индекс выигрышного предмета в массиве
       let winIndex = -1;
       for (let i = 0; i < items.length; i++) {
-        if (items[i].name === serverItem.name && items[i].price === serverItem.price) {
+        const matchPrice = items[i].price === serverItem.price;
+        const matchFloor = items[i].floor === serverItem.floor || items[i].floor === serverItem.price;
+        if (items[i].name === serverItem.name && (matchPrice || matchFloor)) {
           winIndex = i;
           break;
         }
