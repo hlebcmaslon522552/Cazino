@@ -18,7 +18,7 @@ interface Nft {
 }
 
 export function ProfilePage({ onNavigate }: Props) {
-  const { user, haptic, initData } = useTelegram();
+  const { user, initData } = useTelegram();
 
   const [balanceTon, setBalanceTon] = useState(0);
   const [balanceStars, setBalanceStars] = useState(0);
@@ -29,8 +29,6 @@ export function ProfilePage({ onNavigate }: Props) {
   const [userName, setUserName] = useState('Пользователь');
   const [username, setUsername] = useState('@username');
   const [avatarUrl, setAvatarUrl] = useState('');
-
-  const refLink = `https://t.me/YourBot?start=ref_${user?.id || 123}`;
 
   useEffect(() => {
     // Извлекаем данные пользователя напрямую из Telegram WebApp
@@ -56,25 +54,6 @@ export function ProfilePage({ onNavigate }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCopyRef = async () => {
-    haptic('light');
-    try {
-      await navigator.clipboard.writeText(refLink);
-      haptic('medium');
-    } catch {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = refLink;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      } catch { /* ignore */ }
-    }
-  };
-
   const firstLetter = userName?.charAt(0)?.toUpperCase() || '?';
 
   return (
@@ -99,12 +78,24 @@ export function ProfilePage({ onNavigate }: Props) {
       </div>
 
       {/* ── Баннер рефералки ──────────────────────── */}
+      <style>{`
+        .invite-btn-wrap button {
+          cursor: pointer;
+          transition: transform 0.1s ease;
+        }
+        .invite-btn-wrap button:active {
+          transform: scale(0.95);
+        }
+      `}</style>
+
       <div style={{ backgroundImage: `url("${publicUrl('Phon_ref_.png')}")`, backgroundSize: 'cover', backgroundPosition: 'center', borderRadius: 16, padding: '24px 20px', marginBottom: spacing.lg, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', borderRadius: 16 }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ fontSize: 28, fontWeight: 'bold', letterSpacing: 2, marginBottom: 4 }}>ПОЛУЧАЙ</div>
           <div style={{ fontSize: 22, fontWeight: 'bold', color: '#ffd700', marginBottom: spacing.md }}>5% С ИХ ТРАТ</div>
-          <Button variant="primary" fullWidth onClick={handleCopyRef}>📋 Пригласить</Button>
+          <div className="invite-btn-wrap">
+            <Button variant="primary" fullWidth onClick={() => onNavigate('referral')}>📋 Пригласить</Button>
+          </div>
         </div>
       </div>
 
