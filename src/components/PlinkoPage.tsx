@@ -66,13 +66,13 @@ const SLOT_H = 34;                     // высота слота
 const SPAWN_STEP = 180;                // мс между появлением шариков
 const MIN_BET = 0.1;
 
-const ROWS_OPTIONS = [8, 12, 16];
+const ROWS_OPTIONS = [8, 10, 12];
 const BALLS_OPTIONS = [1, 3, 5, 10, 30];
 
 /* Честные множители как в Stake. Симметричные массивы: центр → край  */
 const MULTIS_8  = [5.6, 2.1, 0.8, 0.5, 0.5, 0.5, 0.8, 2.1, 5.6];
+const MULTIS_10 = [8.0, 2.8, 1.4, 1.0, 0.6, 0.5, 0.6, 1.0, 1.4, 2.8, 8.0];
 const MULTIS_12 = [10.0, 3.0, 1.6, 1.4, 0.8, 0.5, 0.5, 0.5, 0.8, 1.4, 1.6, 3.0, 10.0];
-const MULTIS_16 = [15.0, 5.0, 2.0, 1.6, 1.2, 1.0, 0.8, 0.5, 0.3, 0.5, 0.8, 1.0, 1.2, 1.6, 2.0, 5.0, 15.0];
 
 /* Цвета для групп множителей: низкие зелёные → средние жёлтые → высокие красные → легендарные */
 const MULT_COLORS = [
@@ -84,7 +84,7 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** Строит конфигурацию слотов из заранее заданных массивов множителей. */
 function buildSlots(rows: number): SlotConfig[] {
-  const arr: number[] = rows === 8 ? MULTIS_8 : rows === 12 ? MULTIS_12 : MULTIS_16;
+  const arr: number[] = rows === 8 ? MULTIS_8 : rows === 10 ? MULTIS_10 : MULTIS_12;
   return arr.map((mult, i) => {
     // цвет от центра (0) к краям
     const dist = Math.abs(i - (arr.length - 1) / 2);
@@ -157,48 +157,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
   }, []);
 
 
-  /* ── Завершение полёта шарика: фиксируем слот и начисляем выигрыш ── */
-  const finishBall = (b: Ball) => {
-    if (b.finished) return;
-
-    const totalSlots = multipliers.length;
-    const slotWidth = boardW / totalSlots;
-    let slotIndex: number;
-
-    // Определяем слот по физическому положению шарика (без телекорта)
-    slotIndex = Math.floor(b.x / slotWidth);
-    if (slotIndex < 0) slotIndex = 0;
-    if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
-
-    // Используем серверный множитель для выплаты, если он есть
-    const winMultiplier = b.serverMultiplier !== null && b.serverMultiplier !== undefined
-      ? b.serverMultiplier
-      : multipliers[slotIndex];
-
-    b.slot = slotIndex;
-    b.multiplier = winMultiplier;
-    b.finished = true;
-    b.y = slotTop + SLOT_H / 2 - BALL_R; // шарик ложится на дно слота
-    b.vy = 0;
-    b.vx = 0;
-
-    console.log("Шарик упал в слот:", slotIndex, "Множитель:", winMultiplier);
-
-    // считаем выполненный шарик
-    ballsFinishedRef.current++;
-
-    const win = round2(b.bet * b.multiplier);
-    const won = b.multiplier > 1;
-    onUpdateBalance(win);
-    if (won) {
-      haptic('medium');
-      setLastWin({ id: b.id, multiplier: b.multiplier, win, won: true });
-      onToast(`🎉 Выигрыш +${win.toFixed(2)} TON (${b.multiplier.toFixed(2)}x)`, 'success');
-    } else {
-      haptic('light');
-    }
-  };
-
   /* ── Игровой цикл физики (requestAnimationFrame) ── */
   useEffect(() => {
     let raf = 0;
@@ -250,7 +208,41 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
 
         // падение в слот
         if (b.y > slotTop + SLOT_H * 0.25) {
-          finishBall(b);
+          // ① Сначала вычисляем слот по координате X шарика
+          const totalSlots = multipliers.length;
+          const slotWidth = boardW / totalSlots;
+          let slotIndex = Math.floor(b.x / slotWidth);
+          if (slotIndex < 0) slotIndex = 0;
+          if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
+
+          // Используем серверный множитель для выплаты, если он есть
+          const winMultiplier = b.serverMultiplier !== null && b.serverMultiplier !== undefined
+            ? b.serverMultiplier
+            : multipliers[slotIndex];
+
+          b.slot = slotIndex;
+          b.multiplier = winMultiplier;
+          b.y = slotTop + SLOT_H / 2 - BALL_R;
+          b.vy = 0;
+          b.vx = 0;
+
+          console.log("Шарик упал в слот:", slotIndex, "Множитель:", winMultiplier);
+
+          // ② Затем начисляем выигрыш
+          ballsFinishedRef.current++;
+          const win = round2(b.bet * b.multiplier);
+          const won = b.multiplier > 1;
+          onUpdateBalance(win);
+          if (won) {
+            haptic('medium');
+            setLastWin({ id: b.id, multiplier: b.multiplier, win, won: true });
+            onToast(`🎉 Выигрыш +${win.toFixed(2)} TON (${b.multiplier.toFixed(2)}x)`, 'success');
+          } else {
+            haptic('light');
+          }
+
+          // ③ После всего помечаем шарик finished — filter после цикла удалит его
+          b.finished = true;
           changed = true;
         }
       }
