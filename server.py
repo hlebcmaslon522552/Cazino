@@ -763,6 +763,67 @@ def mines_click():
         })
 
 
+# ── Telegram Stars Invoice ─────────────────────────────────────────────
+@app.route("/api/create_invoice", methods=["POST"])
+def create_invoice():
+    """Создаёт счёт для оплаты Telegram Stars."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    user_id = str(data.get("user_id", ""))
+    amount = data.get("amount", 0)
+
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+    try:
+        amount = int(amount)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Amount must be a number"}), 400
+    if amount < 50:
+        return jsonify({"error": "Минимум 50 Stars"}), 400
+
+    if not TG_BOT_TOKEN:
+        print("[create_invoice] BOT_TOKEN is empty!")
+        return jsonify({"error": "Telegram bot not configured"}), 500
+
+    try:
+        url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/createInvoiceLink"
+        payload = {
+            "title": "Пополнение баланса",
+            "description": f"Покупка {amount} Stars",
+            "payload": f"topup_{user_id}_{amount}",
+            "currency": "XTR",
+            "prices": [{"label": "Stars", "amount": int(amount)}]
+        }
+        print(f"[create_invoice] Sending to Telegram: {url}")
+        print(f"[create_invoice] Payload: {json.dumps(payload, ensure_ascii=False)}")
+        response = requests.post(url, json=payload, timeout=15)
+        print("TELEGRAM RESPONSE:", response.json())
+
+        result = response.json()
+        if not result.get("ok"):
+            error_desc = result.get("description", "Unknown error")
+            print(f"[create_invoice] Telegram error: {error_desc}")
+            return jsonify({"error": f"Ошибка Telegram: {error_desc}"}), 400
+
+        invoice_link = result.get("result")
+        if not invoice_link:
+            return jsonify({"error": "Telegram не вернул ссылку на счёт"}), 500
+
+        return jsonify({"invoiceLink": invoice_link})
+
+    except requests.exceptions.Timeout:
+        print("[create_invoice] Timeout connecting to Telegram API")
+        return jsonify({"error": "Таймаут при обращении к Telegram"}), 500
+    except requests.exceptions.RequestException as e:
+        print(f"[create_invoice] Request error: {e}")
+        return jsonify({"error": f"Ошибка соединения с Telegram: {str(e)}"}), 500
+    except Exception as e:
+        print(f"[create_invoice] Unexpected error: {e}")
+        return jsonify({"error": "Внутренняя ошибка сервера"}), 500
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "cazino-game-server"})
