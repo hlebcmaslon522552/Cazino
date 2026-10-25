@@ -30,11 +30,13 @@ const DIFFICULTIES: Difficulty[] = [
 interface Props {
   onBack: () => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  balance: number;
+  onUpdateBalance: (amount: number) => void;
 }
 
 type Phase = 'setup' | 'playing' | 'won' | 'lost';
 
-export function MinesPage({ onBack, onToast }: Props) {
+export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) {
   const [betAmount, setBetAmount] = useState('0.1');
   const [difficulty, setDifficulty] = useState<Difficulty>(DIFFICULTIES[0]);
   const [phase, setPhase] = useState<Phase>('setup');
@@ -50,12 +52,19 @@ export function MinesPage({ onBack, onToast }: Props) {
   const stakePrice = Math.max(0.1, parseFloat(betAmount) || 0);
   const multiplier = 1 + openSafe.length * MULTIPLIER_STEP;
   const potentialWin = stakePrice * multiplier;
-  const canStart = phase === 'setup' && stakePrice > 0;
+  const canStart = phase === 'setup' && stakePrice > 0 && Number(balance) >= Number(stakePrice);
   const canCashout = phase === 'playing' && openSafe.length > 0 && !isGameOver;
 
   /* ── Старт игры ─────────────────────────── */
   const startGame = () => {
     if (stakePrice <= 0 || difficulty.mines >= totalCells) return;
+
+    if (Number(balance) < Number(stakePrice)) {
+      onToast('Недостаточно средств', 'error');
+      return;
+    }
+
+    onUpdateBalance(-Number(stakePrice));
 
     const cells = Array.from({ length: totalCells }, (_, i) => i);
     for (let i = cells.length - 1; i > 0; i--) {
@@ -99,6 +108,7 @@ export function MinesPage({ onBack, onToast }: Props) {
   /* ── Забрать ─────────────────────────────── */
   const cashout = () => {
     if (!canCashout) return;
+    onUpdateBalance(potentialWin);
     setPhase('won');
     onToast(`💰 Вы забрали ${potentialWin.toFixed(2)} TON!`, 'success');
   };

@@ -144,23 +144,17 @@ useEffect(() => {
   const renderCandles = () => {
     if (!candles || candles.length === 0) return null;
     
-    const maxVal = Math.max(...candles.map(c => c.high), 1.1);
-    const minVal = Math.min(...candles.map(c => c.low), 1.0);
-    const range = maxVal - minVal || 1; // Защита от деления на 0
-
-    const totalCandles = 6;
-    const candleWidth = 100 / totalCandles; 
+    const candleWidth = 100 / 6;
 
     return candles.map((candle, i) => {
       const isGreen = candle.close >= candle.open;
       const color = isGreen ? '#00ff88' : '#ff3366';
       
-      const bodyTop = 100 - ((Math.max(candle.open, candle.close) - minVal) / range) * 100;
-      const bodyBottom = 100 - ((Math.min(candle.open, candle.close) - minVal) / range) * 100;
-      const bodyHeight = Math.max(bodyBottom - bodyTop, 1); 
+      const bodyHeight = Math.min(candle.close * 10, 100);
+      const bodyTop = 100 - bodyHeight;
       
-      const wickTop = 100 - ((candle.high - minVal) / range) * 100;
-      const wickBottom = 100 - ((candle.low - minVal) / range) * 100;
+      const wickTop = Math.max(0, 100 - candle.high * 10);
+      const wickBottom = Math.min(100, 100 - candle.low * 10);
       
       const xPos = (i * candleWidth) + (candleWidth / 2);
 
