@@ -26,7 +26,7 @@ import { getBalance } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
-export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard';
+export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard' | 'inventory';
 export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
 
 export function Root() {
@@ -127,6 +127,9 @@ export function Root() {
           {gameScreen === 'plinko' && <PlinkoPage balance={balance} onUpdateBalance={handleUpdateBalance} onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
         </>
+      )}
+      {activeTab === 'inventory' && (
+        <InventoryPage onToast={showToast} onBalanceChange={refreshBalance} />
       )}
       {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} />}
       {activeTab === 'market' && (

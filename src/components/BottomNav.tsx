@@ -1,7 +1,7 @@
 import { ASSETS } from '../assets';
-import { ShoppingBag, Swords, User, Trophy, Home } from 'lucide-react';
+import { ShoppingBag, Swords, User, Trophy, Home, Backpack } from 'lucide-react';
 
-type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard';
+type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard' | 'inventory';
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -10,16 +10,18 @@ interface BottomNavProps {
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs: { id: Tab; left: string; icon: React.ReactNode }[] = [
-    { id: 'market',      left: '10%',   icon: <ShoppingBag size={20} /> },
-    { id: 'game',        left: '30%',   icon: <Swords size={20} /> },
-    { id: 'leaderboard', left: '50%',   icon: <Trophy size={20} /> },
-    { id: 'profile',     left: '70%',   icon: <User size={20} /> },
-    { id: 'home',        left: '90%',   icon: <Home size={20} /> },
+    { id: 'market',      left: '8%',    icon: <ShoppingBag size={20} /> },
+    { id: 'game',        left: '25%',   icon: <Swords size={20} /> },
+    { id: 'inventory',   left: '42%',   icon: <Backpack size={20} /> },
+    { id: 'leaderboard', left: '58%',   icon: <Trophy size={20} /> },
+    { id: 'profile',     left: '75%',   icon: <User size={20} /> },
+    { id: 'home',        left: '92%',   icon: <Home size={20} /> },
   ];
 
   const labelMap: Record<string, string> = {
     market: 'Маркет',
     game: 'Игры',
+    inventory: 'Инвентарь',
     leaderboard: 'Топ',
     profile: 'Профиль',
     home: 'Главная',
