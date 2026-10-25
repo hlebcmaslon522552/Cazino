@@ -191,20 +191,21 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             const overlap = (BALL_R + PEG_R) - dist;
             b.x += (dx / dist) * overlap;
             b.y += (dy / dist) * overlap;
-            // Отталкивание от колышка с малым хаосом (не ломает общий вектор)
-            b.vx = (dx / dist) * 0.5 + (Math.random() - 0.5) * 0.5;
-            b.vy = Math.abs(b.vy) * 0.5;
+            // Мягкое огибание колышка: минимальное изменение направления
+            b.vx += (dx / dist) * 0.1 + (Math.random() - 0.5) * 0.2;
+            // Демпфер Vy: плавно гасим, не обнуляя направление
+            b.vy *= 0.9;
 
-            // Антизастревание: если скорость Y почти нулевая, толкаем в случайную сторону
+            // Антизастревание: если скорость Y почти нулевая, лёгкий толчок вбок
             if (b.vy < 0.5) {
-              b.vx += (Math.random() - 0.5) * 1.5;
+              b.vx += (Math.random() - 0.5) * 0.3;
             }
           }
         }
 
-        // боковые стенки
-        if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * 0.5; }
-        if (b.x + BALL_R > boardW) { b.x = boardW - BALL_R; b.vx = -Math.abs(b.vx) * 0.5; }
+        // боковые стенки (упругость ≈ 0, шарик не отлетает)
+        if (b.x - BALL_R < 0) { b.x = BALL_R; b.vx = Math.abs(b.vx) * 0.1; }
+        if (b.x + BALL_R > boardW) { b.x = boardW - BALL_R; b.vx = -Math.abs(b.vx) * 0.1; }
 
         // падение в слот
         if (b.y > slotTop + SLOT_H * 0.25) {
@@ -354,7 +355,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
       } else {
         // Нет сервера — случайный разброс (как было)
         startX = boardW / 2 + (Math.random() - 0.5) * 10;
-        startVx = (Math.random() - 0.5) * 0.5;
+        startVx = (Math.random() - 0.5) * 0.2;
       }
 
       created.push({
