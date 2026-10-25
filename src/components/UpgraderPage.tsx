@@ -97,7 +97,6 @@ function NftGridCard({
    =================================================================== */
 
 const MAX_CHANCE = 75;    // потолок шанса (%)
-const MIN_STAKE = 0.1;    // минимальная ставка в TON
 const STROKE = 16;        // толщина чёрной обводки (строго 16px)
 
 /* Геометрия круга (viewBox 0 0 300 300, центр 150,150) */
@@ -276,7 +275,6 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
 
-  const [stake, setStake] = useState<number>(1);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<'win' | 'lose' | null>(null);
   const [angle, setAngle] = useState(0);
@@ -335,11 +333,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const startPrice = startNft?.floor ?? 0;
   const targetPrice = targetNft?.floor ?? 0;
 
-  // Ставка = что ставим. Учитываем и введённые TON, и цену начального NFT.
-  const wager = Math.max(stake, startPrice);
-
-  // Шанс: (цена ставим / цена получаем) * 100, потолок 75%.
-  const rawChance = targetPrice > 0 ? (wager / targetPrice) * 100 : 0;
+  // Шанс: (цена начального NFT / цена конечного NFT) * 100, потолок 75%.
+  const rawChance = targetPrice > 0 ? (startPrice / targetPrice) * 100 : 0;
   const chance = Math.min(rawChance, MAX_CHANCE);
 
   const startOkay = !!startNft && !!targetNft && targetPrice >= startPrice;
@@ -363,58 +358,80 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     resetGame();
     setSpinning(true);
 
-    const isWin = Math.random() * 100 < chance;
+    // Отправляем запрос на сервер
+    fetch('/api/play_game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_type: 'upgrade',
+        start_price: startPrice,
+        end_price: targetPrice,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Server error');
+        return res.json();
+      })
+      .then((data: { success: boolean; item?: Nft }) => {
+        const isWin = data.success === true;
 
-    // Дуга занимает winArc градусов (от 12 часов по часовой стрелке).
-    // Указатель закреплён на 12 часах (0°).
-    const winArc = (chance / 100) * 360;
+        // Обновляем инвентарь
+        setNfts((prev) => {
+          let updated = prev.filter((n) => n.id !== startNft!.id);
+          if (isWin && data.item) {
+            // Добавляем новый NFT, если его ещё нет
+            if (!updated.find((n) => n.id === data.item!.id)) {
+              updated = [...updated, data.item];
+            }
+          }
+          // Сохраняем в localStorage как fallback
+          localStorage.setItem('inventory', JSON.stringify(updated));
+          return updated;
+        });
 
-    // Целевой угол «старта дуги» так, чтобы указатель оказался внутри дуги (победа)
-    // либо вне её (проигрыш).
-    let finalDeg: number;
-    if (isWin) {
-      // Указатель (0°) внутри зоны: дуга «обернулась» вокруг 360°.
-      finalDeg = (360 - winArc) + Math.random() * winArc;
-    } else {
-      // Указатель вне зоны: зона целиком слева от 0°, не пересекает 360°.
-      finalDeg = Math.random() * (360 - winArc);
-    }
+        // Рассчитываем угол для анимации (оставляем локальную симуляцию для визуала)
+        const winArc = (chance / 100) * 360;
+        let finalDeg: number;
+        if (isWin) {
+          finalDeg = (360 - winArc) + Math.random() * winArc;
+        } else {
+          finalDeg = Math.random() * (360 - winArc);
+        }
 
-    // 5–7 секунд вращения с несколькими полными оборотами (по часовой стрелке).
-    const dur = 5000 + Math.random() * 2000;
-    setDuration(dur);
+        const dur = 5000 + Math.random() * 2000;
+        setDuration(dur);
 
-    const start = ((angle % 360) + 360) % 360;
-    const delta = ((finalDeg - start) + 360) % 360;
-    const fullSpins = (5 + Math.floor(Math.random() * 5)) * 360;
-    setAngle(angle + fullSpins + delta);
+        const start = ((angle % 360) + 360) % 360;
+        const delta = ((finalDeg - start) + 360) % 360;
+        const fullSpins = (5 + Math.floor(Math.random() * 5)) * 360;
+        setAngle(angle + fullSpins + delta);
 
-    setTimeout(() => {
-      setSpinning(false);
-      setResult(isWin ? 'win' : 'lose');
-      vibrate(isWin ? 'success' : 'error');
-      onToast(
-        isWin ? '🎉 Апгрейд успешен!' : '💀 Проигрыш...',
-        isWin ? 'success' : 'error',
-      );
-    }, dur);
+        setTimeout(() => {
+          setSpinning(false);
+          setResult(isWin ? 'win' : 'lose');
+          vibrate(isWin ? 'success' : 'error');
+          if (isWin) {
+            onToast('🎉 Апгрейд успешен!', 'success');
+          } else {
+            onToast('💀 Неудача! Начальный NFT сгорел.', 'error');
+          }
+        }, dur);
+      })
+      .catch((err) => {
+        console.error('Upgrade error:', err);
+        setSpinning(false);
+        onToast('Ошибка сервера, попробуйте позже', 'error');
+      });
   };
 
-  const onStakeInput = (value: string) => {
-    const parsed = parseFloat(value.replace(',', '.'));
-    setStake(Number.isFinite(parsed) ? Math.max(0, parsed) : 0);
-  };
-return (
+  return (
     <><div style={{ padding: spacing.md, color: colors.text, paddingBottom: 120, userSelect: 'none' }}>
       <style>{`
         @keyframes ug-fade {
           from { opacity: 0; transform: scale(0.9); }
           to   { opacity: 1; transform: scale(1); }
         }
-        input[type="number"]::-webkit-outer-spin-button,
-        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type="number"] { -moz-appearance: textfield; }
-      `}</style>
+        `}</style>
 
       {/* Навигация: ← Назад */}
       <div style={{ marginBottom: spacing.md, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -448,35 +465,6 @@ return (
         <NftSlot label="Начальный NFT" nft={startNft} onClick={() => { if (!spinning) { haptic('light'); setStartModalOpen(true); } }} />
         <NftSlot label="Конечный NFT" nft={targetNft} onClick={() => { if (!spinning) { haptic('light'); setTargetModalOpen(true); } }} />
       </div>
-
-      {/* Поле ввода ставки (от 0.1 TON) */}
-      <Card padding="14px" glow="none">
-        <div style={{ fontSize: 10, color: colors.textMuted, marginBottom: 8 }}>СТАВКА (TON, от 0.1)</div>
-        <input
-          type="number"
-          min={MIN_STAKE}
-          step={0.1}
-          value={stake}
-          disabled={spinning}
-          onChange={(e) => onStakeInput(e.target.value)}
-          style={{
-            width: '100%',
-            boxSizing: 'border-box',
-            padding: '12px 14px',
-            fontSize: 18,
-            fontWeight: 'bold',
-            color: colors.text,
-            background: '#141414',
-            border: `1.5px solid ${colors.border}`,
-            borderRadius: 12,
-            outline: 'none',
-          }}
-          placeholder="1.0"
-        />
-        {stake > 0 && stake < MIN_STAKE && (
-          <div style={{ fontSize: 11, color: colors.danger, marginTop: 6 }}>Минимальная ставка — 0.1 TON</div>
-        )}
-      </Card>
 
       {/* Кнопка запуска */}
       <div style={{ marginTop: spacing.md }}>
@@ -569,7 +557,7 @@ return (
             />
           </div>
           <div style={{ fontSize: 26, fontWeight: 'bold', color: '#fff', textAlign: 'center', marginTop: 8 }}>
-            {result === 'win' ? `Вы выиграли ${targetNft?.name ?? ''}` : 'LOSE'}
+            {result === 'win' ? `Вы выиграли ${targetNft?.name ?? ''}` : 'Неудача'}
           </div>
           {result === 'win' && targetNft && (
             <img
