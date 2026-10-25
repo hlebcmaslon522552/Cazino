@@ -20,7 +20,7 @@ interface DropItem {
   name: string;
   image: string;
   rarity: string;
-  chance: number; // %
+  chance: number;
   price: number;
 }
 
@@ -54,94 +54,168 @@ function rarityColor(rarity: string): string {
   }
 }
 
-export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
-  const { haptic, vibrate, user, initData } = useTelegram();
+/* ─── Взвешенный случайный выбор ─── */
+function pickRandomItem(pool: DropItem[]): DropItem {
+  const total = pool.reduce((s, i) => s + i.chance, 0);
+  let r = Math.random() * total;
+  for (const item of pool) {
+    r -= item.chance;
+    if (r <= 0) return item;
+  }
+  return pool[pool.length - 1];
+}
 
-  const [spinning, setSpinning] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [isOpening, setIsOpening] = useState(false);
+/* ─── Константы рулетки ─── */
+const ITEM_WIDTH = 80;
+const VIEWPORT_WIDTH = 240;
+const ITEMS_COUNT = () => 30 + Math.floor(Math.random() * 11); // 30–40
+
+export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
+  const { haptic, user, initData } = useTelegram();
+
+  const pool = loadPool();
+
+  const [isSpinning, setIsSpinning] = useState(false);
   const [wonItem, setWonItem] = useState<DropItem | null>(null);
   const [showResult, setShowResult] = useState(false);
-  const [droppedItem, setDroppedItem] = useState<DropItem | null>(null); // будет использовано в Промт 2
-  void droppedItem;
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [spinItems, setSpinItems] = useState<DropItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<DropItem | null>(null);
 
-  /* Анимация прокрутки */
-  const pool = loadPool();
-  const [displayImg, setDisplayImg] = useState(pool[0].image);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
     };
   }, []);
 
+  /* ─── Поиск самого дорогого предмета в пуле ─── */
+  const getMostExpensive = (): DropItem => {
+    return pool.reduce((max, it) => (it.price > max.price ? it : max), pool[0]);
+  };
+
+  /* ─── Генерация массива для рулетки с Near Miss ─── */
+  const generateSpinArray = (winningItem: DropItem): DropItem[] => {
+    const count = ITEMS_COUNT();
+    const arr: DropItem[] = [];
+
+    /* Win-индекс — ~25, ближе к концу */
+    const winIndex = Math.min(25, count - 3);
+
+    /* Near Miss: 35% — ставим самый дорогой предмет прямо перед выигрышным */
+    const triggerNearMiss = Math.random() < 0.35;
+    const mostExpensive = getMostExpensive();
+
+    for (let i = 0; i < count; i++) {
+      if (i === winIndex) {
+        arr.push(winningItem);
+      } else if (triggerNearMiss && i === winIndex - 1) {
+        /* Дорогой предмет прямо перед выигрышем — психологический подъёб */
+        arr.push(mostExpensive);
+      } else {
+        arr.push(pickRandomItem(pool));
+      }
+    }
+
+    return arr;
+  };
+
+  /* ─── Запуск CSS-анимации translateX ─── */
+  const runSpinAnimation = (targetIndex: number): Promise<void> => {
+    return new Promise((resolve) => {
+      const strip = stripRef.current;
+      if (!strip) {
+        resolve();
+        return;
+      }
+
+      const viewportCenter = VIEWPORT_WIDTH / 2;
+      const finalX = -(targetIndex * ITEM_WIDTH + ITEM_WIDTH / 2 - viewportCenter);
+      const extraSpin = targetIndex * ITEM_WIDTH + 2000; // откат назад для раскрутки
+
+      /* Фаза 1 — мгновенный откат назад (имитация раскрутки) */
+      strip.style.transition = 'none';
+      strip.style.transform = `translateX(${-extraSpin}px)`;
+      void strip.offsetHeight; // принудительный reflow
+
+      /* Фаза 2 — анимация до выигрышной позиции с замедлением */
+      strip.style.transition = 'transform 3.8s cubic-bezier(0.05, 0.7, 0.1, 1.0)';
+      strip.style.transform = `translateX(${finalX}px)`;
+
+      animationTimerRef.current = setTimeout(resolve, 4000);
+    });
+  };
+
+  /* ─── Открытие кейса ─── */
   const handleOpenCase = async () => {
-    if (spinning || loading) return;
+    if (isSpinning) return;
 
     const currentBalance = Number(balance);
     const price = Number(caseData.price);
 
     if (isNaN(currentBalance) || currentBalance < price) {
       onToast('Недостаточно TON на балансе!', 'error');
+      haptic('error');
       return;
     }
 
-    onUpdateBalance(-price); // Списываем цену
+    /* 1. Списываем цену кейса */
+    onUpdateBalance(-price);
+    haptic('medium');
+
+    /* 2. Запрос на сервер */
+    setIsSpinning(true);
 
     try {
       const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          user_id: user?.id || '6267608438', 
-          game_type: 'case', 
+        body: JSON.stringify({
+          user_id: user?.id || '6267608438',
+          game_type: 'case',
           bet_amount: price,
-          initData: initData // <--- используем переменную из useTelegram
-        })
+          initData: initData,
+        }),
       });
-      
+
       const data = await res.json();
 
-      if (data.success && data.item) {
-        const winAmount = Number(data.item.price || data.item.floor || 0);
-        onUpdateBalance(winAmount); // Начисляем выигрыш
-        
-        setDroppedItem(data.item);
-        setShowResult(true);
-        
-        if (typeof addToInventory === 'function') {
-           const userId = String(user?.id ?? '6267608438');
-           await addToInventory(data.item, userId); // Добавляем в инвентарь через сервер
-        }
-      } else {
-        onToast(data.error || 'Ошибка при открытии', 'error');
-        onUpdateBalance(price); // Возвращаем деньги
+      if (!data.success || !data.item) {
+        throw new Error(data.error || 'Ошибка при открытии кейса');
       }
-    } catch (e) {
+
+      /* 3. Сервер вернул успех — генерируем рулетку */
+      const serverItem = data.item as DropItem;
+      const items = generateSpinArray(serverItem);
+      const winIndex = items.findIndex(
+        (it) => it.name === serverItem.name && it.price === serverItem.price,
+      );
+      const safeWinIndex = winIndex >= 0 ? winIndex : 25;
+
+      setSpinItems(items);
+
+      /* 4. Запускаем анимацию рулетки */
+      await runSpinAnimation(safeWinIndex);
+
+      /* 5. Анимация завершена — добавляем в инвентарь, показываем результат */
+      setIsSpinning(false);
+
+      const userId = String(user?.id ?? '6267608438');
+      await addToInventory(serverItem, userId);
+
+      setWonItem(serverItem);
+      setShowResult(true);
+    } catch (e: any) {
       console.error(e);
-      onToast('Ошибка сети', 'error');
-      onUpdateBalance(price); // Возвращаем деньги
-    } finally {
-      setIsOpening(false);
+      onToast(e.message || 'Ошибка сети', 'error');
+      /* Возвращаем деньги при ошибке */
+      onUpdateBalance(price);
+      setIsSpinning(false);
     }
   };
 
-  const claimPrize = async () => {
-    if (!wonItem) return;
-    haptic('medium');
-
-    /* Сохраняем на сервере через API */
-    const userId = String(user?.id ?? '6267608438');
-    await addToInventory(wonItem, userId);
-
-    onToast(`🎁 ${wonItem.name} отправлен в инвентарь!`, 'success');
-    setWonItem(null);
-    setShowResult(false);
-    onBack();
-  };
-
+  /* ─── Закрыть модалку результата ─── */
   const closeResult = () => {
     setShowResult(false);
     setWonItem(null);
@@ -165,40 +239,166 @@ return (
         </span>
       </div>
 
-      {/* Превью / анимация прокрутки */}
+      {/* ─── РУЛЕТКА ─── */}
       <div
         style={{
           marginTop: spacing.md,
           background: colors.bgCard,
           borderRadius: 16,
-          padding: 24,
-          textAlign: 'center',
+          padding: '8px 0',
           border: `1px solid ${colors.border}`,
-          minHeight: 200,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          userSelect: 'none',
         }}
       >
-        <img
-          src={publicUrl(displayImg.replace(/^\//, ''))}
-          onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
-          alt="item"
+        {/* Указатель (стрелка) */}
+        <div
           style={{
-            width: 140,
-            height: 140,
-            objectFit: 'contain',
-            transition: 'transform 0.1s',
-            transform: spinning ? 'scale(1.08)' : 'scale(1)',
+            position: 'absolute',
+            top: -2,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10,
+            width: 0,
+            height: 0,
+            borderLeft: '12px solid transparent',
+            borderRight: '12px solid transparent',
+            borderTop: '18px solid #ff2d55',
+            filter: 'drop-shadow(0 0 6px #ff2d55)',
           }}
         />
-        <div style={{ marginTop: 12, fontSize: 13, color: colors.textMuted }}>
-          {spinning ? '🎲 Прокрутка...' : caseData.name}
+        {/* Подсветка указателя */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 2,
+            height: '100%',
+            background: 'rgba(255,45,85,0.15)',
+            zIndex: 9,
+            pointerEvents: 'none',
+          }}
+        />
+        {/* Маска по бокам (затемнение) */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: 20,
+            height: '100%',
+            background: 'linear-gradient(to right, rgba(21,21,33,1) 0%, transparent 100%)',
+            zIndex: 8,
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            width: 20,
+            height: '100%',
+            background: 'linear-gradient(to left, rgba(21,21,33,1) 0%, transparent 100%)',
+            zIndex: 8,
+            pointerEvents: 'none',
+          }}
+        />
+        {/* Окошко просмотра */}
+        <div
+          style={{
+            width: VIEWPORT_WIDTH,
+            maxWidth: '100%',
+            height: 100,
+            margin: '0 auto',
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          {/* Лента предметов */}
+          <div
+            ref={stripRef}
+            style={{
+              display: 'flex',
+              gap: 4,
+              height: '100%',
+              alignItems: 'center',
+              paddingLeft: 8,
+              willChange: 'transform',
+            }}
+          >
+            {spinItems.length === 0 ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: ITEM_WIDTH - 8,
+                    flexShrink: 0,
+                    height: 80,
+                    borderRadius: 10,
+                    background: '#2a2a40',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.4,
+                  }}
+                >
+                  <span style={{ fontSize: 10, color: '#666' }}>?</span>
+                </div>
+              ))
+            ) : (
+              spinItems.map((item, idx) => (
+                <div
+                  key={`${idx}-${item.name}`}
+                  style={{
+                    width: ITEM_WIDTH - 8,
+                    minWidth: ITEM_WIDTH - 8,
+                    flexShrink: 0,
+                    height: 80,
+                    borderRadius: 10,
+                    background: '#2a2a40',
+                    border: `2px solid ${rarityColor(item.rarity)}33`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '4px 2px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <img
+                    src={publicUrl(item.image.replace(/^\//, ''))}
+                    alt={item.name}
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    style={{ width: 36, height: 36, objectFit: 'contain', display: 'block' }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 8,
+                      color: rarityColor(item.rarity),
+                      fontWeight: 600,
+                      marginTop: 2,
+                      textAlign: 'center',
+                      lineHeight: 1.1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '100%',
+                    }}
+                  >
+                    {item.name}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Возможные предметы */}
+      {/* ─── Возможные предметы ─── */}
       <div
         style={{
           background: colors.bgCard,
@@ -258,11 +458,10 @@ return (
         </div>
       </div>
 
+      {/* ─── Кнопка открытия ─── */}
       <div style={{ marginTop: spacing.lg }}>
-        <Button size="lg" fullWidth onClick={handleOpenCase} disabled={spinning || loading || isOpening}>
-          {loading || isOpening
-            ? '⏳ Загрузка...'
-            : spinning
+        <Button size="lg" fullWidth onClick={handleOpenCase} disabled={isSpinning}>
+          {isSpinning
             ? '🎲 Открываем...'
             : `🎰 Открыть кейс (${caseData.price.toFixed(2)} TON)`}
         </Button>
@@ -296,15 +495,16 @@ return (
               border: `2px solid ${rarityColor(wonItem.rarity)}`,
             }}
           >
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
+            <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 4 }}>
+              Вы выиграли
+            </div>
             <img
               src={publicUrl(wonItem.image.replace(/^\//, ''))}
               onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
               alt={wonItem.name}
               style={{ width: 120, height: 120, objectFit: 'contain', marginBottom: 12 }}
             />
-            <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 4 }}>
-              {wonItem.rarity.toUpperCase()}
-            </div>
             <div
               style={{
                 fontSize: 22,
@@ -313,17 +513,14 @@ return (
                 marginBottom: 4,
               }}
             >
-              🎉 {wonItem.name}
+              {wonItem.name}
             </div>
             <div style={{ fontSize: 14, color: colors.gold, marginBottom: 16 }}>
               ≈ {wonItem.price.toFixed(2)} TON
             </div>
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Button size="lg" fullWidth onClick={claimPrize}>
-                📦 Забрать в инвентарь
-              </Button>
-              <Button size="sm" fullWidth variant="ghost" onClick={closeResult}>
-                Закрыть
+              <Button size="lg" fullWidth onClick={closeResult}>
+                ✅ Забрать
               </Button>
             </div>
           </div>
