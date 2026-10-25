@@ -21,6 +21,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [history, setHistory] = useState<number[]>([1.2, 5.4, 1.0, 14.2, 2.1, 1.8]);
   const [points, setPoints] = useState<{ x: number; y: number }[]>([{ x: 0, y: 100 }]);
   const [countdown, setCountdown] = useState<number>(15);
+  const [hasBet, setHasBet] = useState<boolean>(false);
   const [players, setPlayers] = useState<{ name: string; bet: number }[]>([]);
   const requestRef = useRef<number>();
   const startTimeRef = useRef<number>();
@@ -53,6 +54,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       if (countdownRef.current) clearInterval(countdownRef.current);
       return;
     }
+    setPlayers([]);
+    setHasBet(false);
     setCountdown(15);
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
@@ -101,6 +104,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     if (finalBet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
     if (finalBet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
     onUpdateBalance(-finalBet);
+    setHasBet(true);
     setPlayers(prev => [...prev, { name: user?.first_name || 'Вы', bet: finalBet }]);
     onToast?.('Ставка принята!', 'success');
   };
@@ -120,9 +124,12 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const renderGraph = () => {
     if (!points || points.length === 0) return null;
     const polylinePoints = points.map(p => `${p.x},${p.y}`).join(' ');
-    const circles = points.map((p, i) => (
-      <circle key={i} cx={p.x} cy={p.y} r="1.5" fill="#00ff88" stroke="#000" strokeWidth="0.5" />
-    ));
+    const circles = points.map((p, i) => {
+      const isLast = i === points.length - 1 && isCrashed;
+      return (
+        <circle key={i} cx={p.x} cy={p.y} r={isLast ? 3 : 1.5} fill={isLast ? "#ff3366" : "#00ff88"} stroke={isLast ? "#000" : "#000"} strokeWidth={isLast ? 1 : 0.5} />
+      );
+    });
     return (
       <g>
         <polyline points={polylinePoints} fill="none" stroke="#00ff88" strokeWidth="1.5" strokeLinejoin="round" />
@@ -175,7 +182,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
               <input type="text" inputMode="decimal" value={betInput} onChange={(e) => { const val = e.target.value.replace(',', '.'); if (/^\d*\.?\d*$/.test(val)) setBetInput(val); }} className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-4 text-xl font-bold text-white focus:outline-none focus:border-purple-500 pl-12" />
               <Coins className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500" size={24} />
             </div>
-            <button onClick={placeBet} className="w-full mt-2 bg-gradient-to-r from-purple-600 to-pink-500 text-white font-black py-3 rounded-xl shadow-lg active:scale-[0.98] transition-all">Сделать ставку</button>
+            <button onClick={placeBet} disabled={hasBet} className={`w-full mt-2 py-3 rounded-xl shadow-lg active:scale-[0.98] transition-all font-black ${hasBet ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white'}`}>Сделать ставку</button>
           </div>
         )}
 

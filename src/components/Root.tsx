@@ -14,6 +14,7 @@ import { PlinkoPage } from './PlinkoPage';
 import { CrashPage } from './CrashPage';
 import { ProfilePage } from './ProfilePage';
 import { InventoryPage } from './InventoryPage';
+import { GiftShop } from './GiftShop';
 import { TopUpPage } from './TopUpPage';
 import { NewsPage } from './NewsPage';
 import { ReferralPage } from './ReferralPage';
@@ -24,7 +25,7 @@ import { getBalance } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
-export type Tab = 'home' | 'game' | 'profile' | 'inventory' | 'topup' | 'news' | 'referral' | 'admin';
+export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin';
 export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
 
 export function Root() {
@@ -127,8 +128,8 @@ export function Root() {
         </>
       )}
       {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} />}
-      {activeTab === 'inventory' && (
-        <InventoryPage onToast={showToast} onBalanceChange={refreshBalance} />
+      {activeTab === 'market' && (
+        <GiftShop balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />
       )}
       {activeTab === 'topup' && (
         <TopUpPage

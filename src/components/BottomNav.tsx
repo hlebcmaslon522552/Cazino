@@ -1,6 +1,7 @@
 import { ASSETS } from '../assets';
+import { ShoppingBag, Swords, User } from 'lucide-react';
 
-type Tab = 'home' | 'game' | 'profile' | 'inventory' | 'topup' | 'news' | 'referral' | 'admin';
+type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin';
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -8,10 +9,10 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
-  const tabs: { id: Tab; left: string }[] = [
-    { id: 'inventory', left: '16.66%' },
-    { id: 'game',    left: '50%' },
-    { id: 'profile', left: '83.33%' },
+  const tabs: { id: Tab; left: string; icon: React.ReactNode }[] = [
+    { id: 'market', left: '16.66%', icon: <ShoppingBag size={22} /> },
+    { id: 'game',    left: '50%', icon: <Swords size={22} /> },
+    { id: 'profile', left: '83.33%', icon: <User size={22} /> },
   ];
 
   return (
@@ -74,7 +75,27 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                   : 'none',
                 transition: 'opacity 0.25s, filter 0.25s',
               }}
-            />
+            >
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 2,
+              }}>
+                <div style={{ color: isActive ? '#fff' : '#999' }}>
+                  {tab.icon}
+                </div>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: isActive ? '#fff' : '#999',
+                  textTransform: 'capitalize',
+                }}>
+                  {tab.id === 'market' ? 'Маркет' : tab.id === 'game' ? 'Игры' : 'Профиль'}
+                </span>
+              </div>
+            </button>
           );
         })}
       </div>
