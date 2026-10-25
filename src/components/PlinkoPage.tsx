@@ -215,10 +215,18 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
           if (slotIndex < 0) slotIndex = 0;
           if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
 
-          // Используем серверный множитель для выплаты, если он есть
-          const winMultiplier = b.serverMultiplier !== null && b.serverMultiplier !== undefined
-            ? b.serverMultiplier
-            : multipliers[slotIndex];
+          // Используем множитель слота, куда физически упал шарик
+          const winMultiplier = multipliers[slotIndex];
+
+          // Серверный множитель — только для проверки (логируем рассинхрон)
+          if (b.serverMultiplier !== null && b.serverMultiplier !== undefined) {
+            console.log(
+              "Шарик упал в слот:", slotIndex,
+              "Физ. множитель:", winMultiplier,
+              "Серверный:", b.serverMultiplier,
+              "Рассинхрон:", winMultiplier !== b.serverMultiplier
+            );
+          }
 
           b.slot = slotIndex;
           b.multiplier = winMultiplier;
@@ -228,10 +236,10 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
 
           console.log("Шарик упал в слот:", slotIndex, "Множитель:", winMultiplier);
 
-          // ② Затем начисляем выигрыш
+          // ② Затем начисляем выигрыш по физическому слоту
           ballsFinishedRef.current++;
-          const win = round2(b.bet * b.multiplier);
-          const won = b.multiplier > 1;
+          const win = round2(b.bet * winMultiplier);
+          const won = winMultiplier > 1;
           onUpdateBalance(win);
           if (won) {
             haptic('medium');
@@ -270,26 +278,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pegs, slotW, slotTop, slotsCfg, n, boardW]);
 
-  const findSlotForMultiplier = useCallback((mult: number): number | null => {
-    const totalSlots = multipliers.length;
-    // Ищем слот с таким множителем (идём от центра к краям для более правдоподобного вида)
-    const mid = Math.floor((totalSlots - 1) / 2);
-    for (let offset = 0; offset <= mid; offset++) {
-      const idx1 = mid - offset;
-      const idx2 = mid + offset;
-      if (idx1 >= 0 && multipliers[idx1] === mult) return idx1;
-      if (idx2 < totalSlots && multipliers[idx2] === mult) return idx2;
-    }
-    // Если не нашли точного совпадения — ищем ближайший
-    let best = 0;
-    let bestDiff = Infinity;
-    for (let i = 0; i < totalSlots; i++) {
-      const diff = Math.abs(multipliers[i] - mult);
-      if (diff < bestDiff) { bestDiff = diff; best = i; }
-    }
-    return best;
-  }, [multipliers]);
-
   /* ── Запуск партии ────────────────────── */
   const drop = async () => {
     if (boardW === 0 || isDroppingRef.current) return;
@@ -325,8 +313,11 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
       );
       for (const res of results) {
         if (res && typeof res.multiplier === 'number') {
-          const slotIdx = findSlotForMultiplier(res.multiplier);
-          serverData.push({ slotIndex: slotIdx, multiplier: res.multiplier });
+          // Пытаемся получить slotIndex от сервера, иначе находим индекс по множителю
+          const slotIdx = typeof res.slotIndex === 'number'
+            ? res.slotIndex
+            : multipliers.indexOf(res.multiplier);
+          serverData.push({ slotIndex: slotIdx >= 0 ? slotIdx : null, multiplier: res.multiplier });
         } else {
           serverData.push({ slotIndex: null, multiplier: null });
         }
