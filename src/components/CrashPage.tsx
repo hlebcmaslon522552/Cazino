@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, RefreshCw, Coins, Clock } from 'lucide-react';
+import { getInitData } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
@@ -57,7 +58,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           user_id: user?.id ?? 'unknown',
           game_type: 'crash',
           bet_amount: finalBet,
-          initData: initData
+          initData: getInitData() // <--- используем надёжную функцию из api.ts
         })
       });
       const data = await res.json();

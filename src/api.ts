@@ -16,6 +16,13 @@ export interface InventoryItem {
 
 const API_URL = 'https://cazino-api.fxtun.ru';
 
+export const getInitData = () => {
+  if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initData) {
+    return (window as any).Telegram.WebApp.initData;
+  }
+  return ''; // Если открыто в браузере, отправляем пустую строку
+};
+
 /**
  * fetchUserData — запрашивает баланс пользователя по user_id.
  * Сервер возвращает { balance_ton: number }.

@@ -5,7 +5,7 @@ import { useTelegram } from '../hooks/useTelegram';
 import type { CaseItem } from './CaseShop';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { addToInventory } from '../api';
+import { addToInventory, getInitData } from '../api';
 
 interface Props {
   caseData: CaseItem;
@@ -98,7 +98,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
           user_id: user?.id || '6267608438', 
           game_type: 'case', 
           bet_amount: price,
-          initData: initData // <--- ГЛАВНЫЙ ФИКС (передаем initData из useTelegram)
+          initData: getInitData() // <--- используем надёжную функцию из api.ts
         })
       });
       
