@@ -84,70 +84,46 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     const price = Number(caseData.price);
 
     if (isNaN(currentBalance) || currentBalance < price) {
-      haptic('medium');
       onToast('Недостаточно TON на балансе!', 'error');
       return;
     }
 
-    haptic('medium');
-    setIsOpening(true);
-    onUpdateBalance(-price); // Списываем цену кейса
+    onUpdateBalance(-price); // Списываем цену
 
     try {
-      const tg = (window as any).Telegram?.WebApp;
-      const initDataVal = tg?.initData || '';
-      const userId = tg?.initDataUnsafe?.user?.id ?? 'unknown';
       const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          user_id: userId, 
+          user_id: user?.id || '6267608438', 
           game_type: 'case', 
-          bet_amount: Number(caseData.price),
-          initData: initDataVal
+          bet_amount: price,
+          initData: initData // <--- ГЛАВНЫЙ ФИКС (передаем initData из useTelegram)
         })
       });
+      
       const data = await res.json();
 
       if (data.success && data.item) {
         const winAmount = Number(data.item.price || data.item.floor || 0);
         onUpdateBalance(winAmount); // Начисляем выигрыш
-        addToInventory(data.item);  // Сохраняем в инвентарь
+        
         setDroppedItem(data.item);
-        setWonItem(data.item);
-        setSpinning(true);
-
-        /* Анимация прокрутки — 2 секунды, 20 кадров */
-        let tick = 0;
-        const maxTicks = 20;
-        const pool = loadPool();
-
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = setInterval(() => {
-          tick++;
-          const idx = tick % pool.length;
-          setDisplayImg(pool[idx].image);
-
-          if (tick >= maxTicks) {
-            if (intervalRef.current) clearInterval(intervalRef.current);
-            intervalRef.current = null;
-            setSpinning(false);
-            setDisplayImg(data.item.image);
-            setShowResult(true);
-            vibrate('success');
-            onToast(`🎉 Вы выиграли ${data.item.name}!`, 'success');
-          }
-        }, 100);
+        setShowResult(true);
+        
+        if (typeof addToInventory === 'function') {
+           addToInventory(data.item); // Добавляем в инвентарь
+        }
       } else {
-        onToast?.(data.error || 'Ошибка при открытии', 'error');
+        onToast(data.error || 'Ошибка при открытии', 'error');
         onUpdateBalance(price); // Возвращаем деньги
       }
     } catch (e) {
-      onToast?.('Ошибка сети', 'error');
+      console.error(e);
+      onToast('Ошибка сети', 'error');
       onUpdateBalance(price); // Возвращаем деньги
     } finally {
       setIsOpening(false);
-      setLoading(false);
     }
   };
 
