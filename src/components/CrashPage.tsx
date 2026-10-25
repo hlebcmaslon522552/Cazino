@@ -85,12 +85,27 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
           const prevY = prev.length > 0 ? prev[prev.length - 1].y : 100;
           const newX = Math.min(prevX + 10, 100);
-          const newY = Math.max(prevY - (Math.random() * 10 + 5), 10);
-          const newPoints = [...prev, { x: newX, y: newY }];
+          // Вычисляем новую Y: уменьшаем (двигаем вверх), но с плавной кривой
+          const rawY = prevY - (Math.random() * 8 + 2);
+          let newY = Math.min(Math.max(rawY, 0), 100);
+          let newPoints = [...prev, { x: newX, y: newY }];
           // Сдвигаем график влево, если точек больше 10 (эффект бегущей строки)
           if (newPoints.length > 10) {
-            return newPoints.map(p => ({ ...p, x: p.x - 5 }));
+            newPoints = newPoints.map(p => ({ ...p, x: Math.max(p.x - 5, 0) }));
           }
+          // Если последняя точка поднялась слишком высоко (Y < 20) — сдвигаем всё вниз
+          const lastY = newPoints[newPoints.length - 1].y;
+          if (lastY < 20) {
+            newPoints = newPoints.map(p => ({
+              ...p,
+              y: Math.min(p.y + 10, 100),
+            }));
+          }
+          // Финальное ограничение всех точек в пределах [0, 100]
+          newPoints = newPoints.map(p => ({
+            ...p,
+            y: Math.min(Math.max(p.y, 0), 100),
+          }));
           return newPoints;
         });
         lastPointTimeRef.current = time;
