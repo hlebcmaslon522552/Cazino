@@ -64,6 +64,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
   const [showResult, setShowResult] = useState(false);
   const [droppedItem, setDroppedItem] = useState<DropItem | null>(null); // будет использовано в Промт 2
   void droppedItem;
+  const [selectedItem, setSelectedItem] = useState<any>(null);
 
   /* Анимация прокрутки */
   const pool = loadPool();
@@ -226,20 +227,49 @@ return (
         <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 8 }}>
           Возможные предметы ({pool.length} шт.):
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {pool.map((p, i) => (
-            <span
+            <div
               key={i}
+              onClick={() => setSelectedItem(p)}
               style={{
                 background: 'rgba(255,255,255,0.06)',
-                borderRadius: 6,
-                padding: '4px 10px',
+                borderRadius: 10,
+                padding: '6px 10px',
                 fontSize: 12,
                 color: rarityColor(p.rarity),
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
             >
-              {p.name} ({p.chance}%)
-            </span>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  background: '#2a2a40',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={publicUrl(p.image.replace(/^\//, ''))}
+                  alt={p.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+              <span style={{ fontWeight: 500 }}>{p.name}</span>
+              <span style={{ color: '#f5c842', fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <img src={publicUrl('TON.png')} alt="TON" style={{ width: 12, height: 12, objectFit: 'contain' }} />
+                {p.price.toFixed(2)}
+              </span>
+            </div>
           ))}
         </div>
       </div>
@@ -311,6 +341,135 @@ return (
               <Button size="sm" fullWidth variant="ghost" onClick={closeResult}>
                 Закрыть
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Модальное окно предмета ─── */}
+      {selectedItem && (
+        <div
+          onClick={() => setSelectedItem(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(4px)',
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 320,
+              background: '#1c1c2e',
+              borderRadius: 24,
+              padding: 20,
+              border: '1px solid #374151',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+              position: 'relative',
+            }}
+          >
+            {/* Кнопка закрытия */}
+            <button
+              onClick={() => setSelectedItem(null)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                color: '#9ca3af',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 24,
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Заголовок */}
+            <h3 style={{ color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 16 }}>
+              Предмет
+            </h3>
+
+            {/* Картинка и название */}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 24 }}>
+              <div
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: 16,
+                  background: '#2a2a40',
+                  border: '2px solid rgba(168,85,247,0.5)',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 8,
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={publicUrl(selectedItem.image.replace(/^\//, ''))}
+                  alt={selectedItem.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              </div>
+              <div>
+                <p style={{ color: '#fff', fontWeight: 'bold', fontSize: 18, lineHeight: 1.2, marginBottom: 4 }}>
+                  {selectedItem.name}
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#a855f7', fontSize: 14 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#a855f7', display: 'inline-block' }}></span>
+                  {selectedItem.rarity || 'Редкий'}
+                </div>
+              </div>
+            </div>
+
+            {/* Таблица с ценой и шансом */}
+            <div
+              style={{
+                background: '#151521',
+                borderRadius: 12,
+                overflow: 'hidden',
+                border: '1px solid #1f2937',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px',
+                  borderBottom: '1px solid #1f2937',
+                }}
+              >
+                <span style={{ color: '#9ca3af' }}>Цена</span>
+                <span style={{ color: '#fff', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {selectedItem.floor || selectedItem.price}{' '}
+                  <img src={publicUrl('TON.png')} alt="TON" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                </span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '12px',
+                }}
+              >
+                <span style={{ color: '#9ca3af' }}>Шанс</span>
+                <span style={{ color: '#fff', fontWeight: 'bold' }}>
+                  {selectedItem.chance} %
+                </span>
+              </div>
             </div>
           </div>
         </div>
