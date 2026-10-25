@@ -7,7 +7,7 @@ import { Modal } from './ui/Modal';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { getInitData } from '../api';
+import { getInitData, fetchInventory, addToInventory } from '../api';
 
 /* ===================================================================
    NFT данные (из all_gifts.json)
@@ -282,26 +282,22 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const [angle, setAngle] = useState(0);
   const [duration, setDuration] = useState(6000);
 
-  // Загружаем NFT из инвентаря (my_nfts.json)
+  // Загружаем NFT из инвентаря через API
   useEffect(() => {
-    fetch('/my_nfts.json')
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch');
-        return res.json();
-      })
-      .then((data: Nft[]) => {
-        setNfts(data);
+    const initData = getInitData();
+    const userId = String(user?.id ?? '6267608438');
+    fetchInventory(initData, userId)
+      .then((data) => {
+        const mapped: Nft[] = data.map((item) => ({
+          id: item.id,
+          name: item.model,
+          floor: item.floor,
+          image: item.image,
+        }));
+        setNfts(mapped);
         setLoadingNfts(false);
       })
       .catch(() => {
-        // Если файла нет — берём из localStorage
-        const local = localStorage.getItem('inventory');
-        if (local) {
-          try {
-            const parsed = JSON.parse(local);
-            setNfts(parsed);
-          } catch {}
-        }
         setLoadingNfts(false);
       });
   }, []);
@@ -379,21 +375,46 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         if (!res.ok) throw new Error('Server error');
         return res.json();
       })
-      .then((data: { success: boolean; item?: Nft }) => {
+      .then(async (data: { success: boolean; item?: Nft }) => {
         const isWin = data.success === true;
+        const userId = String(user?.id ?? '6267608438');
 
         if (isWin && data.item) {
-          // Успех — добавляем новый NFT, удаляем старый, сохраняем в localStorage
+          // Успех — синхронизируем инвентарь на сервере
+          try {
+            // Удаляем startNft из инвентаря
+            await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: userId, item_id: startNft!.id }),
+            });
+            // Добавляем выигранный NFT в инвентарь
+            await addToInventory(data.item, userId);
+          } catch (e) {
+            console.error('Inventory sync error:', e);
+          }
+
+          // Обновляем локальное состояние
           setNfts((prev) => {
             let updated = prev.filter((n) => n.id !== startNft!.id);
             if (!updated.find((n) => n.id === data.item!.id)) {
               updated = [...updated, data.item as Nft];
             }
-            localStorage.setItem('inventory', JSON.stringify(updated));
             return updated;
           });
         } else if (!isWin) {
-          // Неудача — удаляем стартовый NFT из инвентаря
+          // Неудача — удаляем startNft из инвентаря на сервере
+          try {
+            await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: userId, item_id: startNft!.id }),
+            });
+          } catch (e) {
+            console.error('Inventory sync error:', e);
+          }
+
+          // Обновляем локальное состояние — убираем startNft
           setNfts((prev) => {
             const updated = prev.filter((n) => n.id !== startNft!.id);
             return updated;
