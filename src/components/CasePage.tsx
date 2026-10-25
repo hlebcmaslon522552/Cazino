@@ -29,11 +29,11 @@ const DEFAULT_POOL: DropItem[] = [
   { name: 'Plush Pepe', image: '/nft_images/plush_pepe.webp', rarity: 'legendary', chance: 1, price: 500 },
   { name: 'Durov Cap', image: '/nft_images/durovs_cap.webp', rarity: 'epic', chance: 4, price: 200 },
   { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'rare', chance: 10, price: 80 },
-  { name: 'Golden Fish', image: '/CaseWOOD.png', rarity: 'rare', chance: 10, price: 75 },
-  { name: 'Shadow Veil', image: '/case-test.png', rarity: 'uncommon', chance: 15, price: 40 },
-  { name: 'Ruby Heart', image: '/GOLD.png', rarity: 'uncommon', chance: 15, price: 35 },
-  { name: 'Emerald Eye', image: '/Silver.png', rarity: 'uncommon', chance: 15, price: 30 },
-  { name: 'Moonstone', image: '/CASE_COPPER.png', rarity: 'common', chance: 30, price: 10 },
+  { name: 'Golden Fish', image: '/nft_images/bonded_ring.webp', rarity: 'rare', chance: 10, price: 75 },
+  { name: 'Shadow Veil', image: '/nft_images/westside_sign.webp', rarity: 'uncommon', chance: 15, price: 40 },
+  { name: 'Ruby Heart', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'uncommon', chance: 15, price: 35 },
+  { name: 'Emerald Eye', image: '/nft_images/clover_pin.webp', rarity: 'uncommon', chance: 15, price: 30 },
+  { name: 'Moonstone', image: '/nft_images/moon_pendant.webp', rarity: 'common', chance: 30, price: 10 },
 ];
 
 function loadPool(): DropItem[] {

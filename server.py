@@ -107,9 +107,13 @@ def init_db():
     """)
 
     # Пользователь по умолчанию (id из браузера)
-    c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
-    conn.commit()
-    conn.close()
+    try:
+        c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
+        conn.commit()
+    except Exception as e:
+        print(f"[init_db] insert default user error: {e}")
+    finally:
+        conn.close()
 
 
 init_db()
@@ -120,14 +124,14 @@ def verify_init_data(init_data):
 
 # ── Пул предметов для кейсов ──────────────────────────────────────────
 CASE_POOL = [
-    {"name": "Plush Pepe", "image": "/GOLD.png", "rarity": "legendary", "chance": 1, "price": 500},
-    {"name": "Durov Cap", "image": "/Silver.png", "rarity": "epic", "chance": 4, "price": 200},
-    {"name": "Astral Shard", "image": "/CASE_COPPER.png", "rarity": "rare", "chance": 10, "price": 80},
-    {"name": "Golden Fish", "image": "/CaseWOOD.png", "rarity": "rare", "chance": 10, "price": 75},
-    {"name": "Shadow Veil", "image": "/case-test.png", "rarity": "uncommon", "chance": 15, "price": 40},
-    {"name": "Ruby Heart", "image": "/GOLD.png", "rarity": "uncommon", "chance": 15, "price": 35},
-    {"name": "Emerald Eye", "image": "/Silver.png", "rarity": "uncommon", "chance": 15, "price": 30},
-    {"name": "Moonstone", "image": "/CASE_COPPER.png", "rarity": "common", "chance": 30, "price": 10},
+    {"name": "Plush Pepe", "image": "/nft_images/plush_pepe.webp", "rarity": "legendary", "chance": 1, "price": 500},
+    {"name": "Durov Cap", "image": "/nft_images/durovs_cap.webp", "rarity": "epic", "chance": 4, "price": 200},
+    {"name": "Astral Shard", "image": "/nft_images/astral_shard.webp", "rarity": "rare", "chance": 10, "price": 80},
+    {"name": "Golden Fish", "image": "/nft_images/bonded_ring.webp", "rarity": "rare", "chance": 10, "price": 75},
+    {"name": "Shadow Veil", "image": "/nft_images/westside_sign.webp", "rarity": "uncommon", "chance": 15, "price": 40},
+    {"name": "Ruby Heart", "image": "/nft_images/heart_locket-removebg-preview.png", "rarity": "uncommon", "chance": 15, "price": 35},
+    {"name": "Emerald Eye", "image": "/nft_images/clover_pin.webp", "rarity": "uncommon", "chance": 15, "price": 30},
+    {"name": "Moonstone", "image": "/nft_images/moon_pendant.webp", "rarity": "common", "chance": 30, "price": 10},
 ]
 
 def generate_crash_point():
@@ -179,19 +183,23 @@ def send_telegram_notification(message: str):
 # ── Leaderboard Reset ──────────────────────────────────────────────
 def get_total_deposits_by_user():
     """Возвращает топ-15 пользователей по сумме депозитов."""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("""
-        SELECT user_id, SUM(amount) as total
-        FROM deposits
-        WHERE prize_paid = 0
-        GROUP BY user_id
-        ORDER BY total DESC
-        LIMIT 15
-    """)
-    rows = c.fetchall()
-    conn.close()
-    return rows
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT user_id, SUM(amount) as total
+            FROM deposits
+            WHERE prize_paid = 0
+            GROUP BY user_id
+            ORDER BY total DESC
+            LIMIT 15
+        """)
+        rows = c.fetchall()
+        conn.close()
+        return rows
+    except Exception as e:
+        print(f"[get_total_deposits_by_user] error: {e}")
+        return []
 
 
 def award_prizes(top_users: list) -> str:
@@ -203,32 +211,36 @@ def award_prizes(top_users: list) -> str:
         return "Нет пользователей для награждения."
 
     report_lines = ["🏆 <b>Топ обнулён! Призы выданы:</b>"]
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
 
-    for rank, (user_id, total_deposited) in enumerate(top_users, start=1):
-        prize = LEADERBOARD_PRIZES.get(rank, 0.0)
-        if prize <= 0:
-            continue
+        for rank, (user_id, total_deposited) in enumerate(top_users, start=1):
+            prize = LEADERBOARD_PRIZES.get(rank, 0.0)
+            if prize <= 0:
+                continue
 
-        # Начисляем приз на баланс пользователя
-        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
-        row = c.fetchone()
-        if row:
-            new_balance = row[0] + prize
-            c.execute("UPDATE users SET balance_ton = ? WHERE id = ?", (new_balance, user_id))
-        else:
-            # Создаём пользователя, если его нет
-            c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?)", (user_id, prize))
+            # Начисляем приз на баланс пользователя
+            c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            if row:
+                new_balance = row[0] + prize
+                c.execute("UPDATE users SET balance_ton = ? WHERE id = ?", (new_balance, user_id))
+            else:
+                # Создаём пользователя, если его нет
+                c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?)", (user_id, prize))
 
-        report_lines.append(
-            f"  {rank}. <code>{user_id}</code> — {prize} TON (депозит: {total_deposited:.2f} TON)"
-        )
+            report_lines.append(
+                f"  {rank}. <code>{user_id}</code> — {prize} TON (депозит: {total_deposited:.2f} TON)"
+            )
 
-    # Очищаем таблицу депозитов
-    c.execute("DELETE FROM deposits")
-    conn.commit()
-    conn.close()
+        # Очищаем таблицу депозитов
+        c.execute("DELETE FROM deposits")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[award_prizes] error: {e}")
+        report_lines.append(f"  ❌ Ошибка: {e}")
 
     return "\n".join(report_lines)
 
@@ -238,11 +250,15 @@ def should_reset_now() -> bool:
     Проверяет, пора ли сбрасывать лидерборд.
     Сброс происходит каждые RESET_INTERVAL_DAYS дней в RESET_HOUR часов.
     """
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT value FROM config WHERE key = 'last_reset'")
-    row = c.fetchone()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT value FROM config WHERE key = 'last_reset'")
+        row = c.fetchone()
+        conn.close()
+    except Exception as e:
+        print(f"[should_reset_now] error: {e}")
+        return False
 
     if not row:
         return False
@@ -264,11 +280,14 @@ def should_reset_now() -> bool:
 def update_last_reset_time():
     """Обновляет время последнего сброса на текущее."""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("UPDATE config SET value = ? WHERE key = 'last_reset'", (now_str,))
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("UPDATE config SET value = ? WHERE key = 'last_reset'", (now_str,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[update_last_reset_time] error: {e}")
 
 
 def check_and_reset_leaderboard():
@@ -316,19 +335,26 @@ def check_and_reset_leaderboard():
 @app.route("/api/balance", methods=["GET"])
 def get_balance():
     user_id = request.args.get("user_id", "6267608438")
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT balance_ton, balance_stars FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-    if row:
-        return jsonify({"balance_ton": row[0], "balance_stars": row[1]})
-    # Если пользователя нет — создаём с балансом 15 TON
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, 15.0)", (user_id,))
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT balance_ton, balance_stars FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return jsonify({"balance_ton": row[0], "balance_stars": row[1]})
+    except Exception as e:
+        print(f"[get_balance] select error: {e}")
+
+    # Если пользователя нет или ошибка — создаём с балансом 15 TON
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, 15.0)", (user_id,))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[get_balance] insert error: {e}")
     return jsonify({"balance_ton": 15.0, "balance_stars": 0.0})
 
 
@@ -451,30 +477,39 @@ def open_case():
         return jsonify({"error": "case_price must be > 0"}), 400
 
     # Проверяем баланс пользователя
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
-    if not row:
-        # Создаём пользователя с балансом 15.0
-        c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, 15.0)", (user_id,))
-        conn.commit()
-        balance = 15.0
-    else:
-        balance = row[0]
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if not row:
+            # Создаём пользователя с балансом 15.0
+            c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, 15.0)", (user_id,))
+            conn.commit()
+            balance = 15.0
+        else:
+            balance = row[0]
+    except Exception as e:
+        print(f"[open_case] select/insert error: {e}")
+        return jsonify({"error": "Database error"}), 500
 
     if balance < case_price:
         conn.close()
         return jsonify({"error": "Недостаточно средств"}), 400
 
     # Списываем цену кейса
-    new_balance = balance - case_price
-    c.execute("UPDATE users SET balance_ton = ? WHERE id = ?", (new_balance, user_id))
+    try:
+        new_balance = balance - case_price
+        c.execute("UPDATE users SET balance_ton = ? WHERE id = ?", (new_balance, user_id))
 
-    # Выбираем случайный предмет
-    item = pick_case_item()
-    conn.commit()
-    conn.close()
+        # Выбираем случайный предмет
+        item = pick_case_item()
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[open_case] update error: {e}")
+        conn.close()
+        return jsonify({"error": "Database error"}), 500
 
     return jsonify({"success": True, "item": item})
 
@@ -624,17 +659,21 @@ def sell_nft():
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
-    balance = row[0] if row else 15.0
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        balance = row[0] if row else 15.0
 
-    new_balance = balance + price
-    c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
-              (user_id, new_balance, new_balance))
-    conn.commit()
-    conn.close()
+        new_balance = balance + price
+        c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
+                  (user_id, new_balance, new_balance))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[sell_nft] error: {e}")
+        return jsonify({"error": "Database error"}), 500
 
     return jsonify({"success": True, "new_balance": new_balance})
 
@@ -744,33 +783,41 @@ def add_turnover():
     if amount <= 0:
         return jsonify({"error": "Amount must be > 0"}), 400
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO turnover (user_id, username, amount) VALUES (?, ?, ?)",
-        (user_id, username, amount)
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO turnover (user_id, username, amount) VALUES (?, ?, ?)",
+            (user_id, username, amount)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[add_turnover] error: {e}")
+        return jsonify({"error": "Database error"}), 500
     return jsonify({"success": True})
 
 
 @app.route("/api/leaderboard_turnover", methods=["GET"])
 def leaderboard_turnover():
     """Возвращает топ-15 юзеров по сумме оборота."""
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("""
-        SELECT username, SUM(amount) as total
-        FROM turnover
-        GROUP BY user_id
-        ORDER BY total DESC
-        LIMIT 15
-    """)
-    rows = c.fetchall()
-    conn.close()
-    leaderboard = [{"username": row[0], "total": round(row[1], 2)} for row in rows]
-    return jsonify(leaderboard)
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT username, SUM(amount) as total
+            FROM turnover
+            GROUP BY user_id
+            ORDER BY total DESC
+            LIMIT 15
+        """)
+        rows = c.fetchall()
+        conn.close()
+        leaderboard = [{"username": row[0], "total": round(row[1], 2)} for row in rows]
+        return jsonify(leaderboard)
+    except Exception as e:
+        print(f"[leaderboard_turnover] error: {e}")
+        return jsonify([])
 
 
 # ── Запуск фоновой задачи сброса лидерборда ───────────────────────────
