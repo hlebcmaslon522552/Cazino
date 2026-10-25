@@ -3,6 +3,8 @@ import { LottiePlayer } from './ui/LottiePlayer';
 import { BetInput } from './ui/BetInput';
 import { colors, radius, spacing } from '../theme';
 import { publicUrl } from '../helpers/publicUrl';
+import { CONFIG } from '../config';
+import { useTelegram } from '../hooks/useTelegram';
 
 /* ===================================================================
    Константы
@@ -37,6 +39,7 @@ interface Props {
 type Phase = 'setup' | 'playing' | 'won' | 'lost';
 
 export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) {
+  const { user, initData } = useTelegram();
   const [betAmount, setBetAmount] = useState('0.1');
   const [difficulty, setDifficulty] = useState<Difficulty>(DIFFICULTIES[0]);
   const [phase, setPhase] = useState<Phase>('setup');
@@ -56,7 +59,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
   const canCashout = phase === 'playing' && openSafe.length > 0 && !isGameOver;
 
   /* ── Старт игры ─────────────────────────── */
-  const startGame = () => {
+  const startGame = async () => {
     if (stakePrice <= 0 || difficulty.mines >= totalCells) return;
 
     if (Number(balance) < Number(stakePrice)) {
@@ -66,42 +69,71 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
 
     onUpdateBalance(-Number(stakePrice));
 
-    const cells = Array.from({ length: totalCells }, (_, i) => i);
-    for (let i = cells.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [cells[i], cells[j]] = [cells[j], cells[i]];
-    }
-
-    setMineIndexes(cells.slice(0, difficulty.mines));
     setOpenSafe([]);
     setHitMineIndex(null);
     setShowBomb(false);
     setFadeOut(false);
     setIsGameOver(false);
-    setPhase('playing');
+
+    try {
+      const res = await fetch(`${CONFIG.API_URL}/api/mines_start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          size: difficulty.size,
+          mines_count: difficulty.mines,
+          initData: initData
+        })
+      });
+      const data = await res.json();
+      if (data.status === 'started') {
+        setPhase('playing');
+      } else {
+        onToast('Ошибка при старте игры', 'error');
+      }
+    } catch (e) {
+      console.error('mines_start error:', e);
+      onToast('Ошибка сети', 'error');
+    }
   };
 
   /* ── Клик по клетке ─────────────────────── */
-  const handleCellClick = (index: number) => {
+  const handleCellClick = async (index: number) => {
     if (phase !== 'playing' || showBomb) return;
     if (openSafe.includes(index)) return;
 
-    if (mineIndexes.includes(index)) {
-      setIsGameOver(true);
-      setHitMineIndex(index);
-      setShowBomb(true);
-      onToast('💥 БОМБА!', 'error');
-      setTimeout(() => setFadeOut(true), 200);
-      setTimeout(() => setPhase('lost'), 1200);
-      return;
-    }
+    try {
+      const res = await fetch(`${CONFIG.API_URL}/api/mines_click`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          cell_index: index,
+          initData: initData
+        })
+      });
+      const data = await res.json();
 
-    const updated = [...openSafe, index];
-    setOpenSafe(updated);
+      if (data.status === 'boom') {
+        setIsGameOver(true);
+        setHitMineIndex(index);
+        setShowBomb(true);
+        onToast('💥 БОМБА!', 'error');
+        setTimeout(() => setFadeOut(true), 200);
+        setTimeout(() => setPhase('lost'), 1200);
+      } else if (data.status === 'safe') {
+        const updated = [...openSafe, index];
+        setOpenSafe(updated);
 
-    if (updated.length >= safeTotal) {
-      setPhase('won');
-      onToast('🎉 Вы открыли все клетки!', 'success');
+        if (updated.length >= safeTotal) {
+          setPhase('won');
+          onToast('🎉 Вы открыли все клетки!', 'success');
+        }
+      }
+    } catch (e) {
+      console.error('mines_click error:', e);
+      onToast('Ошибка сети', 'error');
     }
   };
 

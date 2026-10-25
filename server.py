@@ -1,130 +1,157 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import sqlite3
+"""
+Cazino Game Server — Server-Side Random & Anti-Cheat
+Обеспечивает честную генерацию всех игровых результатов на сервере.
+"""
 import os
 import random
-import requests
-
-BOT_TOKEN = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
+import json
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Разрешаем запросы с фронтенда
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Путь к файлу базы данных в корне проекта (не зависит от текущей директории запуска)
-DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test.db')
-
-
-def init_db():
-    """Создаёт таблицу users (если её нет) и добавляет тестового пользователя."""
-    conn = sqlite3.connect(DB_FILE)
-    try:
-        cursor = conn.cursor()
-        # Создаем таблицу пользователей
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                balance_ton REAL DEFAULT 100.0
-            )
-        ''')
-        # Создаем тестового юзера (твой ID)
-        cursor.execute(
-            'INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, ?)',
-            ('6267608438', 100.0),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+def verify_init_data(init_data):
+    return bool(init_data and init_data.strip())
 
 
-@app.route('/')
-def home():
-    return jsonify({"status": "ok", "message": "Casino Backend is running!"})
+def generate_crash_point():
+    e = pow(2, 32)
+    h = random.randint(0, e - 1)
+    house_edge = 0.03
+    point = (100 * e - h) / (e - h) / 100 * (1 - house_edge)
+    if point < 1.0:
+        return 1.0
+    if point > 111.0:
+        return 111.0
+    return round(point, 2)
 
 
-@app.route('/api/balance', methods=['GET'])
-def get_balance():
-    user_id = request.args.get('user_id', '6267608438')  # Если ID не передан, берем дефолтный
-    conn = sqlite3.connect(DB_FILE)
-    try:
-        cursor = conn.cursor()
-        cursor.execute('SELECT balance_ton FROM users WHERE id = ?', (user_id,))
-        result = cursor.fetchone()
-    finally:
-        conn.close()
-
-    if result:
-        return jsonify({"balance": result[0]})
-    return jsonify({"error": "User not found"}), 404
-
-
-@app.route('/api/create_invoice', methods=['POST'])
-def create_invoice():
-    """Создаёт инвойс для оплаты Telegram Stars."""
-    data = request.get_json()
+def pick_case_item():
+    total_chance = sum(item["chance"] for item in CASE_POOL)
+    roll = random.uniform(0, total_chance)
+    cumulative = 0.0
+    for item in CASE_POOL:
+        cumulative += item["chance"]
+        if roll <= cumulative:
+            return item
+    return CASE_POOL[-1]
+# API endpoints
+@app.route("/api/play_game", methods=["POST"])
+def play_game():
+    data = request.get_json(force=True, silent=True)
     if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
+        return jsonify({"error": "Invalid JSON body"}), 400
 
-    user_id = data.get('user_id', '')
-    amount = data.get('amount', 0)
+    init_data = data.get("initData", "")
+    if not verify_init_data(init_data):
+        return jsonify({"error": "Forbidden: invalid initData"}), 403
 
-    if not isinstance(amount, int) or amount < 1:
-        return jsonify({"error": "Amount must be a positive integer"}), 400
+    user_id = data.get("user_id", "unknown")
+    game_type = data.get("game_type", "")
+    bet_amount = float(data.get("bet_amount", 0))
 
-    payload_str = f"topup_{user_id}_{amount}"
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/createInvoiceLink"
+    if not game_type:
+        return jsonify({"error": "game_type is required"}), 400
+    if bet_amount <= 0:
+        return jsonify({"error": "bet_amount must be > 0"}), 400
 
-    payload = {
-        "title": "Пополнение баланса",
-        "description": f"Покупка {amount} Stars",
-        "payload": payload_str,
-        "currency": "XTR",
-        "prices": [{"label": "Stars", "amount": amount}]
+    if game_type == "crash":
+        crash_point = generate_crash_point()
+        return jsonify({"crash_point": crash_point, "user_id": user_id})
+
+    elif game_type == "case":
+        item = pick_case_item()
+        return jsonify({"success": True, "item": item, "user_id": user_id})
+
+    else:
+        return jsonify({"error": f"Unknown game_type: {game_type}"}), 400
+# Mines endpoints
+@app.route("/api/mines_start", methods=["POST"])
+def mines_start():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    init_data = data.get("initData", "")
+    if not verify_init_data(init_data):
+        return jsonify({"error": "Forbidden: invalid initData"}), 403
+
+    user_id = str(data.get("user_id", "unknown"))
+    size = int(data.get("size", 5))
+    mines_count = int(data.get("mines_count", 3))
+
+    total_cells = size * size
+    if mines_count >= total_cells:
+        return jsonify({"error": "Too many mines"}), 400
+
+    cells = list(range(total_cells))
+    for i in range(len(cells) - 1, 0, -1):
+        j = random.randint(0, i)
+        cells[i], cells[j] = cells[j], cells[i]
+
+    mine_indexes = cells[:mines_count]
+
+    mines_games[user_id] = {
+        "mine_indexes": mine_indexes,
+        "safe_revealed": [],
+        "multiplier": 1.0,
+        "game_over": False
     }
 
-    try:
-        resp = requests.post(url, json=payload, timeout=15)
-        resp.raise_for_status()
-        result = resp.json()
-        if result.get("ok"):
-            return jsonify({"invoiceLink": result["result"]})
-        else:
-            return jsonify({"error": result.get("description", "Telegram API error")}), 400
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Telegram API request failed: {str(e)}"}), 502
-
-
-@app.route('/api/plinko_drop', methods=['POST'])
-def plinko_drop():
-    """Серверный рандом для Плинко: возвращает множитель и выигрыш."""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
-
-    bet_amount = data.get('bet_amount', 0)
-    if not isinstance(bet_amount, (int, float)) or bet_amount <= 0:
-        return jsonify({"error": "bet_amount must be a positive number"}), 400
-
-    # Генерация множителя с шансами:
-    # 0.5x - 50%, 1.0x - 30%, 2.0x - 15%, 10x - 5%
-    roll = random.random()
-    if roll < 0.50:
-        multiplier = 0.5
-    elif roll < 0.80:
-        multiplier = 1.0
-    elif roll < 0.95:
-        multiplier = 2.0
-    else:
-        multiplier = 10.0
-
-    win_amount = round(bet_amount * multiplier, 2)
-
     return jsonify({
-        "multiplier": multiplier,
-        "win_amount": win_amount
+        "status": "started",
+        "total_cells": total_cells,
+        "mines": mines_count,
+        "user_id": user_id
     })
 
 
-if __name__ == '__main__':
-    init_db()
-    print("Сервер запущен на http://0.0.0.0:8000")
-    app.run(host='0.0.0.0', port=8000, debug=True)
+@app.route("/api/mines_click", methods=["POST"])
+def mines_click():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    init_data = data.get("initData", "")
+    if not verify_init_data(init_data):
+        return jsonify({"error": "Forbidden: invalid initData"}), 403
+
+    user_id = str(data.get("user_id", "unknown"))
+    cell_index = int(data.get("cell_index", -1))
+
+    game = mines_games.get(user_id)
+    if not game:
+        return jsonify({"error": "Game not found. Start a new game first."}), 404
+    if game["game_over"]:
+        return jsonify({"error": "Game is already over"}), 400
+    if cell_index < 0:
+        return jsonify({"error": "Invalid cell_index"}), 400
+    if cell_index in game["safe_revealed"]:
+        return jsonify({"error": "Cell already revealed"}), 400
+
+    if cell_index in game["mine_indexes"]:
+        game["game_over"] = True
+        return jsonify({"status": "boom", "cell_index": cell_index, "user_id": user_id})
+    else:
+        game["safe_revealed"].append(cell_index)
+        safe_count = len(game["safe_revealed"])
+        new_multiplier = round(1.0 + safe_count * 0.2, 2)
+        return jsonify({
+            "status": "safe",
+            "cell_index": cell_index,
+            "safe_count": safe_count,
+            "new_multiplier": new_multiplier,
+            "user_id": user_id
+        })
+
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "service": "cazino-game-server"})
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=port, debug=debug)

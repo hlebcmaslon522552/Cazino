@@ -55,7 +55,7 @@ function rarityColor(rarity: string): string {
 }
 
 export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
-  const { haptic, vibrate, user } = useTelegram();
+  const { haptic, vibrate, user, initData } = useTelegram();
 
   const [spinning, setSpinning] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -94,10 +94,15 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     onUpdateBalance(-price); // Списываем цену кейса
 
     try {
-      const res = await fetch(`${CONFIG.API_URL}/api/open_case`, {
+      const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({ user_id: user?.id ?? 'unknown', case_price: price })
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          game_type: 'case',
+          bet_amount: price,
+          initData: initData
+        })
       });
       const data = await res.json();
 
@@ -117,7 +122,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = setInterval(() => {
           tick++;
-          const idx = Math.floor(Math.random() * pool.length);
+          const idx = tick % pool.length;
           setDisplayImg(pool[idx].image);
 
           if (tick >= maxTicks) {

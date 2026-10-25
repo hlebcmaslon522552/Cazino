@@ -36,13 +36,14 @@ interface Ball {
   y: number;
   vx: number;
   vy: number;
-  slot: number | null;   // индекс слота после приземления
-  multiplier: number;    // множитель слота
-  bet: number;           // ставка за этот шарик
-  finished: boolean;     // упал в слот
-  startTime: number;     // performance.now() в момент запуска партии
-  spawnDelay: number;    // мс до появления шарика (очередь)
-  targetSlot: number | null; // целевой слот от сервера (если есть)
+  slot: number | null;        // индекс слота после приземления
+  multiplier: number;         // множитель слота
+  serverMultiplier: number | null; // множитель от сервера (для выплаты)
+  bet: number;                // ставка за этот шарик
+  finished: boolean;          // упал в слот
+  startTime: number;          // performance.now() в момент запуска партии
+  spawnDelay: number;         // мс до появления шарика (очередь)
+  targetSlot: number | null;  // целевой слот от сервера (если есть)
 }
 
 interface Peg {
@@ -161,24 +162,18 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     if (b.finished) return;
 
     const totalSlots = multipliers.length;
+    const slotWidth = boardW / totalSlots;
     let slotIndex: number;
 
-    // Если есть целевой слот от сервера — используем его
-    if (b.targetSlot !== null && b.targetSlot >= 0 && b.targetSlot < totalSlots) {
-      slotIndex = b.targetSlot;
-      // Визуально перемещаем шарик в центр целевого слота
-      const slotWidth = boardW / totalSlots;
-      b.x = slotWidth * slotIndex + slotWidth / 2;
-    } else {
-      // Иначе вычисляем по физике
-      const slotWidth = boardW / totalSlots;
-      slotIndex = Math.floor(b.x / slotWidth);
-      // Защита от вылета за пределы массива
-      if (slotIndex < 0) slotIndex = 0;
-      if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
-    }
+    // Определяем слот по физическому положению шарика (без телекорта)
+    slotIndex = Math.floor(b.x / slotWidth);
+    if (slotIndex < 0) slotIndex = 0;
+    if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
 
-    const winMultiplier = multipliers[slotIndex];
+    // Используем серверный множитель для выплаты, если он есть
+    const winMultiplier = b.serverMultiplier !== null && b.serverMultiplier !== undefined
+      ? b.serverMultiplier
+      : multipliers[slotIndex];
 
     b.slot = slotIndex;
     b.multiplier = winMultiplier;
@@ -238,13 +233,13 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             const overlap = (BALL_R + PEG_R) - dist;
             b.x += (dx / dist) * overlap;
             b.y += (dy / dist) * overlap;
-            const randomBounce = (Math.random() - 0.5) * 2;
-            b.vx = (dx / dist) * 2 + randomBounce;
+            // Отталкивание от колышка с малым хаосом (не ломает общий вектор)
+            b.vx = (dx / dist) * 2 + (Math.random() - 0.5) * 0.5;
             b.vy = Math.abs(b.vy) * 0.5;
 
             // Антизастревание: если скорость Y почти нулевая, толкаем в случайную сторону
             if (b.vy < 0.5) {
-              b.vx += (Math.random() - 0.5) * 3;
+              b.vx += (Math.random() - 0.5) * 1.5;
             }
           }
         }
@@ -321,7 +316,11 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     haptic('medium');
 
     // Спрашиваем серверные множители
-    const serverSlots: (number | null)[] = [];
+    interface ServerSlot {
+      slotIndex: number | null;
+      multiplier: number | null;
+    }
+    const serverData: ServerSlot[] = [];
     try {
       const results = await Promise.all(
         Array.from({ length: ballsCount }, () =>
@@ -335,16 +334,16 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
       for (const res of results) {
         if (res && typeof res.multiplier === 'number') {
           const slotIdx = findSlotForMultiplier(res.multiplier);
-          serverSlots.push(slotIdx);
+          serverData.push({ slotIndex: slotIdx, multiplier: res.multiplier });
         } else {
-          serverSlots.push(null);
+          serverData.push({ slotIndex: null, multiplier: null });
         }
       }
     } catch {
       // Если сервер недоступен — играем локально
-      for (let i = 0; i < ballsCount; i++) serverSlots.push(null);
+      for (let i = 0; i < ballsCount; i++) serverData.push({ slotIndex: null, multiplier: null });
     }
-    serverSlotsRef.current = serverSlots;
+    serverSlotsRef.current = serverData.map(d => d.slotIndex);
 
     onUpdateBalance(-totalStake);
     setIsDropping(true);
@@ -354,21 +353,41 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     setLastWin(null);
 
     const now = performance.now();
+    const totalSlots = multipliers.length;
+    const fallDistance = Math.max(slotTop - DROP_START_Y, 1);
+    const timeToFall = Math.sqrt(2 * fallDistance / GRAVITY);
+
     const created: Ball[] = [];
     for (let i = 0; i < ballsCount; i++) {
+      const sd = serverData[i] || { slotIndex: null, multiplier: null };
+      let startX = boardW / 2;
+      let startVx = 0;
+
+      if (sd.slotIndex !== null) {
+        // Рассчитываем целевую X — центр слота
+        const targetX = (sd.slotIndex + 0.5) * (boardW / totalSlots);
+        // Начальная скорость X = смещение / время полёта
+        startVx = (targetX - boardW / 2) / timeToFall;
+      } else {
+        // Нет сервера — случайный разброс (как было)
+        startX = boardW / 2 + (Math.random() - 0.5) * 10;
+        startVx = (Math.random() - 0.5) * 2;
+      }
+
       created.push({
         id: nextId.current++,
-        x: boardW / 2 + (Math.random() - 0.5) * 10,
+        x: startX,
         y: DROP_START_Y,
-        vx: (Math.random() - 0.5) * 2,
+        vx: startVx,
         vy: 0,
         slot: null,
         multiplier: 0,
+        serverMultiplier: sd.multiplier,
         bet: stake,
         finished: false,
         startTime: now,
         spawnDelay: i * SPAWN_STEP, // очередь: каждый следующий на 300 мс позже
-        targetSlot: serverSlotsRef.current.length > i ? serverSlotsRef.current[i] : null,
+        targetSlot: sd.slotIndex,
       });
     }
     ballsRef.current = [...ballsRef.current, ...created];

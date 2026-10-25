@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, RefreshCw, Coins, Clock } from 'lucide-react';
+import { useTelegram } from '../hooks/useTelegram';
+import { CONFIG } from '../config';
 
 interface CrashPageProps {
   balance: number;
@@ -16,6 +18,7 @@ interface Candle {
 }
 
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
+  const { user, initData } = useTelegram();
   const [bet, setBet] = useState<number>(1.0);
   const [multiplier, setMultiplier] = useState<number>(1.00);
   const [gameState, setGameState] = useState<'waiting' | 'playing' | 'crashed'>('waiting');
@@ -32,28 +35,36 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const startTimeRef = useRef<number>();
   const lastCandleTimeRef = useRef<number>(0);
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
-  const generateCrashPoint = (): number => {
-    const e = Math.pow(2, 32);
-    const h = Math.floor(Math.random() * e);
-    const houseEdge = 0.03;
-    let point = (100 * e - h) / (e - h) / 100 * (1 - houseEdge);
-    if (point < 1.00) return 1.00;
-    if (point > 111.00) return 111.00;
-    return point;
-  };
 
-  const startGame = React.useCallback(() => {
+  const startGame = React.useCallback(async () => {
     if (bet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
     if (bet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
 
     onUpdateBalance(-bet);
     setMultiplier(1.00);
-    setCrashPoint(generateCrashPoint());
     setHasCashedOut(false);
     setCandles([{ open: 1.0, close: 1.0, high: 1.0, low: 1.0, x: 0 }]);
     setGameState('playing');
     startTimeRef.current = performance.now();
     lastCandleTimeRef.current = performance.now();
+
+    try {
+      const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          game_type: 'crash',
+          bet_amount: bet,
+          initData: initData
+        })
+      });
+      const data = await res.json();
+      setCrashPoint(data.crash_point || 1.00);
+    } catch (e) {
+      console.error('Failed to fetch crash point:', e);
+      setCrashPoint(1.00);
+    }
   }, [bet, balance, onUpdateBalance, onToast]);
 
   const cashOut = () => {
