@@ -32,12 +32,11 @@ export function Root() {
   const [gameScreen, setGameScreen] = useState<GameScreen>('menu');
   const [caseData, setCaseData] = useState<CaseItem | null>(null);
   const [refreshVersion] = useState(0);
-  const { initData } = useTelegram();
   const [balance, setBalance] = useState(0);
 
   useEffect(() => {
-    getBalance(initData).then(setBalance).catch(() => setBalance(0));
-  }, [initData]);
+    getBalance().then(setBalance).catch(() => setBalance(0));
+  }, []);
 
   const handleUpdateBalance = (amount: number) => {
     setBalance(prev => {
@@ -74,7 +73,7 @@ export function Root() {
    * чтобы перезапросить баланс из API и Header обновился автоматически.
    */
   const refreshBalance = () => {
-    getBalance(initData).then(setBalance).catch(() => {});
+    getBalance().then(setBalance).catch(() => {});
   };
 
   return (

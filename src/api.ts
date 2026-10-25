@@ -149,16 +149,15 @@ export async function withdrawNft(itemId: number, initData: string): Promise<boo
   }
   return res.json();
 }
-let mockBalance = 15.0; // Стартовый баланс (15 TON)
-
-export async function getBalance(_initData: string): Promise<number> {
-  return mockBalance;
-}
-
-export async function updateBalance(_initData: string, amount: number): Promise<number> {
-  mockBalance += amount;
-  return mockBalance;
-}
+/**
+ * getBalance — реальный запрос баланса пользователя через fetchUserData.
+ * Извлекает userId из Telegram WebApp или использует значение по умолчанию.
+ */
+export const getBalance = async (): Promise<number> => {
+  const userId = String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id ?? '6267608438');
+  const data = await fetchUserData(userId);
+  return data.balance_ton;
+};
 
 export const getFloorPrice = async (collectionName: string) => {
   const res = await fetch(`${API_URL}/api/get_floor?collection=${collectionName}`, {
