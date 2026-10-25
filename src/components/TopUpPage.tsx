@@ -44,7 +44,7 @@ export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }:
         }],
       };
       await tonConnectUI.sendTransaction(transaction);
-      onUpdateBalance?.(balance + CONFIG.TOP_UP_AMOUNT_TON); // Обновляем баланс
+      onUpdateBalance?.(CONFIG.TOP_UP_AMOUNT_TON); // Обновляем баланс
       onToast('Баланс пополнен', 'success');
     } catch (e) {
       console.error(e);
@@ -74,7 +74,7 @@ export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }:
       if (window.Telegram?.WebApp) {
         window.Telegram.WebApp.openInvoice(data.invoiceLink, (status) => {
           if (status === 'paid') {
-            onUpdateBalance?.(balance + amount * 0.01);
+            onUpdateBalance?.(amount * 0.01);
             onToast?.('Баланс успешно пополнен!', 'success');
           } else if (status === 'cancelled') {
             onToast?.('Оплата отменена', 'error');

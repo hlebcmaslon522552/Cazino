@@ -5,11 +5,35 @@ Cazino Game Server — Server-Side Random & Anti-Cheat
 import os
 import random
 import json
+import sqlite3
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# ── База данных ──────────────────────────────────────────────────────
+DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
+
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            balance_ton REAL DEFAULT 15.0,
+            balance_stars REAL DEFAULT 0.0,
+            referrer_id TEXT DEFAULT NULL
+        )
+    """)
+    # Пользователь по умолчанию (id из браузера)
+    c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
+    conn.commit()
+    conn.close()
+
+
+init_db()
 
 def verify_init_data(init_data):
     return bool(init_data and init_data.strip())
@@ -36,6 +60,45 @@ def pick_case_item():
         if roll <= cumulative:
             return item
     return CASE_POOL[-1]
+# ── Баланс ───────────────────────────────────────────────────────────
+@app.route("/api/balance", methods=["GET"])
+def get_balance():
+    user_id = request.args.get("user_id", "6267608438")
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT balance_ton, balance_stars FROM users WHERE id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return jsonify({"balance_ton": row[0], "balance_stars": row[1]})
+    # Если пользователя нет — создаём с балансом 15 TON
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, 15.0)", (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"balance_ton": 15.0, "balance_stars": 0.0})
+
+
+@app.route("/api/update_balance", methods=["POST"])
+def update_balance():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    user_id = str(data.get("user_id", "unknown"))
+    balance = float(data.get("balance", 0))
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # Upsert: создаём строку если нет, обновляем баланс
+    c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
+              (user_id, balance, balance))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
 # API endpoints
 @app.route("/api/play_game", methods=["POST"])
 def play_game():

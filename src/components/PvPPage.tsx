@@ -97,7 +97,7 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
       }
       // Если игрок в ожидании и соперников меньше 2 — возвращаем ставку
       if (statusRef.current === 'waiting' && playersRef.current < 2 && betRef.current > 0) {
-        onUpdateBalance(balanceRef.current + betRef.current);
+        onUpdateBalance(betRef.current);
         onToast?.('Ставка возвращена, так как вы покинули лобби', 'info');
       }
       clearLobbyState();
@@ -150,7 +150,7 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
       onToast?.('Ставка должна быть больше 0', 'error');
       return;
     }
-    onUpdateBalance(balance - bet);
+    onUpdateBalance(-bet);
     setPlayersCount(1);
     setMyStatus('waiting');
   };
@@ -320,7 +320,7 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
         <button onClick={() => {
           // Выход из лобби — возвращаем ставку
           if (playersCount < 2) {
-            onUpdateBalance(balance + bet);
+            onUpdateBalance(bet);
             onToast?.('Вы вышли из лобби, ставка возвращена', 'info');
           } else {
             onToast?.('Игра уже началась, выход невозможен', 'error');
