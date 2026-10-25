@@ -74,7 +74,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
-          username: user?.first_name ?? user?.username ?? 'Unknown',
+          username: user?.first_name || 'Игрок',
           amount: stakePrice,
         }),
       }).catch(() => {});

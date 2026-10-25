@@ -87,7 +87,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           const newX = Math.min(prevX + 10, 100);
           // Вычисляем новую Y: уменьшаем (двигаем вверх), но с плавной кривой
           const rawY = prevY - (Math.random() * 8 + 2);
-          let newY = Math.min(Math.max(rawY, 0), 100);
+          let newY = Math.min(Math.max(rawY, 10), 100);
           let newPoints = [...prev, { x: newX, y: newY }];
           // Сдвигаем график влево, если точек больше 10 (эффект бегущей строки)
           if (newPoints.length > 10) {
@@ -159,7 +159,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
-          username: user?.first_name ?? user?.username ?? 'Unknown',
+          username: user?.first_name || 'Игрок',
           amount: turnoverAmount,
         }),
       }).catch(() => {});
@@ -297,8 +297,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
                   ? `Забрать ${(finalBet * multiplier).toFixed(2)} TON`
                   : `Забрать ${((selectedNft?.floor || 0) * multiplier).toFixed(2)} TON`}
           </button>
-        )}{gameState === 'crashed' && (
-          <button disabled className="w-full bg-gray-800 text-gray-500 font-black text-xl py-4 rounded-xl flex items-center justify-center gap-2"><RefreshCw size={24} className="animate-spin" /> Ожидание...</button>
         )}
       </div>
 

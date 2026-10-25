@@ -10,11 +10,11 @@ interface BottomNavProps {
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs: { id: Tab; left: string; icon: React.ReactNode }[] = [
-    { id: 'market',      left: '10%',   icon: <ShoppingBag size={20} /> },
-    { id: 'game',        left: '30%',   icon: <Swords size={20} /> },
-    { id: 'inventory',   left: '50%',   icon: <Backpack size={20} /> },
-    { id: 'leaderboard', left: '70%',   icon: <Trophy size={20} /> },
-    { id: 'profile',     left: '90%',   icon: <User size={20} /> },
+    { id: 'market',      left: '10%',   icon: <ShoppingBag size={18} /> },
+    { id: 'game',        left: '30%',   icon: <Swords size={18} /> },
+    { id: 'inventory',   left: '50%',   icon: <Backpack size={18} /> },
+    { id: 'leaderboard', left: '70%',   icon: <Trophy size={18} /> },
+    { id: 'profile',     left: '90%',   icon: <User size={18} /> },
   ];
 
   const labelMap: Record<string, string> = {
@@ -97,7 +97,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                   {tab.icon}
                 </div>
                 <span style={{
-                  fontSize: 9,
+                  fontSize: 8,
                   fontWeight: 600,
                   color: isActive ? '#fff' : '#999',
                   textTransform: 'capitalize',
