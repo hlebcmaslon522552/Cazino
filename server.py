@@ -71,8 +71,8 @@ def generate_crash_point():
     h = random.randint(0, e - 1)
     house_edge = 0.03
     point = (100 * e - h) / (e - h) / 100 * (1 - house_edge)
-    if point < 1.0:
-        return 1.0
+    if point < 1.01:
+        return 1.01
     if point > 111.0:
         return 111.0
     return round(point, 2)
@@ -203,18 +203,10 @@ def plinko_drop():
         return jsonify({"error": "bet_amount must be > 0"}), 400
 
     # Серверная генерация множителя Plinko
-    # Plinko multiplier: от x0.5 до x10.0
-    roll = random.random()
-    if roll < 0.15:
-        multiplier = round(random.uniform(0.5, 1.0), 2)
-    elif roll < 0.40:
-        multiplier = round(random.uniform(1.0, 2.0), 2)
-    elif roll < 0.65:
-        multiplier = round(random.uniform(2.0, 4.0), 2)
-    elif roll < 0.85:
-        multiplier = round(random.uniform(4.0, 7.0), 2)
-    else:
-        multiplier = round(random.uniform(7.0, 10.0), 2)
+    # Plinko multiplier: от x0.5 до x10.0 (23% house edge)
+    weights = [1, 1, 2, 4, 12, 80]
+    multipliers = [10.0, 5.0, 2.0, 1.5, 1.0, 0.5]
+    multiplier = random.choices(multipliers, weights=weights, k=1)[0]
 
     win_amount = round(bet_amount * multiplier, 2)
     return jsonify({"multiplier": multiplier, "win_amount": win_amount})

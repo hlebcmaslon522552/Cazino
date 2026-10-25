@@ -134,16 +134,37 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
   const pegs = useMemo<Peg[]>(() => {
     const list: Peg[] = [];
     if (boardW <= 0) return list;
-    const MIN_SPACING = (BALL_R + PEG_R) * 2; // минимум 24px — физический зазор для шарика
-    const sp = Math.max(boardW / (rows + 1), MIN_SPACING);
+    // Чистое расстояние между колышками по X: ширина поля / (количество рядов + 1)
+    const spacingX = boardW / (rows + 1);
+    // Проверка физического зазора: шарик (2*BALL_R) должен проходить между колышками
+    // Если spacingX <= (BALL_R + PEG_R) * 2 — уменьшаем радиусы
+    const minGap = (BALL_R + PEG_R) * 2;
+    let ballR = BALL_R;
+    let pegR = PEG_R;
+    let collideDist = COLLIDE_DIST;
+    if (spacingX <= minGap) {
+      // Уменьшаем радиусы пропорционально, чтобы spacingX > (ballR + pegR) * 2
+      const ratio = (spacingX * 0.98) / (minGap);
+      ballR = Math.floor(ballR * ratio * 10) / 10;
+      pegR = Math.floor(pegR * ratio * 10) / 10;
+      collideDist = ballR + pegR;
+    }
+    // Вертикальный шаг = доступная высота / количество рядов
+    const pegAreaHeight = slotTop - TOP_OFFSET;
+    const spacingY = pegAreaHeight / rows;
+
     for (let r = 0; r < rows; r++) {
-      const startX = (boardW - r * sp) / 2; // центрируем ряд
+      // Центрированный сдвиг: (boardW - r * spacingX) / 2
+      const startX = (boardW - r * spacingX) / 2;
       for (let j = 0; j <= r; j++) {
-        list.push({ x: startX + j * sp, y: TOP_OFFSET + r * ROW_GAP });
+        list.push({
+          x: startX + j * spacingX,
+          y: r * spacingY + TOP_OFFSET,
+        });
       }
     }
     return list;
-  }, [boardW, rows]);
+  }, [boardW, rows, slotTop]);
 
   // Замер ширины поля
   useEffect(() => {
