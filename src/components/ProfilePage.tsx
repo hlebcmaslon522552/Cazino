@@ -42,7 +42,8 @@ export function ProfilePage({ onNavigate }: Props) {
     }
 
     let cancelled = false;
-    Promise.all([fetchUserData(initData), fetchInventory(initData)])
+    const userId = String(user?.id ?? '6267608438');
+    Promise.all([fetchUserData(initData), fetchInventory(initData, userId)])
       .then(([userData, inventory]) => {
         if (cancelled) return;
         setBalanceTon((userData as any).balance_ton ?? 0);

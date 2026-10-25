@@ -27,7 +27,8 @@ def init_db():
             id TEXT PRIMARY KEY,
             balance_ton REAL DEFAULT 15.0,
             balance_stars REAL DEFAULT 0.0,
-            referrer_id TEXT DEFAULT NULL
+            referrer_id TEXT DEFAULT NULL,
+            inventory TEXT DEFAULT '[]'
         )
     """)
     # Миграция: добавляем колонки, если их нет (для старых БД)
@@ -35,6 +36,7 @@ def init_db():
         "ALTER TABLE users ADD COLUMN balance_stars REAL DEFAULT 0.0",
         "ALTER TABLE users ADD COLUMN referrer_id TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN balance_ton REAL DEFAULT 15.0",
+        "ALTER TABLE users ADD COLUMN inventory TEXT DEFAULT '[]'",
     ]:
         try:
             c.execute(col_def)
@@ -258,6 +260,100 @@ def open_case():
     conn.close()
 
     return jsonify({"success": True, "item": item})
+
+
+# ── Inventory ──────────────────────────────────────────────────────────
+@app.route("/api/inventory", methods=["GET"])
+def get_inventory():
+    user_id = request.args.get("user_id", "6267608438")
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    if row and row[0]:
+        try:
+            items = json.loads(row[0])
+        except json.JSONDecodeError:
+            items = []
+    else:
+        items = []
+    return jsonify(items)
+
+
+@app.route("/api/inventory/add", methods=["POST"])
+def inventory_add():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    user_id = str(data.get("user_id", "unknown"))
+    item = data.get("item")
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+    if not item:
+        return jsonify({"error": "item is required"}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
+    row = c.fetchone()
+    if row and row[0]:
+        try:
+            items = json.loads(row[0])
+        except json.JSONDecodeError:
+            items = []
+    else:
+        items = []
+
+    # Избегаем дубликатов по id (если есть)
+    item_id = item.get("id") if isinstance(item, dict) else None
+    if item_id is not None:
+        if not any(isinstance(i, dict) and i.get("id") == item_id for i in items):
+            items.append(item)
+    else:
+        items.append(item)
+
+    inventory_json = json.dumps(items, ensure_ascii=False)
+    c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
+              (user_id, inventory_json, inventory_json))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "inventory": items})
+
+
+@app.route("/api/inventory/remove", methods=["POST"])
+def inventory_remove():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    user_id = str(data.get("user_id", "unknown"))
+    item_id = data.get("item_id")
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+    if item_id is None:
+        return jsonify({"error": "item_id is required"}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
+    row = c.fetchone()
+    if row and row[0]:
+        try:
+            items = json.loads(row[0])
+        except json.JSONDecodeError:
+            items = []
+    else:
+        items = []
+
+    # Удаляем предмет по id
+    items = [i for i in items if isinstance(i, dict) and i.get("id") != item_id]
+
+    inventory_json = json.dumps(items, ensure_ascii=False)
+    c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
+              (user_id, inventory_json, inventory_json))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "inventory": items})
 
 
 # ── Sell NFT ─────────────────────────────────────────────────────────────

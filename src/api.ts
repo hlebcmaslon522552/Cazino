@@ -44,9 +44,9 @@ export const fetchUserData = async (userId: string) => {
   return res.json() as Promise<{ balance_ton: number }>;
 };
 
-export async function fetchInventory(initData: string): Promise<InventoryItem[]> {
+export async function fetchInventory(initData: string, userId: string): Promise<InventoryItem[]> {
   try {
-    const res = await fetch(`${API_URL}/api/inventory`, {
+    const res = await fetch(`${API_URL}/api/inventory?user_id=${userId}`, {
       headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true',
@@ -57,14 +57,10 @@ export async function fetchInventory(initData: string): Promise<InventoryItem[]>
       throw new Error(`fetchInventory failed: ${res.status} ${res.statusText}`);
     }
     const data: InventoryItem[] = await res.json();
-    // Если API вернул данные — синхронизируем в localStorage
-    if (Array.isArray(data) && data.length > 0) {
-      localStorage.setItem('inventory', JSON.stringify(data));
-    }
     return data;
   } catch (err) {
-    console.warn('fetchInventory error, fallback to localStorage:', err);
-    return loadInventoryFromLocal();
+    console.warn('fetchInventory error:', err);
+    return [];
   }
 }
 
@@ -80,27 +76,27 @@ export async function topUpStars(_initData: string, amount: number): Promise<boo
 }
 
 /**
- * addToInventory — сохраняет предмет в localStorage (ключ 'inventory')
- * как запасной вариант, если бэкенд не отвечает.
- * Принимает любой объект (InventoryItem, DropItem и т.д.)
+ * addToInventory — отправляет POST на /api/inventory/add.
+ * Добавляет предмет в инвентарь пользователя на сервере.
  */
-export function addToInventory(item: unknown): void {
+export async function addToInventory(item: unknown, userId: string): Promise<boolean> {
   try {
-    const raw = localStorage.getItem('inventory');
-    const list: unknown[] = raw ? JSON.parse(raw) : [];
-    // Избегаем дубликатов по id (если есть)
-    const itemRecord = item as Record<string, unknown>;
-    if (itemRecord.id != null) {
-      if (!list.some((i) => (i as Record<string, unknown>).id === itemRecord.id)) {
-        list.push(item);
-        localStorage.setItem('inventory', JSON.stringify(list));
-      }
-    } else {
-      list.push(item);
-      localStorage.setItem('inventory', JSON.stringify(list));
+    const res = await fetch(`${API_URL}/api/inventory/add`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      body: JSON.stringify({ user_id: userId, item }),
+    });
+    if (!res.ok) {
+      throw new Error(`addToInventory failed: ${res.status} ${res.statusText}`);
     }
+    const data = await res.json();
+    return data.success === true;
   } catch (e) {
-    console.warn('addToInventory localStorage error:', e);
+    console.warn('addToInventory error:', e);
+    return false;
   }
 }
 

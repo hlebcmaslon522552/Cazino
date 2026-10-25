@@ -3,7 +3,7 @@ import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
-import { sellNft, withdrawNft, getFloorPrice } from '../api';
+import { sellNft, withdrawNft, getFloorPrice, fetchInventory } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 
@@ -39,31 +39,28 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   const [sellingItemId, setSellingItemId] = useState<number | null>(null);
   const { haptic, vibrate, initData, user } = useTelegram();
 
-  // Загружаем список NFT из /my_nfts.json и подтягиваем цены флора
+  // Загружаем инвентарь с сервера
   useEffect(() => {
     const loadNfts = async () => {
       try {
-        const res = await fetch('/my_nfts.json');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const userId = String(user?.id ?? '6267608438');
+        const data = await fetchInventory(initData, userId);
 
         // Для каждого NFT: если floor === null — запрашиваем цену с сервера
         const itemsWithPrices = await Promise.all(
           data.map(async (item: any) => {
-            let floor = item.floor;
-            if (floor === null) {
+            let floor = item.floor ?? item.price ?? 0;
+            if (floor === 0 && item.collection) {
               try {
                 const priceData = await getFloorPrice(item.collection);
-                // Сервер может вернуть { floor_price: ... } или { price: ... }
                 floor = priceData.floor_price ?? priceData.price ?? 0;
               } catch (err) {
                 console.warn('Не удалось получить флор для', item.collection, err);
-                floor = 0;
               }
             }
             return {
-              id: Number(item.id),
-              name: item.name,
+              id: Number(item.id ?? Date.now() + Math.random()),
+              name: item.name || 'Unknown',
               image: item.image || '',
               collection: item.collection,
               floor: floor,
@@ -81,7 +78,6 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     };
 
     loadNfts();
-    // onToast создаётся заново при каждом рендере Root, поэтому не включаем его в зависимости
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -168,7 +164,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
             style={{ width: '60%', maxWidth: 200, opacity: 0.7 }}
           />
           <p style={{ color: colors.textMuted, marginTop: 16 }}>
-            Твой инвентарь пуст
+            Нет NFT
           </p>
         </div>
       </div>

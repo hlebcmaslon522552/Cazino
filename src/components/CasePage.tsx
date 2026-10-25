@@ -112,7 +112,8 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
         setShowResult(true);
         
         if (typeof addToInventory === 'function') {
-           addToInventory(data.item); // Добавляем в инвентарь
+           const userId = String(user?.id ?? '6267608438');
+           await addToInventory(data.item, userId); // Добавляем в инвентарь через сервер
         }
       } else {
         onToast(data.error || 'Ошибка при открытии', 'error');
@@ -127,14 +128,13 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     }
   };
 
-  const claimPrize = () => {
+  const claimPrize = async () => {
     if (!wonItem) return;
     haptic('medium');
 
-    /* Сохраняем в localStorage */
-    const inventory: DropItem[] = JSON.parse(localStorage.getItem('inventory') || '[]');
-    inventory.push({ ...wonItem });
-    localStorage.setItem('inventory', JSON.stringify(inventory));
+    /* Сохраняем на сервере через API */
+    const userId = String(user?.id ?? '6267608438');
+    await addToInventory(wonItem, userId);
 
     onToast(`🎁 ${wonItem.name} отправлен в инвентарь!`, 'success');
     setWonItem(null);
