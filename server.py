@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import sqlite3
 import os
+import random
 import requests
 
 BOT_TOKEN = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
@@ -90,6 +91,37 @@ def create_invoice():
             return jsonify({"error": result.get("description", "Telegram API error")}), 400
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Telegram API request failed: {str(e)}"}), 502
+
+
+@app.route('/api/plinko_drop', methods=['POST'])
+def plinko_drop():
+    """Серверный рандом для Плинко: возвращает множитель и выигрыш."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    bet_amount = data.get('bet_amount', 0)
+    if not isinstance(bet_amount, (int, float)) or bet_amount <= 0:
+        return jsonify({"error": "bet_amount must be a positive number"}), 400
+
+    # Генерация множителя с шансами:
+    # 0.5x - 50%, 1.0x - 30%, 2.0x - 15%, 10x - 5%
+    roll = random.random()
+    if roll < 0.50:
+        multiplier = 0.5
+    elif roll < 0.80:
+        multiplier = 1.0
+    elif roll < 0.95:
+        multiplier = 2.0
+    else:
+        multiplier = 10.0
+
+    win_amount = round(bet_amount * multiplier, 2)
+
+    return jsonify({
+        "multiplier": multiplier,
+        "win_amount": win_amount
+    })
 
 
 if __name__ == '__main__':

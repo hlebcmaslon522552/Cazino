@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Player as LottiePlayer } from '@lottiefiles/react-lottie-player';
+import { CONFIG } from '../config';
 import { colors, radius, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
@@ -41,6 +42,7 @@ interface Ball {
   finished: boolean;     // упал в слот
   startTime: number;     // performance.now() в момент запуска партии
   spawnDelay: number;    // мс до появления шарика (очередь)
+  targetSlot: number | null; // целевой слот от сервера (если есть)
 }
 
 interface Peg {
@@ -115,6 +117,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
   const isDroppingRef = useRef(false);
   const ballsFinishedRef = useRef(0);
   const expectedBallsRef = useRef(0);
+  const serverSlotsRef = useRef<(number | null)[]>([]);
 
   const stake = Math.max(MIN_BET, parseFloat(betAmount) || MIN_BET);
 
@@ -130,7 +133,8 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
   const pegs = useMemo<Peg[]>(() => {
     const list: Peg[] = [];
     if (boardW <= 0) return list;
-    const sp = boardW / (rows + 1);
+    const MIN_SPACING = (BALL_R + PEG_R) * 2; // минимум 24px, чтобы шарик пролетал
+    const sp = Math.max(boardW / (rows + 1), MIN_SPACING);
     for (let r = 0; r < rows; r++) {
       const startX = (boardW - r * sp) / 2; // центрируем ряд
       for (let j = 0; j <= r; j++) {
@@ -157,12 +161,22 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     if (b.finished) return;
 
     const totalSlots = multipliers.length;
-    const slotWidth = boardW / totalSlots;
-    let slotIndex = Math.floor(b.x / slotWidth);
+    let slotIndex: number;
 
-    // Защита от вылета за пределы массива
-    if (slotIndex < 0) slotIndex = 0;
-    if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
+    // Если есть целевой слот от сервера — используем его
+    if (b.targetSlot !== null && b.targetSlot >= 0 && b.targetSlot < totalSlots) {
+      slotIndex = b.targetSlot;
+      // Визуально перемещаем шарик в центр целевого слота
+      const slotWidth = boardW / totalSlots;
+      b.x = slotWidth * slotIndex + slotWidth / 2;
+    } else {
+      // Иначе вычисляем по физике
+      const slotWidth = boardW / totalSlots;
+      slotIndex = Math.floor(b.x / slotWidth);
+      // Защита от вылета за пределы массива
+      if (slotIndex < 0) slotIndex = 0;
+      if (slotIndex >= totalSlots) slotIndex = totalSlots - 1;
+    }
 
     const winMultiplier = multipliers[slotIndex];
 
@@ -227,6 +241,11 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             const randomBounce = (Math.random() - 0.5) * 2;
             b.vx = (dx / dist) * 2 + randomBounce;
             b.vy = Math.abs(b.vy) * 0.5;
+
+            // Антизастревание: если скорость Y почти нулевая, толкаем в случайную сторону
+            if (b.vy < 0.5) {
+              b.vx += (Math.random() - 0.5) * 3;
+            }
           }
         }
 
@@ -241,8 +260,8 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
         }
       }
 
-      // Удаляем finished-шарики, которые уже ушли далеко вниз (чистим массив)
-      const cleaned = active.filter(b => !(b.finished && b.y > slotTop + SLOT_H * 2));
+      // Удаляем finished-шарики сразу (очищаем массив)
+      const cleaned = active.filter(b => !b.finished);
       if (cleaned.length !== active.length) {
         ballsRef.current = cleaned;
         setBalls(cleaned);
@@ -250,8 +269,8 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
         setBalls([...active]);
       }
 
-      // партия завершена, когда все запущенные шарики финишировали
-      if (ballsFinishedRef.current >= expectedBallsRef.current && isDroppingRef.current) {
+      // Когда массив пустеет — разблокируем кнопку
+      if (cleaned.length === 0 && isDroppingRef.current) {
         isDroppingRef.current = false;
         setIsDropping(false);
       }
@@ -264,8 +283,28 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pegs, slotW, slotTop, slotsCfg, n, boardW]);
 
+  const findSlotForMultiplier = useCallback((mult: number): number | null => {
+    const totalSlots = multipliers.length;
+    // Ищем слот с таким множителем (идём от центра к краям для более правдоподобного вида)
+    const mid = Math.floor((totalSlots - 1) / 2);
+    for (let offset = 0; offset <= mid; offset++) {
+      const idx1 = mid - offset;
+      const idx2 = mid + offset;
+      if (idx1 >= 0 && multipliers[idx1] === mult) return idx1;
+      if (idx2 < totalSlots && multipliers[idx2] === mult) return idx2;
+    }
+    // Если не нашли точного совпадения — ищем ближайший
+    let best = 0;
+    let bestDiff = Infinity;
+    for (let i = 0; i < totalSlots; i++) {
+      const diff = Math.abs(multipliers[i] - mult);
+      if (diff < bestDiff) { bestDiff = diff; best = i; }
+    }
+    return best;
+  }, [multipliers]);
+
   /* ── Запуск партии ────────────────────── */
-  const drop = () => {
+  const drop = async () => {
     if (boardW === 0 || isDroppingRef.current) return;
     if (stake < MIN_BET) {
       haptic('heavy');
@@ -280,6 +319,33 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     }
 
     haptic('medium');
+
+    // Спрашиваем серверные множители
+    const serverSlots: (number | null)[] = [];
+    try {
+      const results = await Promise.all(
+        Array.from({ length: ballsCount }, () =>
+          fetch(`${CONFIG.API_URL}/api/plinko_drop`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bet_amount: stake }),
+          }).then(r => r.json())
+        )
+      );
+      for (const res of results) {
+        if (res && typeof res.multiplier === 'number') {
+          const slotIdx = findSlotForMultiplier(res.multiplier);
+          serverSlots.push(slotIdx);
+        } else {
+          serverSlots.push(null);
+        }
+      }
+    } catch {
+      // Если сервер недоступен — играем локально
+      for (let i = 0; i < ballsCount; i++) serverSlots.push(null);
+    }
+    serverSlotsRef.current = serverSlots;
+
     onUpdateBalance(-totalStake);
     setIsDropping(true);
     isDroppingRef.current = true;
@@ -292,7 +358,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     for (let i = 0; i < ballsCount; i++) {
       created.push({
         id: nextId.current++,
-        x: boardW / 2,
+        x: boardW / 2 + (Math.random() - 0.5) * 10,
         y: DROP_START_Y,
         vx: (Math.random() - 0.5) * 2,
         vy: 0,
@@ -302,6 +368,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
         finished: false,
         startTime: now,
         spawnDelay: i * SPAWN_STEP, // очередь: каждый следующий на 300 мс позже
+        targetSlot: serverSlotsRef.current.length > i ? serverSlotsRef.current[i] : null,
       });
     }
     ballsRef.current = [...ballsRef.current, ...created];
