@@ -188,9 +188,14 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       /* 3. Сервер вернул успех — генерируем рулетку */
       const serverItem = data.item as DropItem;
       const items = generateSpinArray(serverItem);
-      const winIndex = items.findIndex(
-        (it) => it.name === serverItem.name && it.price === serverItem.price,
-      );
+      // Ищем индекс выигрышного предмета в массиве
+      let winIndex = -1;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].name === serverItem.name && items[i].price === serverItem.price) {
+          winIndex = i;
+          break;
+        }
+      }
       const safeWinIndex = winIndex >= 0 ? winIndex : 25;
 
       setSpinItems(items);
@@ -398,6 +403,15 @@ return (
         </div>
       </div>
 
+      {/* ─── Кнопка открытия ─── */}
+      <div style={{ marginTop: spacing.lg }}>
+        <Button size="lg" fullWidth onClick={handleOpenCase} disabled={isSpinning}>
+          {isSpinning
+            ? '🎲 Открываем...'
+            : `🎰 Открыть кейс (${caseData.price.toFixed(2)} TON)`}
+        </Button>
+      </div>
+
       {/* ─── Возможные предметы ─── */}
       <div
         style={{
@@ -456,15 +470,6 @@ return (
             </div>
           ))}
         </div>
-      </div>
-
-      {/* ─── Кнопка открытия ─── */}
-      <div style={{ marginTop: spacing.lg }}>
-        <Button size="lg" fullWidth onClick={handleOpenCase} disabled={isSpinning}>
-          {isSpinning
-            ? '🎲 Открываем...'
-            : `🎰 Открыть кейс (${caseData.price.toFixed(2)} TON)`}
-        </Button>
       </div>
 {/* ─── Модальное окно результата ─── */}
       {showResult && wonItem && (

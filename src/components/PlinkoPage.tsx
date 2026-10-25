@@ -200,8 +200,10 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
 
         // гравитация
         b.vy += GRAVITY;
+        b.vy = Math.min(b.vy, 3);
         b.x += b.vx;
-        b.y += b.vy;
+        b.vx *= 0.95;
+        b.y += b.vy * 0.3;
 
         // коллизии ТОЛЬКО с колышками (ball-vs-ball отключены — сквозной пролёт)
         for (const p of pegs) {
