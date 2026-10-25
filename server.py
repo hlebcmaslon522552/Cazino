@@ -13,7 +13,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # ── База данных ──────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "test.db")
 
 # Активные игры в Mines (серверный анти-чит)
 active_mines_games = {}
@@ -30,6 +30,15 @@ def init_db():
             referrer_id TEXT DEFAULT NULL
         )
     """)
+    # Миграция: добавляем колонки, если их нет (для старых БД)
+    for col_def in [
+        "ALTER TABLE users ADD COLUMN balance_stars REAL DEFAULT 0.0",
+        "ALTER TABLE users ADD COLUMN referrer_id TEXT DEFAULT NULL",
+    ]:
+        try:
+            c.execute(col_def)
+        except sqlite3.OperationalError:
+            pass  # колонка уже существует
     # Пользователь по умолчанию (id из браузера)
     c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
     conn.commit()
@@ -41,6 +50,18 @@ init_db()
 def verify_init_data(init_data):
     return bool(init_data and init_data.strip())
 
+
+# ── Пул предметов для кейсов ──────────────────────────────────────────
+CASE_POOL = [
+    {"name": "Plush Pepe", "image": "/GOLD.png", "rarity": "legendary", "chance": 1, "price": 500},
+    {"name": "Durov Cap", "image": "/Silver.png", "rarity": "epic", "chance": 4, "price": 200},
+    {"name": "Astral Shard", "image": "/CASE_COPPER.png", "rarity": "rare", "chance": 10, "price": 80},
+    {"name": "Golden Fish", "image": "/CaseWOOD.png", "rarity": "rare", "chance": 10, "price": 75},
+    {"name": "Shadow Veil", "image": "/case-test.png", "rarity": "uncommon", "chance": 15, "price": 40},
+    {"name": "Ruby Heart", "image": "/GOLD.png", "rarity": "uncommon", "chance": 15, "price": 35},
+    {"name": "Emerald Eye", "image": "/Silver.png", "rarity": "uncommon", "chance": 15, "price": 30},
+    {"name": "Moonstone", "image": "/CASE_COPPER.png", "rarity": "common", "chance": 30, "price": 10},
+]
 
 def generate_crash_point():
     e = pow(2, 32)
@@ -132,6 +153,78 @@ def play_game():
 
     else:
         return jsonify({"error": f"Unknown game_type: {game_type}"}), 400
+
+
+# ── Plinko Drop ──────────────────────────────────────────────────────
+@app.route("/api/plinko_drop", methods=["POST"])
+def plinko_drop():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    bet_amount = float(data.get("bet_amount", 0))
+    if bet_amount <= 0:
+        return jsonify({"error": "bet_amount must be > 0"}), 400
+
+    # Серверная генерация множителя Plinko
+    # Plinko multiplier: от x0.5 до x10.0
+    roll = random.random()
+    if roll < 0.15:
+        multiplier = round(random.uniform(0.5, 1.0), 2)
+    elif roll < 0.40:
+        multiplier = round(random.uniform(1.0, 2.0), 2)
+    elif roll < 0.65:
+        multiplier = round(random.uniform(2.0, 4.0), 2)
+    elif roll < 0.85:
+        multiplier = round(random.uniform(4.0, 7.0), 2)
+    else:
+        multiplier = round(random.uniform(7.0, 10.0), 2)
+
+    win_amount = round(bet_amount * multiplier, 2)
+    return jsonify({"multiplier": multiplier, "win_amount": win_amount})
+
+
+# ── Open Case ────────────────────────────────────────────────────────
+@app.route("/api/open_case", methods=["POST"])
+def open_case():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    user_id = str(data.get("user_id", "unknown"))
+    case_price = float(data.get("case_price", 0))
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+    if case_price <= 0:
+        return jsonify({"error": "case_price must be > 0"}), 400
+
+    # Проверяем баланс пользователя
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+    row = c.fetchone()
+    if not row:
+        # Создаём пользователя с балансом 15.0
+        c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, 15.0)", (user_id,))
+        conn.commit()
+        balance = 15.0
+    else:
+        balance = row[0]
+
+    if balance < case_price:
+        conn.close()
+        return jsonify({"error": "Недостаточно средств"}), 400
+
+    # Списываем цену кейса
+    new_balance = balance - case_price
+    c.execute("UPDATE users SET balance_ton = ? WHERE id = ?", (new_balance, user_id))
+
+    # Выбираем случайный предмет
+    item = pick_case_item()
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True, "item": item})
+
+
 # Mines endpoints
 @app.route("/api/mines_start", methods=["POST"])
 def mines_start():
