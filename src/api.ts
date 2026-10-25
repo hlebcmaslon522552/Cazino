@@ -76,21 +76,17 @@ export async function topUpStars(_initData: string, amount: number): Promise<boo
   return new Promise((resolve) => setTimeout(() => resolve(true), 500));
 }
 
-/**
- * addToInventory — отправляет POST на /api/inventory/add.
- * Добавляет предмет в инвентарь пользователя на сервере.
- */
 export const addToInventory = async (item: any, userId: string): Promise<boolean> => {
   try {
     const res = await fetch(`${CONFIG.API_URL}/api/inventory/add`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
+      headers: { 
+        'Content-Type': 'application/json', 
+        'ngrok-skip-browser-warning': 'true' 
       },
-      body: JSON.stringify({ user_id: userId, item }),
+      body: JSON.stringify({ user_id: userId, item: item })
     });
-    return res.ok; // Возвращаем true, если сервер ответил 200 OK
+    return res.ok; // true, если сервер ответил 200 OK
   } catch (e) {
     console.error('Ошибка добавления в инвентарь:', e);
     return false;

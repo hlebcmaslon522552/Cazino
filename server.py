@@ -588,6 +588,7 @@ def inventory_add():
         conn.commit()
     except Exception as e:
         print(f"[inventory_add] insert/update error: {e}")
+        print(e)  # дополнительный вывод ошибки
         conn.close()
         return jsonify({"error": "Database error"}), 500
 
