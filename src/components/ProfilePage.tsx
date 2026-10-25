@@ -25,17 +25,14 @@ export function ProfilePage({ onNavigate, balance }: Props) {
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Данные пользователя из Telegram WebApp (синхронно)
+  // Данные пользователя из Telegram WebApp
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  const [userName, setUserName] = useState(
-    tgUser?.first_name
-      ? tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : '')
-      : 'Пользователь'
-  );
-  const [username, setUsername] = useState(
-    tgUser?.username ? '@' + tgUser.username : '@username'
-  );
-  const [avatarUrl, setAvatarUrl] = useState(tgUser?.photo_url || '');
+  // Вычисляем при каждом рендере, чтобы данные подтянулись даже если Telegram инициализировался позже
+  const userName = tgUser?.first_name
+    ? tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : '')
+    : 'Пользователь';
+  const username = tgUser?.username ? '@' + tgUser.username : '@username';
+  const avatarUrl = tgUser?.photo_url || '';
 
   useEffect(() => {
     let cancelled = false;

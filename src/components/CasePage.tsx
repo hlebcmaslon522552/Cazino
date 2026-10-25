@@ -24,23 +24,44 @@ interface DropItem {
   floor?: number;
 }
 
-const DEFAULT_POOL: DropItem[] = [
-  { name: 'Plush Pepe', image: '/nft_images/plush_pepe.webp', rarity: 'legendary', chance: 1, price: 500 },
-  { name: 'Durov Cap', image: '/nft_images/durovs_cap.webp', rarity: 'epic', chance: 4, price: 200 },
-  { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'rare', chance: 10, price: 80 },
-  { name: 'Golden Fish', image: '/nft_images/bonded_ring.webp', rarity: 'rare', chance: 10, price: 75 },
-  { name: 'Shadow Veil', image: '/nft_images/westside_sign.webp', rarity: 'uncommon', chance: 15, price: 40 },
-  { name: 'Ruby Heart', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'uncommon', chance: 15, price: 35 },
-  { name: 'Emerald Eye', image: '/nft_images/clover_pin.webp', rarity: 'uncommon', chance: 15, price: 30 },
-  { name: 'Moonstone', image: '/nft_images/moon_pendant.webp', rarity: 'common', chance: 30, price: 10 },
-];
+/* Пулы предметов по кейсам — синхронизированы с server.py */
+const CASE_POOLS: Record<string, DropItem[]> = {
+  case_wood: [
+    { name: 'Bow Tie', image: '/nft_images/bow_tie.webp', rarity: 'common', chance: 40, price: 5.81 },
+    { name: 'Fresh Socks', image: '/nft_images/fresh_socks.webp', rarity: 'uncommon', chance: 30, price: 4.48 },
+    { name: 'Candy Cane', image: '/nft_images/candy_cane.webp', rarity: 'uncommon', chance: 20, price: 3.88 },
+    { name: 'Snow Globe', image: '/nft_images/snow_globe.webp', rarity: 'rare', chance: 10, price: 6.42 },
+  ],
+  case_copper: [
+    { name: 'Swiss Watch', image: '/nft_images/swiss_watch.webp', rarity: 'rare', chance: 30, price: 56.06 },
+    { name: 'Signet Ring', image: '/nft_images/signet_ring.webp', rarity: 'rare', chance: 30, price: 36.00 },
+    { name: 'Valentine Box', image: '/nft_images/valentine_box.webp', rarity: 'uncommon', chance: 20, price: 12.75 },
+    { name: 'Jingle Bells', image: '/nft_images/jingle_bells.webp', rarity: 'uncommon', chance: 20, price: 10.77 },
+  ],
+  case_silver: [
+    { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'epic', chance: 10, price: 120.81 },
+    { name: 'Genie Lamp', image: '/nft_images/genie_lamp.webp', rarity: 'rare', chance: 20, price: 38.72 },
+    { name: 'Toy Bear', image: '/nft_images/toy_bear.webp', rarity: 'rare', chance: 30, price: 34.59 },
+    { name: 'Love Potion', image: '/nft_images/love_potion.webp', rarity: 'uncommon', chance: 40, price: 14.79 },
+  ],
+  case_gold: [
+    { name: 'Heart Locket', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'legendary', chance: 1, price: 1249.48 },
+    { name: 'Precious Peach', image: '/nft_images/precious_peach.webp', rarity: 'epic', chance: 4, price: 259.57 },
+    { name: 'Durovs Cap', image: '/nft_images/durovs_cap.webp', rarity: 'rare', chance: 15, price: 420.24 },
+    { name: 'Mighty Arm', image: '/nft_images/mighty_arm.webp', rarity: 'rare', chance: 30, price: 127.45 },
+    { name: 'Perfume Bottle', image: '/nft_images/perfume_bottle.webp', rarity: 'uncommon', chance: 50, price: 83.10 },
+  ],
+};
 
-function loadPool(): DropItem[] {
+const DEFAULT_POOL: DropItem[] = CASE_POOLS['case_wood'];
+
+function loadPool(caseId: string): DropItem[] {
+  const fallback = CASE_POOLS[caseId] ?? DEFAULT_POOL;
   try {
     const raw = localStorage.getItem('drop_chances');
     if (raw) return JSON.parse(raw);
   } catch {}
-  return DEFAULT_POOL;
+  return fallback;
 }
 
 /* ─── Цвет редкости ─── */
@@ -73,7 +94,7 @@ const ITEMS_COUNT = () => 30 + Math.floor(Math.random() * 11); // 30–40
 export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
   const { haptic, user } = useTelegram();
 
-  const pool = loadPool();
+  const pool = loadPool(caseData.id);
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [wonItem, setWonItem] = useState<DropItem | null>(null);
@@ -170,6 +191,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
+          case_id: caseData.id,
           case_price: price,
         }),
       });

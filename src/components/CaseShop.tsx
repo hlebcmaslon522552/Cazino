@@ -20,8 +20,7 @@ const CASES_RAW: { id: string; name: string; price: number; image: string }[] = 
   { id: "case_wood", name: "Деревянный кейс", image: "CaseWOOD.png", price: 1.00 },
   { id: "case_copper", name: "Медный кейс", image: "CASE_COPPER.png", price: 5.00 },
   { id: "case_silver", name: "Серебряный кейс", image: "Silver.png", price: 10.00 },
-  { id: "case_gold", name: "Золотой кейс", image: "GOLD.png", price: 50.00 },
-  { id: "case_test", name: "Тестовый кейс", image: "case-test.png", price: 100.00 }
+  { id: "case_gold", name: "Золотой кейс", image: "GOLD.png", price: 50.00 }
 ];
 
 const CASES_FALLBACK = publicUrl('NO_Inventory.png');
