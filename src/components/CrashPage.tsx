@@ -9,10 +9,6 @@ interface CrashPageProps {
   onToast?: (msg: string, type: 'success' | 'error') => void;
 }
 
-interface Candle {
-  open: number; close: number; high: number; low: number; x: number;
-}
-
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user, initData } = useTelegram();
   const [betInput, setBetInput] = useState<string>("1.0");
@@ -23,20 +19,20 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [hasCashedOut, setHasCashedOut] = useState<boolean>(false);
   const [cashedOutAt, setCashedOutAt] = useState<number>(0);
   const [history, setHistory] = useState<number[]>([1.2, 5.4, 1.0, 14.2, 2.1, 1.8]);
-  const [candles, setCandles] = useState<Candle[]>([]);
+  const [points, setPoints] = useState<{ x: number; y: number }[]>([{ x: 0, y: 100 }]);
   const [countdown, setCountdown] = useState<number>(15);
   const [players, setPlayers] = useState<{ name: string; bet: number }[]>([]);
   const requestRef = useRef<number>();
   const startTimeRef = useRef<number>();
-  const lastCandleTimeRef = useRef<number>(0);
+  const lastPointTimeRef = useRef<number>(0);
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
 
   const startRound = async () => {
     setMultiplier(1.00);
     setHasCashedOut(false);
-    setCandles([{ open: 1.0, close: 1.0, high: 1.0, low: 1.0, x: 0 }]);
+    setPoints([{ x: 0, y: 100 }]);
     startTimeRef.current = performance.now();
-    lastCandleTimeRef.current = performance.now();
+    lastPointTimeRef.current = performance.now();
     setPlayers(prev => prev.filter(p => p.bet > 0));
     try {
       const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
@@ -76,18 +72,15 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       if (!startTimeRef.current) startTimeRef.current = time;
       const elapsed = time - startTimeRef.current;
       const newMultiplier = Math.pow(1.00015, elapsed);
-      if (time - lastCandleTimeRef.current > 200) {
-        setCandles(prev => {
-          const newCandles = [...prev].slice(-5);
-          if (newCandles.length > 0) {const last = newCandles[newCandles.length - 1];
-            last.close = newMultiplier;
-            last.high = Math.max(last.high, newMultiplier);
-            last.low = Math.min(last.low, newMultiplier);
-          }
-          newCandles.push({ open: newMultiplier, close: newMultiplier, high: newMultiplier, low: newMultiplier, x: 0 });
-          return newCandles;
+      if (time - lastPointTimeRef.current > 300 + Math.random() * 200) {
+        setPoints(prev => {
+          const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
+          const prevY = prev.length > 0 ? prev[prev.length - 1].y : 100;
+          const newX = Math.min(prevX + 10, 100);
+          const newY = Math.max(prevY - (Math.random() * 10 + 5), 10);
+          return [...prev, { x: newX, y: newY }];
         });
-        lastCandleTimeRef.current = time;
+        lastPointTimeRef.current = time;
       }
       if (newMultiplier >= crashPoint) {
         setMultiplier(crashPoint);
@@ -124,24 +117,18 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
   const isCrashed = gameState === 'crashed';
 
-  const renderCandles = () => {
-    if (!candles || candles.length === 0) return null;
-    const candleWidth = 100 / 6;
-    return candles.map((candle, i) => {
-      const isGreen = candle.close >= candle.open;
-      const color = isGreen ? '#00ff88' : '#ff3366';
-      const bodyHeight = Math.min(candle.close * 10, 100);
-      const bodyTop = 100 - bodyHeight;
-      const wickTop = Math.max(0, 100 - candle.high * 10);
-      const wickBottom = Math.min(100, 100 - candle.low * 10);
-      const xPos = (i * candleWidth) + (candleWidth / 2);
-      return (
-        <g key={i}>
-          <line x1={xPos} y1={wickTop} x2={xPos} y2={wickBottom} stroke={color} strokeWidth="0.8" />
-          <rect x={xPos - (candleWidth / 2)} y={bodyTop} width={candleWidth} height={bodyHeight} fill={color} />
-        </g>
-      );
-    });
+  const renderGraph = () => {
+    if (!points || points.length === 0) return null;
+    const polylinePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+    const circles = points.map((p, i) => (
+      <circle key={i} cx={p.x} cy={p.y} r="1.5" fill="#00ff88" stroke="#000" strokeWidth="0.5" />
+    ));
+    return (
+      <g>
+        <polyline points={polylinePoints} fill="none" stroke="#00ff88" strokeWidth="1.5" strokeLinejoin="round" />
+        {circles}
+      </g>
+    );
   };
   return (
     <div className="flex flex-col h-full bg-[#0f0f13] text-white p-4 overflow-hidden font-sans">
@@ -165,8 +152,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
       <div className="relative h-[300px] bg-[#1a1a2e] rounded-3xl border border-gray-800 overflow-hidden shadow-lg"><div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
         <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-          {renderCandles()}
-          {isCrashed && <line x1={candles.length > 0 ? ((candles.length - 1) * (100/6)) + (100/6)/2 : 50} y1="0" x2={candles.length > 0 ? ((candles.length - 1) * (100/6)) + (100/6)/2 : 50} y2="100" stroke="#ff3366" strokeWidth="2" strokeDasharray="3,3" style={{ filter: 'drop-shadow(0 0 8px #ff3366)' }} />}
+          {renderGraph()}
+          {isCrashed && points.length > 0 && <line x1={points[points.length - 1].x} y1={points[points.length - 1].y} x2={points[points.length - 1].x} y2="100" stroke="#ff3366" strokeWidth="2" strokeDasharray="3,3" style={{ filter: 'drop-shadow(0 0 8px #ff3366)' }} />}
         </svg>
         <div className="absolute top-4 left-4 pointer-events-none">
           <span className={`text-5xl font-black tracking-tighter ${isCrashed ? 'text-red-500' : 'text-white'}`} style={{ textShadow: isCrashed ? '0 0 20px rgba(255,51,102,0.8)' : '0 0 20px rgba(255,255,255,0.5)' }}>{multiplier.toFixed(2)}x</span>
