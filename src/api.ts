@@ -1,4 +1,5 @@
 import { initData } from '@tma.js/sdk-react';
+import { CONFIG } from './config';
 
 // Заглушка. Позже заменишь на реальные запросы к твоему Python-боту.
 // Бот должен отдавать данные по initData — проверять её на бэке.
@@ -79,9 +80,9 @@ export async function topUpStars(_initData: string, amount: number): Promise<boo
  * addToInventory — отправляет POST на /api/inventory/add.
  * Добавляет предмет в инвентарь пользователя на сервере.
  */
-export async function addToInventory(item: unknown, userId: string): Promise<boolean> {
+export const addToInventory = async (item: any, userId: string): Promise<boolean> => {
   try {
-    const res = await fetch(`${API_URL}/api/inventory/add`, {
+    const res = await fetch(`${CONFIG.API_URL}/api/inventory/add`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -89,16 +90,12 @@ export async function addToInventory(item: unknown, userId: string): Promise<boo
       },
       body: JSON.stringify({ user_id: userId, item }),
     });
-    if (!res.ok) {
-      throw new Error(`addToInventory failed: ${res.status} ${res.statusText}`);
-    }
-    const data = await res.json();
-    return data.success === true;
+    return res.ok; // Возвращаем true, если сервер ответил 200 OK
   } catch (e) {
-    console.warn('addToInventory error:', e);
+    console.error('Ошибка добавления в инвентарь:', e);
     return false;
   }
-}
+};
 
 /**
  * loadInventoryFromLocal — читает инвентарь из localStorage.
