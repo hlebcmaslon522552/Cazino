@@ -8,6 +8,7 @@ import { publicUrl } from '../helpers/publicUrl';
 
 interface Props {
   onNavigate: (tab: any) => void;
+  balance: number;
 }
 
 interface Nft {
@@ -17,34 +18,31 @@ interface Nft {
   floor: number;
 }
 
-export function ProfilePage({ onNavigate }: Props) {
+export function ProfilePage({ onNavigate, balance }: Props) {
   const { user, initData } = useTelegram();
 
-  const [balanceTon, setBalanceTon] = useState(0);
   const [balanceStars, setBalanceStars] = useState(0);
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Данные пользователя из Telegram
-  const [userName, setUserName] = useState('Пользователь');
-  const [username, setUsername] = useState('@username');
-  const [avatarUrl, setAvatarUrl] = useState('');
+  // Данные пользователя из Telegram WebApp (синхронно)
+  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const [userName, setUserName] = useState(
+    tgUser?.first_name
+      ? tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : '')
+      : 'Пользователь'
+  );
+  const [username, setUsername] = useState(
+    tgUser?.username ? '@' + tgUser.username : '@username'
+  );
+  const [avatarUrl, setAvatarUrl] = useState(tgUser?.photo_url || '');
 
   useEffect(() => {
-    // Извлекаем данные пользователя напрямую из Telegram WebApp
-    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-    if (tgUser) {
-      setUserName(tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : ''));
-      setUsername(tgUser.username ? '@' + tgUser.username : '');
-      setAvatarUrl(tgUser.photo_url || '');
-    }
-
     let cancelled = false;
     const userId = String(user?.id ?? '6267608438');
     Promise.all([fetchUserData(initData), fetchInventory(initData, userId)])
       .then(([userData, inventory]) => {
         if (cancelled) return;
-        setBalanceTon((userData as any).balance_ton ?? 0);
         setBalanceStars((userData as any).balance_stars ?? 0);
         setItems(inventory);
         setLoading(false);
@@ -73,7 +71,7 @@ export function ProfilePage({ onNavigate }: Props) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <img src={publicUrl('TON.png')} alt="" style={{ width: 20, height: 20 }} />
-          <span style={{ fontWeight: 'bold', fontSize: 15 }}>{balanceTon.toFixed(4)}</span>
+          <span style={{ fontWeight: 'bold', fontSize: 15 }}>{Number(balance).toFixed(4)}</span>
         </div>
       </div>
 
@@ -128,13 +126,6 @@ export function ProfilePage({ onNavigate }: Props) {
             ))}
           </div>
         )}
-      </div>
-
-      {/* ── Навигационные кнопки ────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: spacing.md }}>
-        <Button size="lg" fullWidth onClick={() => onNavigate('referral')}>
-          👥 Рефералы
-        </Button>
       </div>
 
       {/* ── Подпись ────────────────────────────────── */}

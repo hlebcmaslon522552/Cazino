@@ -131,7 +131,7 @@ export function Root() {
       {activeTab === 'inventory' && (
         <InventoryPage onToast={showToast} onBalanceChange={refreshBalance} />
       )}
-      {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} />}
+      {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} balance={balance} />}
       {activeTab === 'market' && (
         <GiftShop balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />
       )}
