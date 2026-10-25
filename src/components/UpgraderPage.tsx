@@ -6,6 +6,8 @@ import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
+import { CONFIG } from '../config';
+import { getInitData } from '../api';
 
 /* ===================================================================
    NFT данные (из all_gifts.json)
@@ -265,7 +267,7 @@ interface Props {
 }
 
 export function UpgraderPage({ onBack, onToast }: Props) {
-  const { haptic, vibrate } = useTelegram();
+  const { haptic, vibrate, user } = useTelegram();
 
   const [nfts, setNfts] = useState<Nft[]>([]);
   const [loadingNfts, setLoadingNfts] = useState(true);
@@ -359,7 +361,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     setSpinning(true);
 
     // Отправляем запрос на сервер
-    fetch('/api/play_game', {
+    fetch(`${CONFIG.API_URL}/api/play_game`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -369,8 +371,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         target_name: targetNft?.name || '',
         target_floor: targetNft?.floor || 0,
         target_image: targetNft?.image || '',
-        user_id: String((window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id || '6267608438'),
-        initData: (window as any).Telegram?.WebApp?.initData || '',
+        user_id: user?.id || '6267608438',
+        initData: getInitData(),
       }),
     })
       .then((res) => {

@@ -1,3 +1,5 @@
+import { initData } from '@tma.js/sdk-react';
+
 // Заглушка. Позже заменишь на реальные запросы к твоему Python-боту.
 // Бот должен отдавать данные по initData — проверять её на бэке.
 
@@ -16,14 +18,10 @@ export interface InventoryItem {
 
 const API_URL = 'https://cazino-api.fxtun.ru';
 
-export const getInitData = () => {
+export const getInitData = (): string => {
   try {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg && tg.initData) {
-      return tg.initData;
-    }
-    // Если это Telegram Desktop, иногда initData лежит в другом месте
-    return '';
+    // Используем SDK v3 для получения сырой строки
+    return initData.raw || '';
   } catch (e) {
     return '';
   }
