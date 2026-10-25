@@ -134,7 +134,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
   const pegs = useMemo<Peg[]>(() => {
     const list: Peg[] = [];
     if (boardW <= 0) return list;
-    const MIN_SPACING = (BALL_R + PEG_R) * 2; // минимум 24px, чтобы шарик пролетал
+    const MIN_SPACING = 40; // минимум 40px, чтобы шарик пролетал
     const sp = Math.max(boardW / (rows + 1), MIN_SPACING);
     for (let r = 0; r < rows; r++) {
       const startX = (boardW - r * sp) / 2; // центрируем ряд
@@ -192,7 +192,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             b.x += (dx / dist) * overlap;
             b.y += (dy / dist) * overlap;
             // Отталкивание от колышка с малым хаосом (не ломает общий вектор)
-            b.vx = (dx / dist) * 2 + (Math.random() - 0.5) * 0.5;
+            b.vx = (dx / dist) * 0.5 + (Math.random() - 0.5) * 0.5;
             b.vy = Math.abs(b.vy) * 0.5;
 
             // Антизастревание: если скорость Y почти нулевая, толкаем в случайную сторону
@@ -354,7 +354,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
       } else {
         // Нет сервера — случайный разброс (как было)
         startX = boardW / 2 + (Math.random() - 0.5) * 10;
-        startVx = (Math.random() - 0.5) * 2;
+        startVx = (Math.random() - 0.5) * 0.5;
       }
 
       created.push({
