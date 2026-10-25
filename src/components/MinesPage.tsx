@@ -10,8 +10,6 @@ import { useTelegram } from '../hooks/useTelegram';
    Константы
    =================================================================== */
 
-const MULTIPLIER_STEP = 0.2;  // +0.2x за каждую безопасную клетку
-
 interface Difficulty {
   id: string;
   label: string;
@@ -39,11 +37,11 @@ interface Props {
 type Phase = 'setup' | 'playing' | 'won' | 'lost';
 
 export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) {
-  const { user, initData } = useTelegram();
+  const { user } = useTelegram();
   const [betAmount, setBetAmount] = useState('0.1');
   const [difficulty, setDifficulty] = useState<Difficulty>(DIFFICULTIES[0]);
   const [phase, setPhase] = useState<Phase>('setup');
-  const [mineIndexes, setMineIndexes] = useState<number[]>([]);
+  const [revealedMines, setRevealedMines] = useState<number[]>([]);
   const [openSafe, setOpenSafe] = useState<number[]>([]);
   const [hitMineIndex, setHitMineIndex] = useState<number | null>(null);
   const [showBomb, setShowBomb] = useState(false);
@@ -53,8 +51,8 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
   const totalCells = difficulty.size * difficulty.size;
   const safeTotal = totalCells - difficulty.mines;
   const stakePrice = Math.max(0.1, parseFloat(betAmount) || 0);
-  const multiplier = 1 + openSafe.length * MULTIPLIER_STEP;
-  const potentialWin = stakePrice * multiplier;
+  const [currentMultiplier, setCurrentMultiplier] = useState(1.0);
+  const potentialWin = stakePrice * currentMultiplier;
   const canStart = phase === 'setup' && stakePrice > 0 && Number(balance) >= Number(stakePrice);
   const canCashout = phase === 'playing' && openSafe.length > 0 && !isGameOver;
 
@@ -74,6 +72,8 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
     setShowBomb(false);
     setFadeOut(false);
     setIsGameOver(false);
+    setRevealedMines([]);
+    setCurrentMultiplier(1.0);
 
     try {
       const res = await fetch(`${CONFIG.API_URL}/api/mines_start`, {
@@ -81,9 +81,9 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
+          bet: stakePrice,
           size: difficulty.size,
-          mines_count: difficulty.mines,
-          initData: initData
+          mines_count: difficulty.mines
         })
       });
       const data = await res.json();
@@ -109,8 +109,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
-          cell_index: index,
-          initData: initData
+          cell_index: index
         })
       });
       const data = await res.json();
@@ -118,6 +117,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
       if (data.status === 'boom') {
         setIsGameOver(true);
         setHitMineIndex(index);
+        setRevealedMines(data.mine_indexes ?? []);
         setShowBomb(true);
         onToast('💥 БОМБА!', 'error');
         setTimeout(() => setFadeOut(true), 200);
@@ -125,6 +125,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
       } else if (data.status === 'safe') {
         const updated = [...openSafe, index];
         setOpenSafe(updated);
+        setCurrentMultiplier(data.new_multiplier ?? currentMultiplier);
 
         if (updated.length >= safeTotal) {
           setPhase('won');
@@ -227,7 +228,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 11, color: colors.textMuted }}>Множитель</div>
               <div style={{ fontSize: 15, fontWeight: 'bold', color: colors.gold }}>
-                ×{multiplier.toFixed(2)}
+                ×{currentMultiplier.toFixed(2)}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -248,7 +249,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
               const isSafe = openSafe.includes(i);
               const isHit = hitMineIndex === i;
               // Не прячем оставшиеся мины — при проигрыше их нужно показать
-              const shouldHide = phase === 'lost' && fadeOut && !isHit && !isSafe && !mineIndexes.includes(i);
+              const shouldHide = phase === 'lost' && fadeOut && !isHit && !isSafe && !revealedMines.includes(i);
               const bg = isSafe ? '#22c55e' : colors.bgCard;
               const borderColor = isSafe ? 'rgba(255,255,255,0.3)' : colors.border;
               const borderWidth = isSafe ? '2px' : '1.5px';
@@ -265,10 +266,10 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
                   {phase === 'lost' && isHit && (
                     <span style={{ fontSize: difficulty.size >= 9 ? 22 : 30, zIndex: 1 }}>💥</span>
                   )}
-                  {phase === 'lost' && !isHit && mineIndexes.includes(i) && (
+                  {phase === 'lost' && !isHit && revealedMines.includes(i) && (
                     <span style={{ fontSize: difficulty.size >= 9 ? 16 : 22, opacity: 0.5, filter: 'grayscale(1)' }}>💣</span>
                   )}
-                  {phase === 'won' && mineIndexes.includes(i) && (
+                  {phase === 'won' && revealedMines.includes(i) && (
                     <span style={{ fontSize: difficulty.size >= 9 ? 16 : 22, opacity: 0.3 }}>💣</span>
                   )}
                 </div>

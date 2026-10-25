@@ -15,6 +15,9 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 # ── База данных ──────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
 
+# Активные игры в Mines (серверный анти-чит)
+active_mines_games = {}
+
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
@@ -136,13 +139,13 @@ def mines_start():
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
-    init_data = data.get("initData", "")
-    if not verify_init_data(init_data):
-        return jsonify({"error": "Forbidden: invalid initData"}), 403
-
     user_id = str(data.get("user_id", "unknown"))
+    bet = float(data.get("bet", 0))
     size = int(data.get("size", 5))
     mines_count = int(data.get("mines_count", 3))
+
+    if bet <= 0:
+        return jsonify({"error": "Bet must be > 0"}), 400
 
     total_cells = size * size
     if mines_count >= total_cells:
@@ -155,11 +158,14 @@ def mines_start():
 
     mine_indexes = cells[:mines_count]
 
-    mines_games[user_id] = {
-        "mine_indexes": mine_indexes,
+    active_mines_games[user_id] = {
+        "mines": mine_indexes,
         "safe_revealed": [],
         "multiplier": 1.0,
-        "game_over": False
+        "game_over": False,
+        "bet": bet,
+        "total_cells": total_cells,
+        "mines_count": mines_count
     }
 
     return jsonify({
@@ -176,14 +182,10 @@ def mines_click():
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
-    init_data = data.get("initData", "")
-    if not verify_init_data(init_data):
-        return jsonify({"error": "Forbidden: invalid initData"}), 403
-
     user_id = str(data.get("user_id", "unknown"))
     cell_index = int(data.get("cell_index", -1))
 
-    game = mines_games.get(user_id)
+    game = active_mines_games.get(user_id)
     if not game:
         return jsonify({"error": "Game not found. Start a new game first."}), 404
     if game["game_over"]:
@@ -193,13 +195,19 @@ def mines_click():
     if cell_index in game["safe_revealed"]:
         return jsonify({"error": "Cell already revealed"}), 400
 
-    if cell_index in game["mine_indexes"]:
+    if cell_index in game["mines"]:
         game["game_over"] = True
-        return jsonify({"status": "boom", "cell_index": cell_index, "user_id": user_id})
+        return jsonify({
+            "status": "boom",
+            "cell_index": cell_index,
+            "mine_indexes": game["mines"],
+            "user_id": user_id
+        })
     else:
         game["safe_revealed"].append(cell_index)
         safe_count = len(game["safe_revealed"])
         new_multiplier = round(1.0 + safe_count * 0.2, 2)
+        game["multiplier"] = new_multiplier
         return jsonify({
             "status": "safe",
             "cell_index": cell_index,
