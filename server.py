@@ -143,10 +143,38 @@ def play_game():
 
     user_id = data.get("user_id", "unknown")
     game_type = data.get("game_type", "")
-    bet_amount = float(data.get("bet_amount", 0))
 
     if not game_type:
         return jsonify({"error": "game_type is required"}), 400
+
+    # ── Upgrade (апгрейд NFT) ────────────────────────────────────────
+    if game_type == "upgrade":
+        start_price = float(data.get("start_price", 0))
+        end_price = float(data.get("end_price", 0))
+        if start_price <= 0 or end_price <= 0:
+            return jsonify({"error": "start_price and end_price must be > 0"}), 400
+
+        # Шанс: (start_price / end_price) * 100, но не больше 75%
+        raw_chance = (start_price / end_price) * 100
+        chance = min(raw_chance, 75.0)
+
+        # Генерация случайного числа от 0 до 100
+        roll = random.uniform(0, 100)
+        success = roll < chance
+
+        # Предмет цели (передан с фронтенда)
+        item = None
+        if success:
+            item = {
+                "name": data.get("target_name", "Unknown"),
+                "floor": end_price,
+                "image": data.get("target_image", "")
+            }
+
+        return jsonify({"success": success, "item": item, "user_id": user_id})
+
+    # ── Для остальных game_type требуется bet_amount ─────────────────
+    bet_amount = float(data.get("bet_amount", 0))
     if bet_amount <= 0:
         return jsonify({"error": "bet_amount must be > 0"}), 400
 

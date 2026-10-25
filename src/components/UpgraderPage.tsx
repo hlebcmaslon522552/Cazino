@@ -366,6 +366,11 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         game_type: 'upgrade',
         start_price: startPrice,
         end_price: targetPrice,
+        target_name: targetNft?.name || '',
+        target_floor: targetNft?.floor || 0,
+        target_image: targetNft?.image || '',
+        user_id: String((window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id || '6267608438'),
+        initData: (window as any).Telegram?.WebApp?.initData || '',
       }),
     })
       .then((res) => {
@@ -375,19 +380,23 @@ export function UpgraderPage({ onBack, onToast }: Props) {
       .then((data: { success: boolean; item?: Nft }) => {
         const isWin = data.success === true;
 
-        // Обновляем инвентарь
-        setNfts((prev) => {
-          let updated = prev.filter((n) => n.id !== startNft!.id);
-          if (isWin && data.item) {
-            // Добавляем новый NFT, если его ещё нет
+        if (isWin && data.item) {
+          // Успех — добавляем новый NFT, удаляем старый, сохраняем в localStorage
+          setNfts((prev) => {
+            let updated = prev.filter((n) => n.id !== startNft!.id);
             if (!updated.find((n) => n.id === data.item!.id)) {
-              updated = [...updated, data.item];
+              updated = [...updated, data.item as Nft];
             }
-          }
-          // Сохраняем в localStorage как fallback
-          localStorage.setItem('inventory', JSON.stringify(updated));
-          return updated;
-        });
+            localStorage.setItem('inventory', JSON.stringify(updated));
+            return updated;
+          });
+        } else if (!isWin) {
+          // Неудача — удаляем стартовый NFT из инвентаря
+          setNfts((prev) => {
+            const updated = prev.filter((n) => n.id !== startNft!.id);
+            return updated;
+          });
+        }
 
         // Рассчитываем угол для анимации (оставляем локальную симуляцию для визуала)
         const winArc = (chance / 100) * 360;
