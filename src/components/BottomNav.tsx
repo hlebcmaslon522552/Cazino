@@ -9,12 +9,12 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
-  const tabs: { id: Tab; left: string; icon: React.ReactNode }[] = [
-    { id: 'market',      left: '10%',   icon: <ShoppingBag size={18} /> },
-    { id: 'game',        left: '30%',   icon: <Swords size={18} /> },
-    { id: 'inventory',   left: '50%',   icon: <Backpack size={18} /> },
-    { id: 'leaderboard', left: '70%',   icon: <Trophy size={18} /> },
-    { id: 'profile',     left: '90%',   icon: <User size={18} /> },
+  const tabs: { id: Tab; icon: React.ReactNode }[] = [
+    { id: 'market',      icon: <ShoppingBag size={20} /> },
+    { id: 'game',        icon: <Swords size={20} /> },
+    { id: 'inventory',   icon: <Backpack size={20} /> },
+    { id: 'leaderboard', icon: <Trophy size={20} /> },
+    { id: 'profile',     icon: <User size={20} /> },
   ];
 
   const labelMap: Record<string, string> = {
@@ -39,13 +39,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
       }}
     >
       <div
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          borderRadius: '999px',
-          overflow: 'hidden',
-        }}
+        className="relative w-full h-full rounded-full overflow-hidden"
       >
         <img
           src={ASSETS.navBg}
@@ -61,53 +55,42 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           }}
         />
 
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              aria-label={tab.id}
-              style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: tab.left,
-                transform: 'translateX(-50%)',
-                width: '20%',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                zIndex: 1,
-                opacity: isActive ? 1 : 0.55,
-                filter: isActive
-                  ? 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.9))'
-                  : 'none',
-                transition: 'opacity 0.25s, filter 0.25s',
-              }}
-            >
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 2,
-              }}>
+        <div className="absolute inset-0 z-1 flex justify-between items-center w-full px-2">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                aria-label={tab.id}
+                className="flex flex-col items-center justify-center gap-0.5 bg-none border-none cursor-pointer"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  opacity: isActive ? 1 : 0.55,
+                  filter: isActive
+                    ? 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.9))'
+                    : 'none',
+                  transition: 'opacity 0.25s, filter 0.25s',
+                }}
+              >
                 <div style={{ color: isActive ? '#fff' : '#999' }}>
                   {tab.icon}
                 </div>
-                <span style={{
-                  fontSize: 8,
-                  fontWeight: 600,
-                  color: isActive ? '#fff' : '#999',
-                  textTransform: 'capitalize',
-                }}>
+                <span
+                  className="text-[8px] leading-tight whitespace-nowrap"
+                  style={{
+                    fontWeight: 600,
+                    color: isActive ? '#fff' : '#999',
+                  }}
+                >
                   {labelMap[tab.id] || tab.id}
                 </span>
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
