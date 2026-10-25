@@ -55,36 +55,31 @@ TG_ADMIN_CHAT_ID = os.environ.get("TG_ADMIN_CHAT_ID", "")
 
 
 def init_db():
+    # Удаляем старый файл БД, чтобы создать новую чистую структуру
+    if os.path.exists(DB_PATH):
+        try:
+            os.remove(DB_PATH)
+            print(f"[init_db] Старый файл {DB_PATH} удалён.")
+        except Exception as e:
+            print(f"[init_db] Не удалось удалить {DB_PATH}: {e}")
+
     conn = sqlite3.connect(DB_PATH)
     # Включаем WAL-режим для предотвращения блокировок при конкурентном доступе
     conn.execute("PRAGMA journal_mode=WAL")
     c = conn.cursor()
+
+    # 1. Таблица пользователей
     c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE users (
             id TEXT PRIMARY KEY,
             balance_ton REAL DEFAULT 15.0,
-            balance_stars REAL DEFAULT 0.0,
-            referrer_id TEXT DEFAULT NULL
+            balance_stars REAL DEFAULT 0.0
         )
     """)
-    # Миграция: добавляем колонки, если их нет (для старых БД)
-    for col_def in [
-        "ALTER TABLE users ADD COLUMN balance_stars REAL DEFAULT 0.0",
-        "ALTER TABLE users ADD COLUMN referrer_id TEXT DEFAULT NULL",
-        "ALTER TABLE users ADD COLUMN balance_ton REAL DEFAULT 15.0",
-    ]:
-        try:
-            c.execute(col_def)
-        except sqlite3.OperationalError:
-            pass  # колонка уже существует
-    # Удаляем устаревшую колонку inventory (если была)
-    try:
-        c.execute("ALTER TABLE users DROP COLUMN inventory")
-    except sqlite3.OperationalError:
-        pass  # колонки нет или уже удалена
-    # Отдельная таблица инвентаря
+
+    # 2. Таблица инвентаря
     c.execute("""
-        CREATE TABLE IF NOT EXISTS inventory (
+        CREATE TABLE inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
             item_id TEXT,
@@ -94,44 +89,46 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    # Таблица депозитов (для лидерборда)
+
+    # 3. Таблица оборота (для лидерборда turnover)
     c.execute("""
-        CREATE TABLE IF NOT EXISTS deposits (
+        CREATE TABLE turnover (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            amount REAL NOT NULL,
-            created_at TEXT DEFAULT (datetime('now')),
-            prize_paid INTEGER DEFAULT 0
+            user_id TEXT,
+            username TEXT,
+            amount REAL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    # Таблица конфигов (для хранения времени последнего сброса)
+
+    # 4. Таблица депозитов (для лидерборда deposits)
     c.execute("""
-        CREATE TABLE IF NOT EXISTS config (
+        CREATE TABLE deposits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            username TEXT,
+            amount REAL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 5. Таблица конфигов (для хранения времени последнего сброса лидерборда)
+    c.execute("""
+        CREATE TABLE config (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         )
     """)
-    # Инициализация времени последнего сброса (если нет — ставим сейчас)
+
+    # Инициализация времени последнего сброса
     c.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('last_reset', datetime('now'))")
 
-    # Таблица оборота (turnover)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS turnover (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            username TEXT,
-            amount REAL
-        )
-    """)
+    # Пользователь по умолчанию
+    c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
 
-    # Пользователь по умолчанию (id из браузера)
-    try:
-        c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
-        conn.commit()
-    except Exception as e:
-        print(f"[init_db] insert default user error: {e}")
-    finally:
-        conn.close()
+    conn.commit()
+    conn.close()
+    print("[init_db] База данных создана заново — все таблицы готовы.")
 
 
 init_db()
@@ -201,23 +198,25 @@ def send_telegram_notification(message: str):
 # ── Leaderboard Reset ──────────────────────────────────────────────
 def get_total_deposits_by_user():
     """Возвращает топ-15 пользователей по сумме депозитов."""
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("""
             SELECT user_id, SUM(amount) as total
             FROM deposits
-            WHERE prize_paid = 0
             GROUP BY user_id
             ORDER BY total DESC
             LIMIT 15
         """)
         rows = c.fetchall()
-        conn.close()
         return rows
     except Exception as e:
         print(f"[get_total_deposits_by_user] error: {e}")
         return []
+    finally:
+        if conn:
+            conn.close()
 
 
 def award_prizes(top_users: list) -> str:
@@ -229,6 +228,7 @@ def award_prizes(top_users: list) -> str:
         return "Нет пользователей для награждения."
 
     report_lines = ["🏆 <b>Топ обнулён! Призы выданы:</b>"]
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -255,10 +255,12 @@ def award_prizes(top_users: list) -> str:
         # Очищаем таблицу депозитов
         c.execute("DELETE FROM deposits")
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[award_prizes] error: {e}")
         report_lines.append(f"  ❌ Ошибка: {e}")
+    finally:
+        if conn:
+            conn.close()
 
     return "\n".join(report_lines)
 
@@ -268,15 +270,18 @@ def should_reset_now() -> bool:
     Проверяет, пора ли сбрасывать лидерборд.
     Сброс происходит каждые RESET_INTERVAL_DAYS дней в RESET_HOUR часов.
     """
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT value FROM config WHERE key = 'last_reset'")
         row = c.fetchone()
-        conn.close()
     except Exception as e:
         print(f"[should_reset_now] error: {e}")
         return False
+    finally:
+        if conn:
+            conn.close()
 
     if not row:
         return False
@@ -298,14 +303,17 @@ def should_reset_now() -> bool:
 def update_last_reset_time():
     """Обновляет время последнего сброса на текущее."""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("UPDATE config SET value = ? WHERE key = 'last_reset'", (now_str,))
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[update_last_reset_time] error: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 
 def check_and_reset_leaderboard():
@@ -353,26 +361,32 @@ def check_and_reset_leaderboard():
 @app.route("/api/balance", methods=["GET"])
 def get_balance():
     user_id = request.args.get("user_id", "6267608438")
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT balance_ton, balance_stars FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
-        conn.close()
         if row:
             return jsonify({"balance_ton": row[0], "balance_stars": row[1]})
     except Exception as e:
         print(f"[get_balance] select error: {e}")
+    finally:
+        if conn:
+            conn.close()
 
     # Если пользователя нет или ошибка — создаём с балансом 15 TON
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, 15.0)", (user_id,))
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[get_balance] insert error: {e}")
+    finally:
+        if conn:
+            conn.close()
     return jsonify({"balance_ton": 15.0, "balance_stars": 0.0})
 
 
@@ -385,6 +399,7 @@ def update_balance():
     balance = float(data.get("balance", 0))
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -392,11 +407,13 @@ def update_balance():
         c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
                   (user_id, balance, balance))
         conn.commit()
-        conn.close()
         return jsonify({"success": True})
     except Exception as e:
-        print(f"update_balance error: {e}")
+        print(f"[update_balance] error: {e}")
         return jsonify({"error": "Internal server error"}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 # API endpoints
@@ -524,6 +541,7 @@ def open_case():
         return jsonify({"error": "case_price must be > 0"}), 400
 
     # Проверяем баланс пользователя
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -538,10 +556,13 @@ def open_case():
             balance = row[0]
     except Exception as e:
         print(f"[open_case] select/insert error: {e}")
+        if conn:
+            conn.close()
         return jsonify({"error": "Database error"}), 500
 
     if balance < case_price:
-        conn.close()
+        if conn:
+            conn.close()
         return jsonify({"error": "Недостаточно средств"}), 400
 
     # Списываем цену кейса
@@ -564,10 +585,12 @@ def open_case():
             (new_balance, user_id)
         )
         conn.commit()
-        conn.close()
+        if conn:
+            conn.close()
     except Exception as e:
         print(f"[open_case] update error: {e}")
-        conn.close()
+        if conn:
+            conn.close()
         return jsonify({"error": "Database error"}), 500
 
     return jsonify({"success": True, "item": {**item, "id": item_id}})
@@ -577,15 +600,18 @@ def open_case():
 @app.route("/api/inventory", methods=["GET"])
 def get_inventory():
     user_id = request.args.get("user_id", "6267608438")
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT item_id, name, image, floor, timestamp FROM inventory WHERE user_id = ?", (user_id,))
         rows = c.fetchall()
-        conn.close()
     except Exception as e:
         print(f"[get_inventory] error: {e}")
         return jsonify([])
+    finally:
+        if conn:
+            conn.close()
 
     items = [
         {
@@ -619,6 +645,7 @@ def inventory_add():
     image = item.get("image", "") if isinstance(item, dict) else ""
     floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
 
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -627,10 +654,12 @@ def inventory_add():
             (user_id, item_id, name, image, floor)
         )
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[inventory_add] insert error: {e}")
         return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
 
     return jsonify({"success": True})
 
@@ -647,15 +676,18 @@ def inventory_remove():
     if item_id is None:
         return jsonify({"error": "item_id is required"}), 400
 
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("DELETE FROM inventory WHERE user_id = ? AND item_id = ?", (user_id, item_id))
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[inventory_remove] delete error: {e}")
         return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
 
     return jsonify({"success": True})
 
@@ -693,7 +725,8 @@ def buy_nft():
         row = c.fetchone()
     except Exception as e:
         print(f"[buy_nft] select error: {e}")
-        conn.close()
+        if conn:
+            conn.close()
         return jsonify({"error": "Database error"}), 500
 
     if row:
@@ -702,7 +735,8 @@ def buy_nft():
         balance = 15.0
 
     if balance < price:
-        conn.close()
+        if conn:
+            conn.close()
         return jsonify({"error": "Недостаточно TON"}), 400
 
     # Добавляем предмет в отдельную таблицу инвентаря
@@ -723,11 +757,14 @@ def buy_nft():
             (new_balance, user_id)
         )
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[buy_nft] insert/update error: {e}")
-        conn.close()
+        if conn:
+            conn.close()
         return jsonify({"error": "Database error"}), 500
+
+    if conn:
+        conn.close()
 
     return jsonify({
         "success": True,
@@ -747,6 +784,7 @@ def sell_nft():
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
 
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -758,10 +796,12 @@ def sell_nft():
         c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
                   (user_id, new_balance, new_balance))
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[sell_nft] error: {e}")
         return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
 
     return jsonify({"success": True, "new_balance": new_balance})
 
@@ -932,6 +972,7 @@ def add_turnover():
     if amount <= 0:
         return jsonify({"error": "Amount must be > 0"}), 400
 
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -940,16 +981,19 @@ def add_turnover():
             (user_id, username, amount)
         )
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[add_turnover] error: {e}")
         return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
     return jsonify({"success": True})
 
 
 @app.route("/api/leaderboard_turnover", methods=["GET"])
 def leaderboard_turnover():
     """Возвращает топ-15 юзеров по сумме оборота."""
+    conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -961,12 +1005,14 @@ def leaderboard_turnover():
             LIMIT 15
         """)
         rows = c.fetchall()
-        conn.close()
         leaderboard = [{"username": row[0], "total": round(row[1], 2)} for row in rows]
         return jsonify(leaderboard)
     except Exception as e:
         print(f"[leaderboard_turnover] error: {e}")
         return jsonify([])
+    finally:
+        if conn:
+            conn.close()
 
 
 # ── Запуск фоновой задачи сброса лидерборда ───────────────────────────
