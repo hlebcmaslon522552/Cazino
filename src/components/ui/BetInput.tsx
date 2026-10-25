@@ -23,11 +23,16 @@ export function BetInput({ value, onChange }: BetInputProps) {
     >
       <img src={publicUrl('TON.png')} alt="TON" style={{ width: 24, height: 24 }} />
       <input
-        type="number"
-        step="0.01"
-        min="0.1"
+        type="text"
+        inputMode="decimal"
         value={value}
-        onChange={onChange}
+        onChange={(e) => {
+          const raw = e.target.value.replace(',', '.');
+          if (/^\d*\.?\d*$/.test(raw)) {
+            e.target.value = raw;
+            onChange(e);
+          }
+        }}
         placeholder="0.1"
         style={{
           flex: 1,

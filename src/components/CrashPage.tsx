@@ -19,7 +19,8 @@ interface Candle {
 
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user, initData } = useTelegram();
-  const [bet, setBet] = useState<number>(1.0);
+  const [betInput, setBetInput] = useState<string>("1.0");
+  const finalBet = parseFloat(betInput) || 0;
   const [multiplier, setMultiplier] = useState<number>(1.00);
   const [gameState, setGameState] = useState<'waiting' | 'playing' | 'crashed'>('waiting');
   
@@ -37,10 +38,10 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
 
   const startGame = React.useCallback(async () => {
-    if (bet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
-    if (bet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
+    if (finalBet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
+    if (finalBet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
 
-    onUpdateBalance(-bet);
+    onUpdateBalance(-finalBet);
     setMultiplier(1.00);
     setHasCashedOut(false);
     setCandles([{ open: 1.0, close: 1.0, high: 1.0, low: 1.0, x: 0 }]);
@@ -55,7 +56,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
           game_type: 'crash',
-          bet_amount: bet,
+          bet_amount: finalBet,
           initData: initData
         })
       });
@@ -65,11 +66,11 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       console.error('Failed to fetch crash point:', e);
       setCrashPoint(1.00);
     }
-  }, [bet, balance, onUpdateBalance, onToast]);
+  }, [finalBet, balance, onUpdateBalance, onToast]);
 
   const cashOut = () => {
     if (gameState === 'playing' && !hasCashedOut) {
-      const winAmount = bet * multiplier;
+      const winAmount = finalBet * multiplier;
       setHasCashedOut(true);
       setCashedOutAt(multiplier);
       onUpdateBalance(winAmount);
@@ -230,7 +231,7 @@ return (
           </span>
           {hasCashedOut && (
             <div className="mt-2 text-green-400 font-bold text-sm bg-green-900/50 px-3 py-1 rounded-full border border-green-500/50 inline-block">
-              Забрано: {(bet * cashedOutAt).toFixed(2)} TON
+              Забрано: {(finalBet * cashedOutAt).toFixed(2)} TON
             </div>
           )}
         </div>
@@ -254,7 +255,7 @@ return (
           <div className="flex flex-col text-right">
             <span className="text-gray-400 text-sm">Потенциал</span>
             <span className="text-xl font-bold text-green-400">
-              {gameState === 'playing' ? (bet * multiplier).toFixed(2) : '0.00'}
+              {gameState === 'playing' ? (finalBet * multiplier).toFixed(2) : '0.00'}
             </span>
           </div>
         </div>
@@ -263,16 +264,22 @@ return (
           <div className="mb-4">
             <div className="relative">
               <input 
-                type="number" 
-                value={bet} 
-                onChange={(e) => setBet(Number(e.target.value))}
+                type="text" 
+                inputMode="decimal"
+                value={betInput} 
+                onChange={(e) => {
+                  const val = e.target.value.replace(',', '.');
+                  if (/^\d*\.?\d*$/.test(val)) {
+                    setBetInput(val);
+                  }
+                }}
                 className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-4 text-xl font-bold text-white focus:outline-none focus:border-purple-500 transition-colors pl-12"
               />
               <Coins className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500" size={24} />
             </div>
             <div className="flex gap-2 mt-2">
               {[1, 5, 10].map(val => (
-                <button key={val} onClick={() => setBet(val)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm transition-colors">
+                <button key={val} onClick={() => setBetInput(val.toString())} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm transition-colors">
                   {val} TON
                 </button>
               ))}
@@ -298,7 +305,7 @@ return (
               ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
               : 'bg-gradient-to-r from-green-500 to-emerald-400 hover:from-green-400 hover:to-emerald-300 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-[0.98]'
             }`}>
-            {hasCashedOut ? 'Вы забрали' : `Забрать ${(bet * multiplier).toFixed(2)} TON`}
+            {hasCashedOut ? 'Вы забрали' : `Забрать ${(finalBet * multiplier).toFixed(2)} TON`}
           </button>
         )}
 
