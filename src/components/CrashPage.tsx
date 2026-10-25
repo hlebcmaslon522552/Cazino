@@ -42,11 +42,11 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     if (finalBet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
     if (finalBet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
 
+    setGameState('playing');
     onUpdateBalance(-finalBet);
     setMultiplier(1.00);
     setHasCashedOut(false);
     setCandles([{ open: 1.0, close: 1.0, high: 1.0, low: 1.0, x: 0 }]);
-    setGameState('playing');
     startTimeRef.current = performance.now();
     lastCandleTimeRef.current = performance.now();
 
@@ -66,6 +66,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     } catch (e) {
       console.error('Failed to fetch crash point:', e);
       setCrashPoint(1.00);
+      setGameState('waiting');
+      onUpdateBalance(finalBet);
     }
   }, [finalBet, balance, onUpdateBalance, onToast]);
 
@@ -294,7 +296,7 @@ return (
               <Clock size={16} />
               <span className="text-sm font-semibold">Следующая игра через {countdown}с</span>
             </div>
-            <button onClick={startGame} className="w-full bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-black text-xl py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+            <button onClick={startGame} disabled={gameState !== 'waiting'} className="w-full bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 text-white font-black text-xl py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all active:scale-[0.98] flex items-center justify-center gap-2">
               <TrendingUp size={24} /> Играть
             </button>
           </>

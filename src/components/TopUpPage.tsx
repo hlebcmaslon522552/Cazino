@@ -5,6 +5,8 @@ import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 
+const STARS_PER_TON = 100;
+
 interface Props {
   onNavigate?: (tab: any) => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -14,7 +16,8 @@ interface Props {
 
 export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }: Props) {
   const [tab, setTab] = useState<'ton' | 'stars'>('ton');
-  const [starsAmount, setStarsAmount] = useState('');
+  const [inputAmount, setInputAmount] = useState('');
+  const numericAmount = parseFloat(inputAmount.replace(',', '.')) || 0;
   const { haptic, initData, user } = useTelegram();
   const userId = user?.id?.toString() || '6267608438';
 
@@ -23,69 +26,54 @@ export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }:
   const userAddress = useTonAddress();
 
   /* ── Helpers ──────────────────────────────────── */
-  const getStarsAmount = (): number => {
-    const val = parseInt(starsAmount, 10);
-    return isNaN(val) ? 0 : val;
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(',', '.');
+    if (/^\d*\.?\d*$/.test(val)) setInputAmount(val);
   };
 
-  const isPayDisabled = (): boolean => getStarsAmount() < 50;
-
-  const handleTopUp = async () => {
-    if (!userAddress) {
-      tonConnectUI.openModal();
-      return;
-    }
+  const handleDisconnect = async () => {
+    haptic('light');
     try {
-      const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 60,
-        messages: [{
-          address: CONFIG.TON_WALLET, // Берем из конфига
-          amount: (CONFIG.TOP_UP_AMOUNT_TON * 1000000000).toString(),
-        }],
-      };
-      await tonConnectUI.sendTransaction(transaction);
-      onUpdateBalance?.(CONFIG.TOP_UP_AMOUNT_TON); // Обновляем баланс
-      onToast('Баланс пополнен', 'success');
+      await tonConnectUI.disconnect();
+      onToast('Кошелек отвязан', 'info');
     } catch (e) {
-      console.error(e);
-      onToast('Ошибка при пополнении', 'error');
+      onToast('Ошибка отвязки', 'error');
     }
   };
 
-  const handlePay = async () => {
-    haptic('medium');
-    const amount = getStarsAmount();
-    try {
-      // Запрашиваем инвойс-ссылку у бэкенда
-      const res = await fetch(`${CONFIG.API_URL}/api/create_invoice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify({ user_id: userId, amount }),
-      });
-      const data = await res.json();
-      if (!data.invoiceLink) {
-        onToast?.(data.error || 'Ошибка при создании инвойса', 'error');
-        return;
-      }
-      // Открываем окно оплаты Telegram
-      if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.openInvoice(data.invoiceLink, (status) => {
-          if (status === 'paid') {
-            onUpdateBalance?.(amount * 0.01);
-            onToast?.('Баланс успешно пополнен!', 'success');
-          } else if (status === 'cancelled') {
-            onToast?.('Оплата отменена', 'error');
-          }
+  const handleMainButtonClick = async () => {
+    if (tab === 'ton') {
+      if (!userAddress) { tonConnectUI.openModal(); return; }
+      if (numericAmount < 0.1) { onToast('Минимум 0.1 TON', 'error'); return; }
+      try {
+        const transaction = {
+          validUntil: Math.floor(Date.now() / 1000) + 60,
+          messages: [{ address: CONFIG.TON_WALLET, amount: (numericAmount * 1000000000).toString() }],
+        };
+        await tonConnectUI.sendTransaction(transaction);
+        onUpdateBalance?.(numericAmount);
+        onToast('Баланс пополнен', 'success');
+      } catch (e) { onToast('Ошибка при пополнении', 'error'); }
+    } else {
+      if (numericAmount < 50) { onToast('Минимум 50 Stars', 'error'); return; }
+      try {
+        const res = await fetch(`${CONFIG.API_URL}/api/create_invoice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+          body: JSON.stringify({ user_id: userId, amount: Math.round(numericAmount) }),
         });
-      } else {
-        onToast?.('Telegram WebApp недоступен', 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      onToast?.('Ошибка при оплате', 'error');
+        const data = await res.json();
+        if (!data.invoiceLink) { onToast(data.error || 'Ошибка', 'error'); return; }
+        if (window.Telegram?.WebApp) {
+          window.Telegram.WebApp.openInvoice(data.invoiceLink, (status) => {
+            if (status === 'paid') {
+              const tonReceived = numericAmount / STARS_PER_TON;
+              onUpdateBalance?.(tonReceived);
+              onToast(`Баланс пополнен на ${tonReceived.toFixed(2)} TON!`, 'success');
+            }
+          });
+        }
+      } catch (e) { onToast('Ошибка при оплате', 'error'); }
     }
   };
 
@@ -157,73 +145,29 @@ export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }:
         </div>
       </div>
 
-      {/* ── Tab: TON (через TON Connect) ───────────── */}
-      {tab === 'ton' && (
-        <div style={{ marginBottom: spacing.lg }}>
-          <div style={{ fontSize: 14, color: colors.textMuted, marginBottom: 8 }}>
-            Подключи кошелёк, чтобы пополнить баланс TON в один клик
-          </div>
-          <button
-            onClick={handleTopUp}
-            className="w-full bg-blue-500 text-white p-4 rounded-xl font-bold"
-          >
-            {userAddress ? `Пополнить на ${CONFIG.TOP_UP_AMOUNT_TON} TON` : 'Подключить кошелек'}
-          </button>
-          {userAddress && (
-            <div style={{ fontSize: 12, color: colors.textMuted, marginTop: 8, wordBreak: 'break-all' }}>
-              Кошелёк: {userAddress}
-            </div>
-          )}
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontSize: 14, color: colors.textMuted, marginBottom: 8 }}>
+          {tab === 'ton' ? 'Введите сумму в TON (мин. 0.1)' : 'Введите сумму в Stars (мин. 50)'}
         </div>
-      )}
-
-      {/* ── Tab: Stars ────────────────────────────── */}
-      {tab === 'stars' && (
-        <div style={{ marginBottom: spacing.lg }}>
-          <div style={{ fontSize: 14, color: colors.textMuted, marginBottom: 8 }}>
-            Введите количество Stars (минимум 50)
-          </div>
-          <input
-            type="number"
-            value={starsAmount}
-            onChange={(e) => setStarsAmount(e.target.value)}
-            placeholder="50"
-            min={50}
-            style={{
-              width: '100%',
-              padding: 16,
-              fontSize: 20,
-              background: '#111',
-              color: colors.text,
-              border: `1px solid ${colors.border}`,
-              borderRadius: 12,
-              marginTop: 8,
-              boxSizing: 'border-box',
-            }}
-          />
+        <input
+          type="text" inputMode="decimal" value={inputAmount} onChange={handleInputChange}
+          placeholder={tab === 'ton' ? '1.0' : '50'}
+          style={{ width: '100%', padding: 16, fontSize: 20, background: '#111', color: colors.text, border: `1px solid ${colors.border}`, borderRadius: 12, boxSizing: 'border-box' }}
+        />
+        <div style={{ fontSize: 13, color: colors.accent, marginTop: 8, fontWeight: 'bold' }}>
+          {tab === 'ton' ? (userAddress ? `К оплате: ${(numericAmount * STARS_PER_TON).toFixed(0)} Stars` : '') : (numericAmount >= 50 ? `Вы получите: ${(numericAmount / STARS_PER_TON).toFixed(2)} TON` : '')}
         </div>
-      )}
+        
+        {tab === 'ton' && userAddress && (<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: colors.bgCard, padding: 12, borderRadius: 12, marginTop: 12 }}>
+            <div style={{ fontSize: 12, color: colors.textMuted }}>{userAddress.slice(0, 4)}...{userAddress.slice(-4)}</div>
+            <button onClick={handleDisconnect} style={{ background: 'rgba(255,50,50,0.2)', color: '#ff4444', border: 'none', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 'bold', cursor: 'pointer' }}>Отвязать</button>
+          </div>
+        )}
+      </div>
 
       {/* ── Кнопка «Пополнить» ────────────────────── */}
-      <button
-        onClick={handlePay}
-        disabled={isPayDisabled()}
-        style={{
-          width: '100%',
-          padding: '18px 24px',
-          fontSize: 20,
-          fontWeight: 'bold',
-          border: 'none',
-          borderRadius: 12,
-          cursor: isPayDisabled() ? 'not-allowed' : 'pointer',
-          background: '#FFD700',
-          color: '#fff',
-          textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000',
-          transition: 'opacity 0.15s',
-          opacity: isPayDisabled() ? 0.5 : 1,
-        }}
-      >
-        Пополнить
+      <button onClick={handleMainButtonClick} disabled={!inputAmount} style={{ width: '100%', padding: '18px 24px', fontSize: 18, fontWeight: 'bold', border: 'none', borderRadius: 12, cursor: !inputAmount ? 'not-allowed' : 'pointer', background: tab === 'ton' ? '#0098EA' : '#FFD700', color: '#fff', textShadow: '1px 1px 0 #000', opacity: !inputAmount ? 0.5 : 1 }}>
+        {tab === 'ton' ? (userAddress ? `Пополнить на ${numericAmount} TON` : 'Подключить кошелек') : `Оплатить ${numericAmount} Stars`}
       </button>
     </div>
   );
