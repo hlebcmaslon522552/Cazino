@@ -324,16 +324,17 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
           fetch(`${CONFIG.API_URL}/api/plinko_drop`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bet_amount: stake }),
+            body: JSON.stringify({ bet_amount: stake, rows }),
           }).then(r => r.json())
         )
       );
       for (const res of results) {
-        if (res && typeof res.multiplier === 'number') {
-          // Пытаемся получить slotIndex от сервера, иначе находим индекс по множителю
-          const slotIdx = typeof res.slotIndex === 'number'
-            ? res.slotIndex
-            : multipliers.indexOf(res.multiplier);
+        if (res && typeof res.slotIndex === 'number' && res.slotIndex >= 0 && res.slotIndex < multipliers.length) {
+          // Сервер возвращает slotIndex, совместимый с нашим массивом множителей
+          serverData.push({ slotIndex: res.slotIndex, multiplier: res.multiplier ?? multipliers[res.slotIndex] });
+        } else if (res && typeof res.multiplier === 'number') {
+          // Fallback: ищем множитель в массиве (для старых версий сервера)
+          const slotIdx = multipliers.indexOf(res.multiplier);
           serverData.push({ slotIndex: slotIdx >= 0 ? slotIdx : null, multiplier: res.multiplier });
         } else {
           serverData.push({ slotIndex: null, multiplier: null });

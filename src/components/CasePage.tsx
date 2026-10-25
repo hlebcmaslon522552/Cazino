@@ -5,7 +5,6 @@ import { useTelegram } from '../hooks/useTelegram';
 import type { CaseItem } from './CaseShop';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { addToInventory } from '../api';
 
 interface Props {
   caseData: CaseItem;
@@ -72,7 +71,7 @@ const VIEWPORT_WIDTH = 240;
 const ITEMS_COUNT = () => 30 + Math.floor(Math.random() * 11); // 30–40
 
 export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
-  const { haptic, user, initData } = useTelegram();
+  const { haptic, user } = useTelegram();
 
   const pool = loadPool();
 
@@ -161,45 +160,45 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       return;
     }
 
-    /* 1. Списываем цену кейса */
-    onUpdateBalance(-price);
-    haptic('medium');
-
-    // Отправляем оборот
-    if (price > 0) {
-      fetch(`${CONFIG.API_URL}/api/add_turnover`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({
-          user_id: user?.id ?? 'unknown',
-          username: user?.first_name || 'Игрок',
-          amount: price,
-        }),
-      }).catch(() => {});
-    }
-
-    /* 2. Запрос на сервер */
+    /* 1. Запрос на сервер — открытие кейса (списание + выбор предмета) */
     setIsSpinning(true);
 
     try {
-      const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
+      const userId = String(user?.id ?? '6267608438');
+      const res = await fetch(`${CONFIG.API_URL}/api/open_case`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: user?.id || '6267608438',
-          game_type: 'case',
-          bet_amount: price,
-          initData: initData,
+          user_id: userId,
+          case_price: price,
         }),
       });
 
       const data = await res.json();
 
-      if (!data.success || !data.item) {
+      if (!res.ok || !data.success || !data.item) {
+        // Сервер вернул ошибку — деньги НЕ списаны (сервер откатывает транзакцию)
         throw new Error(data.error || 'Ошибка при открытии кейса');
       }
 
-      /* 3. Сервер вернул успех — генерируем рулетку */
+      // Отправляем оборот
+      if (price > 0) {
+        fetch(`${CONFIG.API_URL}/api/add_turnover`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+          body: JSON.stringify({
+            user_id: user?.id ?? 'unknown',
+            username: user?.first_name || 'Игрок',
+            amount: price,
+          }),
+        }).catch(() => {});
+      }
+
+      /* 2. Сервер списал деньги — обновляем баланс на фронтенде */
+      onUpdateBalance(-price);
+      haptic('medium');
+
+      /* 3. Генерируем рулетку */
       const serverItem = data.item as DropItem;
       const items = generateSpinArray(serverItem);
       // Ищем индекс выигрышного предмета в массиве
@@ -219,25 +218,14 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       /* 4. Запускаем анимацию рулетки */
       await runSpinAnimation(safeWinIndex);
 
-      /* 5. Анимация завершена — добавляем в инвентарь, показываем результат */
+      /* 5. Анимация завершена — показываем результат (предмет уже сохранён на сервере) */
       setIsSpinning(false);
-
-      const userId = String(user?.id ?? '6267608438');
-      const saved = await addToInventory(serverItem, userId);
-
-      if (!saved) {
-        onToast('Ошибка сохранения. Деньги возвращены', 'error');
-        onUpdateBalance(price);
-        return;
-      }
 
       setWonItem(serverItem);
       setShowResult(true);
     } catch (e: any) {
       console.error(e);
       onToast(e.message || 'Ошибка сети', 'error');
-      /* Возвращаем деньги при ошибке */
-      onUpdateBalance(price);
       setIsSpinning(false);
     }
   };

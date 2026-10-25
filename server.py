@@ -8,6 +8,7 @@ import json
 import sqlite3
 import threading
 import time
+import uuid
 from datetime import datetime, timedelta
 import requests
 from flask import Flask, request, jsonify
@@ -55,14 +56,15 @@ TG_ADMIN_CHAT_ID = os.environ.get("TG_ADMIN_CHAT_ID", "")
 
 def init_db():
     conn = sqlite3.connect(DB_PATH)
+    # Включаем WAL-режим для предотвращения блокировок при конкурентном доступе
+    conn.execute("PRAGMA journal_mode=WAL")
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             balance_ton REAL DEFAULT 15.0,
             balance_stars REAL DEFAULT 0.0,
-            referrer_id TEXT DEFAULT NULL,
-            inventory TEXT DEFAULT '[]'
+            referrer_id TEXT DEFAULT NULL
         )
     """)
     # Миграция: добавляем колонки, если их нет (для старых БД)
@@ -70,12 +72,28 @@ def init_db():
         "ALTER TABLE users ADD COLUMN balance_stars REAL DEFAULT 0.0",
         "ALTER TABLE users ADD COLUMN referrer_id TEXT DEFAULT NULL",
         "ALTER TABLE users ADD COLUMN balance_ton REAL DEFAULT 15.0",
-        "ALTER TABLE users ADD COLUMN inventory TEXT DEFAULT '[]'",
     ]:
         try:
             c.execute(col_def)
         except sqlite3.OperationalError:
             pass  # колонка уже существует
+    # Удаляем устаревшую колонку inventory (если была)
+    try:
+        c.execute("ALTER TABLE users DROP COLUMN inventory")
+    except sqlite3.OperationalError:
+        pass  # колонки нет или уже удалена
+    # Отдельная таблица инвентаря
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            item_id TEXT,
+            name TEXT,
+            image TEXT,
+            floor REAL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     # Таблица депозитов (для лидерборда)
     c.execute("""
         CREATE TABLE IF NOT EXISTS deposits (
@@ -444,6 +462,18 @@ def play_game():
 
 
 # ── Plinko Drop ──────────────────────────────────────────────────────
+# Массивы множителей, синхронизированные с фронтендом (Stake-style)
+MULTIS_8  = [5.6, 2.1, 0.8, 0.5, 0.5, 0.5, 0.8, 2.1, 5.6]
+MULTIS_10 = [8.0, 2.8, 1.4, 1.0, 0.6, 0.5, 0.6, 1.0, 1.4, 2.8, 8.0]
+MULTIS_12 = [10.0, 3.0, 1.6, 1.4, 0.8, 0.5, 0.5, 0.5, 0.8, 1.4, 1.6, 3.0, 10.0]
+
+# Веса, соответствующие house edge ~23%
+# Чем ближе к центру (0.5x) — тем выше вес
+WEIGHTS_8  = [1, 2, 5, 15, 15, 15, 5, 2, 1]
+WEIGHTS_10 = [1, 2, 4, 8, 12, 12, 8, 4, 2, 1]
+WEIGHTS_12 = [1, 1, 3, 5, 10, 15, 15, 15, 10, 5, 3, 1, 1]
+
+
 @app.route("/api/plinko_drop", methods=["POST"])
 def plinko_drop():
     data = request.get_json(force=True, silent=True)
@@ -453,14 +483,31 @@ def plinko_drop():
     if bet_amount <= 0:
         return jsonify({"error": "bet_amount must be > 0"}), 400
 
-    # Серверная генерация множителя Plinko
-    # Plinko multiplier: от x0.5 до x10.0 (23% house edge)
-    weights = [1, 1, 2, 4, 12, 80]
-    multipliers = [10.0, 5.0, 2.0, 1.5, 1.0, 0.5]
-    multiplier = random.choices(multipliers, weights=weights, k=1)[0]
+    rows = int(data.get("rows", 8))
+
+    # Выбираем массив и веса по количеству рядов
+    if rows == 8:
+        multis = MULTIS_8
+        w = WEIGHTS_8
+    elif rows == 10:
+        multis = MULTIS_10
+        w = WEIGHTS_10
+    elif rows == 12:
+        multis = MULTIS_12
+        w = WEIGHTS_12
+    else:
+        return jsonify({"error": f"Unsupported rows: {rows}. Use 8, 10 or 12."}), 400
+
+    # Выбираем индекс слота по весовой таблице
+    slot_index = random.choices(range(len(multis)), weights=w, k=1)[0]
+    multiplier = multis[slot_index]
 
     win_amount = round(bet_amount * multiplier, 2)
-    return jsonify({"multiplier": multiplier, "win_amount": win_amount})
+    return jsonify({
+        "slotIndex": slot_index,
+        "multiplier": multiplier,
+        "win_amount": win_amount
+    })
 
 
 # ── Open Case ────────────────────────────────────────────────────────
@@ -500,10 +547,22 @@ def open_case():
     # Списываем цену кейса
     try:
         new_balance = balance - case_price
-        c.execute("UPDATE users SET balance_ton = ? WHERE id = ?", (new_balance, user_id))
 
         # Выбираем случайный предмет
         item = pick_case_item()
+        item_id = str(uuid.uuid4())
+
+        # Добавляем предмет в отдельную таблицу инвентаря
+        c.execute(
+            "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+            (user_id, item_id, item["name"], item["image"], item["price"])
+        )
+
+        # Обновляем баланс
+        c.execute(
+            "UPDATE users SET balance_ton = ? WHERE id = ?",
+            (new_balance, user_id)
+        )
         conn.commit()
         conn.close()
     except Exception as e:
@@ -511,7 +570,7 @@ def open_case():
         conn.close()
         return jsonify({"error": "Database error"}), 500
 
-    return jsonify({"success": True, "item": item})
+    return jsonify({"success": True, "item": {**item, "id": item_id}})
 
 
 # ── Inventory ──────────────────────────────────────────────────────────
@@ -521,20 +580,23 @@ def get_inventory():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
-        row = c.fetchone()
+        c.execute("SELECT item_id, name, image, floor, timestamp FROM inventory WHERE user_id = ?", (user_id,))
+        rows = c.fetchall()
         conn.close()
     except Exception as e:
         print(f"[get_inventory] error: {e}")
         return jsonify([])
 
-    if row and row[0]:
-        try:
-            items = json.loads(row[0])
-        except json.JSONDecodeError:
-            items = []
-    else:
-        items = []
+    items = [
+        {
+            "id": row[0],
+            "name": row[1],
+            "image": row[2],
+            "floor": row[3],
+            "timestamp": row[4]
+        }
+        for row in rows
+    ]
     return jsonify(items)
 
 
@@ -550,50 +612,27 @@ def inventory_add():
     if not item:
         return jsonify({"error": "item is required"}), 400
 
+    item_id = item.get("id") if isinstance(item, dict) else None
+    if not item_id:
+        item_id = str(uuid.uuid4())
+    name = item.get("name", "Unknown") if isinstance(item, dict) else "Unknown"
+    image = item.get("image", "") if isinstance(item, dict) else ""
+    floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
+
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-    except Exception as e:
-        print(f"[inventory_add] connect error: {e}")
-        return jsonify({"error": "Database connection error"}), 500
-
-    try:
-        c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
-        row = c.fetchone()
-    except Exception as e:
-        print(f"[inventory_add] select error: {e}")
-        conn.close()
-        return jsonify({"error": "Database error"}), 500
-
-    if row and row[0]:
-        try:
-            items = json.loads(row[0])
-        except json.JSONDecodeError:
-            items = []
-    else:
-        items = []
-
-    # Избегаем дубликатов по id (если есть)
-    item_id = item.get("id") if isinstance(item, dict) else None
-    if item_id is not None:
-        if not any(isinstance(i, dict) and i.get("id") == item_id for i in items):
-            items.append(item)
-    else:
-        items.append(item)
-
-    inventory_json = json.dumps(items, ensure_ascii=False)
-    try:
-        c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
-                  (user_id, inventory_json, inventory_json))
+        c.execute(
+            "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+            (user_id, item_id, name, image, floor)
+        )
         conn.commit()
-    except Exception as e:
-        print(f"[inventory_add] insert/update error: {e}")
-        print(e)  # дополнительный вывод ошибки
         conn.close()
+    except Exception as e:
+        print(f"[inventory_add] insert error: {e}")
         return jsonify({"error": "Database error"}), 500
 
-    conn.close()
-    return jsonify({"success": True, "inventory": items})
+    return jsonify({"success": True})
 
 
 @app.route("/api/inventory/remove", methods=["POST"])
@@ -611,41 +650,89 @@ def inventory_remove():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+        c.execute("DELETE FROM inventory WHERE user_id = ? AND item_id = ?", (user_id, item_id))
+        conn.commit()
+        conn.close()
     except Exception as e:
-        print(f"[inventory_remove] connect error: {e}")
+        print(f"[inventory_remove] delete error: {e}")
+        return jsonify({"error": "Database error"}), 500
+
+    return jsonify({"success": True})
+
+
+# ── Buy NFT (Market) ─────────────────────────────────────────────────────
+@app.route("/api/buy_nft", methods=["POST"])
+def buy_nft():
+    """Покупка NFT из маркета: списывает TON и добавляет предмет в инвентарь."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    user_id = str(data.get("user_id", "unknown"))
+    item = data.get("item")
+
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+    if not item:
+        return jsonify({"error": "item is required"}), 400
+
+    price = float(item.get("floor", 0))
+    if price <= 0:
+        return jsonify({"error": "Invalid item price"}), 400
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+    except Exception as e:
+        print(f"[buy_nft] connect error: {e}")
         return jsonify({"error": "Database connection error"}), 500
 
+    # Проверяем баланс
     try:
-        c.execute("SELECT inventory FROM users WHERE id = ?", (user_id,))
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
     except Exception as e:
-        print(f"[inventory_remove] select error: {e}")
+        print(f"[buy_nft] select error: {e}")
         conn.close()
         return jsonify({"error": "Database error"}), 500
 
-    if row and row[0]:
-        try:
-            items = json.loads(row[0])
-        except json.JSONDecodeError:
-            items = []
+    if row:
+        balance = row[0]
     else:
-        items = []
+        balance = 15.0
 
-    # Удаляем предмет по id
-    items = [i for i in items if isinstance(i, dict) and i.get("id") != item_id]
+    if balance < price:
+        conn.close()
+        return jsonify({"error": "Недостаточно TON"}), 400
 
-    inventory_json = json.dumps(items, ensure_ascii=False)
+    # Добавляем предмет в отдельную таблицу инвентаря
+    item_id = item.get("id") if isinstance(item, dict) else str(uuid.uuid4())
+    name = item.get("name", "Unknown") if isinstance(item, dict) else "Unknown"
+    image = item.get("image", "") if isinstance(item, dict) else ""
+    floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
+
+    new_balance = round(balance - price, 2)
+
     try:
-        c.execute("INSERT INTO users (id, inventory) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET inventory = ?",
-                  (user_id, inventory_json, inventory_json))
+        c.execute(
+            "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+            (user_id, item_id, name, image, floor)
+        )
+        c.execute(
+            "UPDATE users SET balance_ton = ? WHERE id = ?",
+            (new_balance, user_id)
+        )
         conn.commit()
+        conn.close()
     except Exception as e:
-        print(f"[inventory_remove] insert/update error: {e}")
+        print(f"[buy_nft] insert/update error: {e}")
         conn.close()
         return jsonify({"error": "Database error"}), 500
 
-    conn.close()
-    return jsonify({"success": True, "inventory": items})
+    return jsonify({
+        "success": True,
+        "new_balance": new_balance
+    })
 
 
 # ── Sell NFT ─────────────────────────────────────────────────────────────

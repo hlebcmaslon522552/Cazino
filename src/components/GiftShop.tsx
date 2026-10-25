@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Coins, ShoppingBag, Loader } from 'lucide-react';
 import { CONFIG } from '../config';
 import { useTelegram } from '../hooks/useTelegram';
-import { addToInventory } from '../api';
 
 interface NftItem {
   id: string;
@@ -49,17 +48,31 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
     setBuyingId(item.id);
 
     try {
-      // 1. Сначала добавляем предмет в инвентарь на сервере
+      // Используем серверный эндпоинт /api/buy_nft,
+      // который сам проверяет баланс, списывает TON и добавляет в инвентарь
       const userId = String(user?.id ?? '6267608438');
-      const success = await addToInventory(item, userId);
+      const res = await fetch(`${CONFIG.API_URL}/api/buy_nft`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'ngrok-skip-browser-warning': 'true' 
+        },
+        body: JSON.stringify({ user_id: userId, item: item })
+      });
+      const data = await res.json();
 
-      if (success) {
-        // 2. Сервер подтвердил — списываем TON
-        onUpdateBalance(-item.floor);
+      if (res.ok && data.success) {
+        // Сервер сам списал TON — обновляем баланс из ответа
+        if (typeof data.new_balance === 'number') {
+          onUpdateBalance(data.new_balance - balance);
+        } else {
+          // fallback: списываем локально
+          onUpdateBalance(-item.floor);
+        }
         onToast?.(`🎉 ${item.name} куплен и отправлен в инвентарь!`, 'success');
       } else {
         // Сервер вернул ошибку — TON не списываем
-        onToast?.('Ошибка. Деньги не списаны', 'error');
+        onToast?.(data.error || 'Ошибка. Деньги не списаны', 'error');
       }
     } catch (err) {
       console.error('Ошибка покупки:', err);
