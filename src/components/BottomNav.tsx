@@ -55,7 +55,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           }}
         />
 
-        <div className="absolute inset-0 z-1 flex justify-between items-center w-full px-2">
+        <div className="flex items-center justify-between w-full px-2 max-w-md mx-auto">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -63,7 +63,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
                 aria-label={tab.id}
-                className="flex flex-col items-center justify-center gap-0.5 bg-none border-none cursor-pointer"
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 min-w-0"
                 style={{
                   background: 'none',
                   border: 'none',
@@ -79,7 +79,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                   {tab.icon}
                 </div>
                 <span
-                  className="text-[8px] leading-tight whitespace-nowrap"
+                  className="text-[8px] leading-tight truncate w-full text-center"
                   style={{
                     fontWeight: 600,
                     color: isActive ? '#fff' : '#999',
