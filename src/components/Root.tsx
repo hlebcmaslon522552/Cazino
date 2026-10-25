@@ -32,21 +32,36 @@ export function Root() {
   const [gameScreen, setGameScreen] = useState<GameScreen>('menu');
   const [caseData, setCaseData] = useState<CaseItem | null>(null);
   const [refreshVersion] = useState(0);
+  const { user } = useTelegram();
+  const userId = String(user?.id ?? '6267608438');
   const [balance, setBalance] = useState(0);
 
+  // Загружаем баланс с сервера при старте
   useEffect(() => {
-    getBalance().then(setBalance).catch(() => setBalance(0));
-  }, []);
+    fetch(`${CONFIG.API_URL}/api/balance?user_id=${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.balance_ton !== undefined) {
+          setBalance(Number(data.balance_ton));
+        }
+      })
+      .catch((e) => {
+        console.error("Ошибка загрузки баланса:", e);
+        setBalance(15); // Запасной вариант, если сервер недоступен
+      });
+  }, [userId]);
 
   const handleUpdateBalance = (amount: number) => {
     setBalance(prev => {
       const newBalance = prev + amount;
-      const userId = String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id ?? '6267608438');
+
+      // Отправляем новый баланс на сервер
       fetch(`${CONFIG.API_URL}/api/update_balance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({ user_id: userId, balance: newBalance }),
       }).catch(console.error);
+
       return newBalance;
     });
   };
