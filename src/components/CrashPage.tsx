@@ -86,7 +86,12 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           const prevY = prev.length > 0 ? prev[prev.length - 1].y : 100;
           const newX = Math.min(prevX + 10, 100);
           const newY = Math.max(prevY - (Math.random() * 10 + 5), 10);
-          return [...prev, { x: newX, y: newY }];
+          const newPoints = [...prev, { x: newX, y: newY }];
+          // Сдвигаем график влево, если точек больше 10 (эффект бегущей строки)
+          if (newPoints.length > 10) {
+            return newPoints.map(p => ({ ...p, x: p.x - 5 }));
+          }
+          return newPoints;
         });
         lastPointTimeRef.current = time;
       }
