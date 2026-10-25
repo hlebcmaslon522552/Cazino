@@ -118,7 +118,12 @@ export function loadInventoryFromLocal(): InventoryItem[] {
   }
 }
 
-export async function sellNft(itemId: number, initData: string): Promise<{ stars: number }> {
+export async function sellNft(
+  itemId: number,
+  initData: string,
+  price: number,
+  userId: string,
+): Promise<{ success: boolean; new_balance: number }> {
   const res = await fetch(`${API_URL}/api/sell_nft`, {
     method: 'POST',
     headers: {
@@ -126,7 +131,7 @@ export async function sellNft(itemId: number, initData: string): Promise<{ stars
       'ngrok-skip-browser-warning': 'true',
       'X-Init-Data': initData,
     },
-    body: JSON.stringify({ item_id: itemId }),
+    body: JSON.stringify({ user_id: userId, price }),
   });
   if (!res.ok) {
     throw new Error(`sellNft failed: ${res.status} ${res.statusText}`);

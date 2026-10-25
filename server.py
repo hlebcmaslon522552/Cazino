@@ -232,6 +232,33 @@ def open_case():
     return jsonify({"success": True, "item": item})
 
 
+# ── Sell NFT ─────────────────────────────────────────────────────────────
+@app.route("/api/sell_nft", methods=["POST"])
+def sell_nft():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+    user_id = str(data.get("user_id", "unknown"))
+    price = float(data.get("price", 0))
+
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+    row = c.fetchone()
+    balance = row[0] if row else 15.0
+
+    new_balance = balance + price
+    c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
+              (user_id, new_balance, new_balance))
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True, "new_balance": new_balance})
+
+
 # Mines endpoints
 @app.route("/api/mines_start", methods=["POST"])
 def mines_start():

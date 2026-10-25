@@ -37,7 +37,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
   const [sellingItemId, setSellingItemId] = useState<number | null>(null);
-  const { haptic, vibrate, initData } = useTelegram();
+  const { haptic, vibrate, initData, user } = useTelegram();
 
   // Загружаем список NFT из /my_nfts.json и подтягиваем цены флора
   useEffect(() => {
@@ -90,7 +90,8 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     haptic('medium');
     
     try {
-      await sellNft(selected.id, initData);
+      const userId = String(user?.id ?? '6267608438');
+      await sellNft(selected.id, initData, selected.floor, userId);
       vibrate('success');
       onToast('Продано!', 'success');
       onBalanceChange?.();
@@ -109,7 +110,8 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     haptic('medium');
     setSellingItemId(item.id);
     try {
-      await sellNft(item.id, initData);
+      const userId = String(user?.id ?? '6267608438');
+      await sellNft(item.id, initData, item.floor, userId);
       vibrate('success');
       onToast('Продано!', 'success');
       onBalanceChange?.();
