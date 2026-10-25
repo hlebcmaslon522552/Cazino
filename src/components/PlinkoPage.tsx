@@ -58,7 +58,7 @@ interface Peg {
 const PEG_R = 4;                       // радиус колышка, px
 const BALL_R = 8;                      // радиус шарика, px
 const COLLIDE_DIST = BALL_R + PEG_R;   // дистанция коллизии = 12
-const GRAVITY = 0.15;                  // гравитация
+const GRAVITY = 0.2;                  // гравитация
 const TOP_OFFSET = 64;                 // Y первого ряда колышков
 const ROW_GAP = 32;                    // вертикальный шаг между рядами
 const DROP_START_Y = 28;               // Y точки старта шарика
@@ -134,7 +134,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
   const pegs = useMemo<Peg[]>(() => {
     const list: Peg[] = [];
     if (boardW <= 0) return list;
-    const MIN_SPACING = 40; // минимум 40px, чтобы шарик пролетал
+    const MIN_SPACING = (BALL_R + PEG_R) * 2; // минимум 24px — физический зазор для шарика
     const sp = Math.max(boardW / (rows + 1), MIN_SPACING);
     for (let r = 0; r < rows; r++) {
       const startX = (boardW - r * sp) / 2; // центрируем ряд
@@ -191,15 +191,8 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             const overlap = (BALL_R + PEG_R) - dist;
             b.x += (dx / dist) * overlap;
             b.y += (dy / dist) * overlap;
-            // Мягкое огибание колышка: минимальное изменение направления
-            b.vx += (dx / dist) * 0.1 + (Math.random() - 0.5) * 0.2;
-            // Демпфер Vy: плавно гасим, не обнуляя направление
-            b.vy *= 0.9;
-
-            // Антизастревание: если скорость Y почти нулевая, лёгкий толчок вбок
-            if (b.vy < 0.5) {
-              b.vx += (Math.random() - 0.5) * 0.3;
-            }
+            // Гасим горизонтальную скорость — шарик плавно огибает колышек
+            b.vx *= 0.5;
           }
         }
 
