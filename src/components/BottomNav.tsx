@@ -1,7 +1,7 @@
 import { ASSETS } from '../assets';
-import { ShoppingBag, Swords, User } from 'lucide-react';
+import { ShoppingBag, Swords, User, Trophy, Home } from 'lucide-react';
 
-type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin';
+type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard';
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -10,10 +10,20 @@ interface BottomNavProps {
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs: { id: Tab; left: string; icon: React.ReactNode }[] = [
-    { id: 'market', left: '16.66%', icon: <ShoppingBag size={22} /> },
-    { id: 'game',    left: '50%', icon: <Swords size={22} /> },
-    { id: 'profile', left: '83.33%', icon: <User size={22} /> },
+    { id: 'market',      left: '10%',   icon: <ShoppingBag size={20} /> },
+    { id: 'game',        left: '30%',   icon: <Swords size={20} /> },
+    { id: 'leaderboard', left: '50%',   icon: <Trophy size={20} /> },
+    { id: 'profile',     left: '70%',   icon: <User size={20} /> },
+    { id: 'home',        left: '90%',   icon: <Home size={20} /> },
   ];
+
+  const labelMap: Record<string, string> = {
+    market: 'Маркет',
+    game: 'Игры',
+    leaderboard: 'Топ',
+    profile: 'Профиль',
+    home: 'Главная',
+  };
 
   return (
     <div
@@ -64,7 +74,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                 bottom: 0,
                 left: tab.left,
                 transform: 'translateX(-50%)',
-                width: '30%',
+                width: '20%',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
@@ -87,12 +97,12 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                   {tab.icon}
                 </div>
                 <span style={{
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 600,
                   color: isActive ? '#fff' : '#999',
                   textTransform: 'capitalize',
                 }}>
-                  {tab.id === 'market' ? 'Маркет' : tab.id === 'game' ? 'Игры' : 'Профиль'}
+                  {labelMap[tab.id] || tab.id}
                 </span>
               </div>
             </button>

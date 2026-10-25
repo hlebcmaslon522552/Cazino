@@ -96,6 +96,16 @@ def init_db():
     # Инициализация времени последнего сброса (если нет — ставим сейчас)
     c.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('last_reset', datetime('now'))")
 
+    # Таблица оборота (turnover)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS turnover (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            username TEXT,
+            amount REAL
+        )
+    """)
+
     # Пользователь по умолчанию (id из браузера)
     c.execute("INSERT OR IGNORE INTO users (id, balance_ton) VALUES ('6267608438', 15.0)")
     conn.commit()
@@ -678,6 +688,50 @@ def mines_click():
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "cazino-game-server"})
+
+
+# ── Turnover Leaderboard ──────────────────────────────────────────────
+@app.route("/api/add_turnover", methods=["POST"])
+def add_turnover():
+    """Фиксирует ставку пользователя в таблице оборота."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    user_id = str(data.get("user_id", "unknown"))
+    username = str(data.get("username", "Unknown"))
+    amount = float(data.get("amount", 0))
+
+    if amount <= 0:
+        return jsonify({"error": "Amount must be > 0"}), 400
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO turnover (user_id, username, amount) VALUES (?, ?, ?)",
+        (user_id, username, amount)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/leaderboard_turnover", methods=["GET"])
+def leaderboard_turnover():
+    """Возвращает топ-15 юзеров по сумме оборота."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        SELECT username, SUM(amount) as total
+        FROM turnover
+        GROUP BY user_id
+        ORDER BY total DESC
+        LIMIT 15
+    """)
+    rows = c.fetchall()
+    conn.close()
+    leaderboard = [{"username": row[0], "total": round(row[1], 2)} for row in rows]
+    return jsonify(leaderboard)
 
 
 # ── Запуск фоновой задачи сброса лидерборда ───────────────────────────

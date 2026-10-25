@@ -135,6 +135,20 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     setHasBet(true);
     setPlayers(prev => [...prev, { name: user?.first_name || 'Вы', bet: betType === 'ton' ? finalBet : (selectedNft?.floor || 0) }]);
     if (betType === 'ton') onToast?.('Ставка принята!', 'success');
+
+    // Отправляем оборот
+    const turnoverAmount = betType === 'ton' ? finalBet : (selectedNft?.floor || 0);
+    if (turnoverAmount > 0) {
+      fetch(`${CONFIG.API_URL}/api/add_turnover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          username: user?.first_name ?? user?.username ?? 'Unknown',
+          amount: turnoverAmount,
+        }),
+      }).catch(() => {});
+    }
   };
 
   const cashOut = () => {

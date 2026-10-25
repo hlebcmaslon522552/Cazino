@@ -19,13 +19,14 @@ import { TopUpPage } from './TopUpPage';
 import { NewsPage } from './NewsPage';
 import { ReferralPage } from './ReferralPage';
 import { AdminPage } from './AdminPage';
+import { LeaderboardPage } from './LeaderboardPage';
 import { BottomNav } from './BottomNav';
 import { publicUrl } from '../helpers/publicUrl';
 import { getBalance } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
-export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin';
+export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard';
 export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
 
 export function Root() {
@@ -144,6 +145,7 @@ export function Root() {
         <ReferralPage onBack={() => handleTabChange('profile')} onToast={showToast} />
       )}
       {activeTab === 'admin' && <AdminPage onBack={() => handleTabChange('profile')} />}
+      {activeTab === 'leaderboard' && <LeaderboardPage />}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
       </AppRoot>

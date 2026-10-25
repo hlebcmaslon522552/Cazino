@@ -164,6 +164,19 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     onUpdateBalance(-price);
     haptic('medium');
 
+    // Отправляем оборот
+    if (price > 0) {
+      fetch(`${CONFIG.API_URL}/api/add_turnover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          username: user?.first_name ?? user?.username ?? 'Unknown',
+          amount: price,
+        }),
+      }).catch(() => {});
+    }
+
     /* 2. Запрос на сервер */
     setIsSpinning(true);
 

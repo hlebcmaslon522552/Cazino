@@ -98,7 +98,7 @@ function buildSlots(rows: number): SlotConfig[] {
    =================================================================== */
 
 export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props) {
-  const { haptic } = useTelegram();
+  const { haptic, user } = useTelegram();
 
   const boardRef = useRef<HTMLDivElement>(null);
   const [boardW, setBoardW] = useState(0);
@@ -346,6 +346,19 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     serverSlotsRef.current = serverData.map(d => d.slotIndex);
 
     onUpdateBalance(-totalStake);
+
+    // Отправляем оборот
+    if (totalStake > 0) {
+      fetch(`${CONFIG.API_URL}/api/add_turnover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          username: user?.first_name ?? user?.username ?? 'Unknown',
+          amount: totalStake,
+        }),
+      }).catch(() => {});
+    }
     setIsDropping(true);
     isDroppingRef.current = true;
     ballsFinishedRef.current = 0;
