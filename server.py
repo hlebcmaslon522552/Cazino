@@ -137,17 +137,43 @@ def verify_init_data(init_data):
     return bool(init_data and init_data.strip())
 
 
-# ── Пул предметов для кейсов ──────────────────────────────────────────
-CASE_POOL = [
-    {"name": "Plush Pepe", "image": "/nft_images/plush_pepe.webp", "rarity": "legendary", "chance": 1, "price": 500},
-    {"name": "Durov Cap", "image": "/nft_images/durovs_cap.webp", "rarity": "epic", "chance": 4, "price": 200},
-    {"name": "Astral Shard", "image": "/nft_images/astral_shard.webp", "rarity": "rare", "chance": 10, "price": 80},
-    {"name": "Golden Fish", "image": "/nft_images/bonded_ring.webp", "rarity": "rare", "chance": 10, "price": 75},
-    {"name": "Shadow Veil", "image": "/nft_images/westside_sign.webp", "rarity": "uncommon", "chance": 15, "price": 40},
-    {"name": "Ruby Heart", "image": "/nft_images/heart_locket-removebg-preview.png", "rarity": "uncommon", "chance": 15, "price": 35},
-    {"name": "Emerald Eye", "image": "/nft_images/clover_pin.webp", "rarity": "uncommon", "chance": 15, "price": 30},
-    {"name": "Moonstone", "image": "/nft_images/moon_pendant.webp", "rarity": "common", "chance": 30, "price": 10},
+# ── Пулы предметов для кейсов (по ID кейса) ───────────────────────────
+CASE_WOOD_POOL = [
+    {"name": "Bow Tie", "image": "/nft_images/bow_tie.webp", "rarity": "common", "chance": 40, "price": 5.81},
+    {"name": "Fresh Socks", "image": "/nft_images/fresh_socks.webp", "rarity": "uncommon", "chance": 30, "price": 4.48},
+    {"name": "Candy Cane", "image": "/nft_images/candy_cane.webp", "rarity": "uncommon", "chance": 20, "price": 3.88},
+    {"name": "Snow Globe", "image": "/nft_images/snow_globe.webp", "rarity": "rare", "chance": 10, "price": 6.42},
 ]
+
+CASE_COPPER_POOL = [
+    {"name": "Swiss Watch", "image": "/nft_images/swiss_watch.webp", "rarity": "rare", "chance": 30, "price": 56.06},
+    {"name": "Signet Ring", "image": "/nft_images/signet_ring.webp", "rarity": "rare", "chance": 30, "price": 36.00},
+    {"name": "Valentine Box", "image": "/nft_images/valentine_box.webp", "rarity": "uncommon", "chance": 20, "price": 12.75},
+    {"name": "Jingle Bells", "image": "/nft_images/jingle_bells.webp", "rarity": "uncommon", "chance": 20, "price": 10.77},
+]
+
+CASE_SILVER_POOL = [
+    {"name": "Astral Shard", "image": "/nft_images/astral_shard.webp", "rarity": "epic", "chance": 10, "price": 120.81},
+    {"name": "Genie Lamp", "image": "/nft_images/genie_lamp.webp", "rarity": "rare", "chance": 20, "price": 38.72},
+    {"name": "Toy Bear", "image": "/nft_images/toy_bear.webp", "rarity": "rare", "chance": 30, "price": 34.59},
+    {"name": "Love Potion", "image": "/nft_images/love_potion.webp", "rarity": "uncommon", "chance": 40, "price": 14.79},
+]
+
+CASE_GOLD_POOL = [
+    {"name": "Heart Locket", "image": "/nft_images/heart_locket-removebg-preview.png", "rarity": "legendary", "chance": 1, "price": 1249.48},
+    {"name": "Precious Peach", "image": "/nft_images/precious_peach.webp", "rarity": "epic", "chance": 4, "price": 259.57},
+    {"name": "Durovs Cap", "image": "/nft_images/durovs_cap.webp", "rarity": "rare", "chance": 15, "price": 420.24},
+    {"name": "Mighty Arm", "image": "/nft_images/mighty_arm.webp", "rarity": "rare", "chance": 30, "price": 127.45},
+    {"name": "Perfume Bottle", "image": "/nft_images/perfume_bottle.webp", "rarity": "uncommon", "chance": 50, "price": 83.10},
+]
+
+# Соответствие ID кейса (фронтенд) и пула предметов
+CASE_POOLS = {
+    "case_wood": CASE_WOOD_POOL,
+    "case_copper": CASE_COPPER_POOL,
+    "case_silver": CASE_SILVER_POOL,
+    "case_gold": CASE_GOLD_POOL,
+}
 
 def generate_crash_point():
     e = pow(2, 32)
@@ -161,15 +187,16 @@ def generate_crash_point():
     return round(point, 2)
 
 
-def pick_case_item():
-    total_chance = sum(item["chance"] for item in CASE_POOL)
+def pick_case_item(case_id=""):
+    pool = CASE_POOLS.get(case_id, CASE_WOOD_POOL)
+    total_chance = sum(item["chance"] for item in pool)
     roll = random.uniform(0, total_chance)
     cumulative = 0.0
-    for item in CASE_POOL:
+    for item in pool:
         cumulative += item["chance"]
         if roll <= cumulative:
             return item
-    return CASE_POOL[-1]
+    return pool[-1]
 # ── Telegram Notification ──────────────────────────────────────────
 def send_telegram_notification(message: str):
     """Отправляет сообщение админу в Telegram."""
@@ -471,7 +498,7 @@ def play_game():
         return jsonify({"crash_point": crash_point, "user_id": user_id})
 
     elif game_type == "case":
-        item = pick_case_item()
+        item = pick_case_item(data.get("case_id", ""))
         return jsonify({"success": True, "item": item, "user_id": user_id})
 
     else:
@@ -535,6 +562,7 @@ def open_case():
         return jsonify({"error": "Invalid JSON body"}), 400
     user_id = str(data.get("user_id", "unknown"))
     case_price = float(data.get("case_price", 0))
+    case_id = str(data.get("case_id", "")).strip()
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
     if case_price <= 0:
@@ -569,8 +597,8 @@ def open_case():
     try:
         new_balance = balance - case_price
 
-        # Выбираем случайный предмет
-        item = pick_case_item()
+        # Выбираем случайный предмет из пула, соответствующего ID кейса
+        item = pick_case_item(case_id)
         item_id = str(uuid.uuid4())
 
         # Добавляем предмет в отдельную таблицу инвентаря
@@ -955,6 +983,46 @@ def create_invoice():
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "cazino-game-server"})
+
+
+# ── Withdraw NFT (уведомление админу) ─────────────────────────────────
+@app.route("/api/withdraw_nft", methods=["POST"])
+def withdraw_nft():
+    """
+    Принимает заявку на вывод NFT и отправляет уведомление админу в Telegram.
+    """
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    user_id = str(data.get("user_id", "unknown"))
+    username = str(data.get("username", "unknown"))
+    nft_name = str(data.get("nft_name", "unknown"))
+    nft_price = float(data.get("nft_price", 0))
+
+    # Формируем текст уведомления
+    text = (
+        "🔔 ЗАЯВКА НА ВЫВОД NFT!\n\n"
+        "👤 Юзер: @{} (ID: {})\n"
+        "🎁 NFT: {}\n"
+        "💰 Цена: {} TON\n\n"
+        "⚠️ Проверьте NFT и отправьте его юзеру."
+    ).format(username, user_id, nft_name, nft_price)
+
+    try:
+        bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": 6267608438,
+            "text": text,
+        }
+        resp = requests.post(url, json=payload, timeout=10)
+        if not resp.ok:
+            print(f"[withdraw_nft] Telegram API error: {resp.status_code} {resp.text}")
+    except Exception as e:
+        print(f"[withdraw_nft] Request failed: {e}")
+
+    return jsonify({"success": True})
 
 
 # ── Turnover Leaderboard ──────────────────────────────────────────────

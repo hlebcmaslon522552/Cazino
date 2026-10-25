@@ -3,9 +3,10 @@ import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
-import { sellNft, withdrawNft, getFloorPrice, fetchInventory } from '../api';
+import { sellNft, getFloorPrice, fetchInventory } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
+import { CONFIG } from '../config';
 
 interface Props {
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -129,15 +130,34 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   const handleWithdraw = async () => {
     if (!selected) return;
     haptic('medium');
-    
+
     try {
-      await withdrawNft(selected.id, initData);
-      vibrate('warning');
-      onToast('Заявка на вывод. Холд 1 час.', 'info');
+      const userId = String(user?.id ?? '6267608438');
+      const username = user?.username || 'unknown';
+
+      const res = await fetch(`${CONFIG.API_URL}/api/withdraw_nft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          username: username,
+          nft_name: selected.name,
+          nft_price: selected.floor,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка при отправке заявки');
+      }
+
+      vibrate('success');
+      onToast('Заявка на вывод отправлена администратору. Ожидайте.', 'success');
       setSelected(null);
     } catch (err) {
-      console.error('Ошибка вывода:', err);
-      onToast('Ошибка при выводе', 'error');
+      console.error('Ошибка при выводе:', err);
+      onToast('Ошибка при отправке заявки', 'error');
     }
   };
 
