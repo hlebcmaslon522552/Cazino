@@ -151,13 +151,6 @@ export function ProfilePage({ onNavigate }: Props) {
         By @ERR_279
       </div>
 
-      {/* ── Админ-панель (красная, в самом низу) ──────────────── */}
-      {/* Проверка Telegram ID закомментирована (временно) — страница открыта всем */}
-      <div style={{ marginTop: spacing.lg }}>
-        <Button size="lg" fullWidth variant="danger" onClick={() => onNavigate('admin')}>
-          ⚙️ Админ-Панель
-        </Button>
       </div>
-    </div>
   );
 }

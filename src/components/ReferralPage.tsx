@@ -93,7 +93,7 @@ export function ReferralPage({ onBack, onToast }: Props) {
             color: colors.gold,
           }}
         >
-          Получай 10% от пополнений
+          Получай 5% от пополнений
         </p>
 
         {/* Реферальная ссылка */}
@@ -156,7 +156,7 @@ export function ReferralPage({ onBack, onToast }: Props) {
           {[
             { value: '0', label: 'Приглашено' },
             { value: '0 TON', label: 'Заработано', gold: true },
-            { value: '10%', label: 'Бонус' },
+            { value: '5%', label: 'Бонус' },
           ].map((s) => (
             <div
               key={s.label}

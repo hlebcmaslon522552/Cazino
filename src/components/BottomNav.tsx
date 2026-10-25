@@ -1,7 +1,7 @@
 import { ASSETS } from '../assets';
 import { ShoppingBag, Swords, User, Trophy, Backpack } from 'lucide-react';
 
-type Tab = 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard' | 'inventory';
+type Tab = 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory';
 
 interface BottomNavProps {
   activeTab: Tab;

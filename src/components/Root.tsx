@@ -18,7 +18,7 @@ import { GiftShop } from './GiftShop';
 import { TopUpPage } from './TopUpPage';
 import { NewsPage } from './NewsPage';
 import { ReferralPage } from './ReferralPage';
-import { AdminPage } from './AdminPage';
+
 import { LeaderboardPage } from './LeaderboardPage';
 import { BottomNav } from './BottomNav';
 import { publicUrl } from '../helpers/publicUrl';
@@ -26,7 +26,7 @@ import { getBalance } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
-export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'admin' | 'leaderboard' | 'inventory';
+export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory';
 export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
 
 export function Root() {
@@ -147,7 +147,6 @@ export function Root() {
       {activeTab === 'referral' && (
         <ReferralPage onBack={() => handleTabChange('profile')} onToast={showToast} />
       )}
-      {activeTab === 'admin' && <AdminPage onBack={() => handleTabChange('profile')} />}
       {activeTab === 'leaderboard' && <LeaderboardPage />}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />

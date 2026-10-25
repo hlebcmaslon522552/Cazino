@@ -9,7 +9,7 @@ interface HeaderProps {
    * Увеличь на 1, когда нужно перезапросить данные (например, после продажи NFT).
    */
   refreshVersion?: number;
-  onNavigate?: (tab: 'home' | 'game' | 'profile' | 'inventory' | 'topup' | 'news' | 'referral' | 'admin') => void;
+  onNavigate?: (tab: 'home' | 'game' | 'profile' | 'inventory' | 'topup' | 'news' | 'referral') => void;
 }
 
 /**
