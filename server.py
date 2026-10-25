@@ -50,7 +50,7 @@ RESET_HOUR = int(os.environ.get("LEADERBOARD_RESET_HOUR", 0))
 CHECK_INTERVAL_SEC = int(os.environ.get("LEADERBOARD_CHECK_INTERVAL", 3600))
 
 # ── Telegram Admin Notifications ────────────────────────────────────
-TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
+TG_BOT_TOKEN = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
 TG_ADMIN_CHAT_ID = os.environ.get("TG_ADMIN_CHAT_ID", "")
 
 
@@ -939,12 +939,9 @@ def create_invoice():
     if amount < 50:
         return jsonify({"error": "Минимум 50 Stars"}), 400
 
-    if not TG_BOT_TOKEN:
-        print("[create_invoice] BOT_TOKEN is empty!")
-        return jsonify({"error": "Telegram bot not configured"}), 500
-
     try:
-        url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/createInvoiceLink"
+        bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
+        url = f"https://api.telegram.org/bot{bot_token}/createInvoiceLink"
         payload = {
             "title": "Пополнение баланса",
             "description": f"Покупка {amount} Stars",
