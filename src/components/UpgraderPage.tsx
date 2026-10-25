@@ -282,15 +282,26 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const [angle, setAngle] = useState(0);
   const [duration, setDuration] = useState(6000);
 
-  // Загружаем NFT из all_gifts.json
+  // Загружаем NFT из инвентаря (my_nfts.json)
   useEffect(() => {
-    fetch('/all_gifts.json')
-      .then((res) => res.json())
+    fetch('/my_nfts.json')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch');
+        return res.json();
+      })
       .then((data: Nft[]) => {
         setNfts(data);
         setLoadingNfts(false);
       })
       .catch(() => {
+        // Если файла нет — берём из localStorage
+        const local = localStorage.getItem('inventory');
+        if (local) {
+          try {
+            const parsed = JSON.parse(local);
+            setNfts(parsed);
+          } catch {}
+        }
         setLoadingNfts(false);
       });
   }, []);
@@ -309,6 +320,18 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     );
   }
 
+  if (nfts.length === 0) {
+    return (
+      <div style={{ padding: spacing.md, color: colors.text }}>
+        <Button variant="ghost" onClick={onBack} size="sm">← Назад</Button>
+        <h1 style={{ marginTop: spacing.md }}>⬆️ Апгрейдер</h1>
+        <p style={{ color: colors.textMuted, textAlign: 'center', marginTop: 40 }}>
+          Нет NFT для апгрейда
+        </p>
+      </div>
+    );
+  }
+
   const startPrice = startNft?.floor ?? 0;
   const targetPrice = targetNft?.floor ?? 0;
 
@@ -319,7 +342,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const rawChance = targetPrice > 0 ? (wager / targetPrice) * 100 : 0;
   const chance = Math.min(rawChance, MAX_CHANCE);
 
-  const startOkay = stake >= MIN_STAKE && !!startNft && !!targetNft && targetPrice >= startPrice;
+  const startOkay = !!startNft && !!targetNft && targetPrice >= startPrice;
   const canUpgrade = startOkay && !spinning;
 
   /* ── Сброс ─────────────────────────────────────── */

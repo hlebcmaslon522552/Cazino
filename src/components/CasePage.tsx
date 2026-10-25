@@ -4,12 +4,15 @@ import { Button } from './ui/Button';
 import { useTelegram } from '../hooks/useTelegram';
 import type { CaseItem } from './CaseShop';
 import { publicUrl } from '../helpers/publicUrl';
+import { CONFIG } from '../config';
+import { addToInventory } from '../api';
 
 interface Props {
   caseData: CaseItem;
   onBack: () => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onUpdateBalance: (amount: number) => void;
+  balance: number;
 }
 
 /* ─── Пул предметов ─── */
@@ -51,13 +54,16 @@ function rarityColor(rarity: string): string {
   }
 }
 
-export function CasePage({ caseData, onBack, onToast, onUpdateBalance }: Props) {
+export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
   const { haptic, vibrate, user } = useTelegram();
 
   const [spinning, setSpinning] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isOpening, setIsOpening] = useState(false);
   const [wonItem, setWonItem] = useState<DropItem | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [droppedItem, setDroppedItem] = useState<DropItem | null>(null); // будет использовано в Промт 2
+  void droppedItem;
 
   /* Анимация прокрутки */
   const pool = loadPool();
@@ -70,56 +76,42 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance }: Props) 
     };
   }, []);
 
-  const spin = async () => {
+  const handleOpenCase = async () => {
     if (spinning || loading) return;
 
-    /* Проверка баланса */
-    const balance = localStorage.getItem('fake_balance');
-    if (!balance || Number(balance) < Number(caseData.price)) {
+    const currentBalance = Number(balance);
+    const price = Number(caseData.price);
+
+    if (isNaN(currentBalance) || currentBalance < price) {
       haptic('medium');
-      onToast('❌ Недостаточно TON на балансе!', 'error');
+      onToast('Недостаточно TON на балансе!', 'error');
       return;
     }
 
     haptic('medium');
-    setLoading(true);
-    setWonItem(null);
-    setShowResult(false);
+    setIsOpening(true);
+    onUpdateBalance(-price); // Списываем цену кейса
 
     try {
-      /* Запрос к серверу */
-      const response = await fetch('http://localhost:8000/api/open_case', {
+      const res = await fetch(`${CONFIG.API_URL}/api/open_case`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: user?.id ?? 'unknown',
-          case_price: caseData.price,
-        }),
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({ user_id: user?.id ?? 'unknown', case_price: price })
       });
-      const data = await response.json();
+      const data = await res.json();
 
-      if (data.success === true) {
-        /* Сервер подтвердил — списываем цену кейса «дельтой» */
-        onUpdateBalance(-caseData.price);
-
-        /* Списываем цену локально */
-        const newBalance = Number(balance) - caseData.price;
-        localStorage.setItem('fake_balance', newBalance.toFixed(4));
-
-        const winner: DropItem = data.item;
-
-        /* Начисляем стоимость выпавшего предмета «дельтой» */
-        const itemWorth = winner.price || (winner as Partial<DropItem> & { floor?: number }).floor || 0;
-        onUpdateBalance(itemWorth);
-
-        setWonItem(winner);
+      if (data.success && data.item) {
+        const winAmount = Number(data.item.price || data.item.floor || 0);
+        onUpdateBalance(winAmount); // Начисляем выигрыш
+        addToInventory(data.item);  // Сохраняем в инвентарь
+        setDroppedItem(data.item);
+        setWonItem(data.item);
         setSpinning(true);
 
         /* Анимация прокрутки — 2 секунды, 20 кадров */
         let tick = 0;
         const maxTicks = 20;
+        const pool = loadPool();
 
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = setInterval(() => {
@@ -131,18 +123,21 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance }: Props) 
             if (intervalRef.current) clearInterval(intervalRef.current);
             intervalRef.current = null;
             setSpinning(false);
-            setDisplayImg(winner.image);
+            setDisplayImg(data.item.image);
             setShowResult(true);
             vibrate('success');
-            onToast(`🎉 Вы выиграли ${winner.name}!`, 'success');
+            onToast(`🎉 Вы выиграли ${data.item.name}!`, 'success');
           }
         }, 100);
       } else {
-        onToast(data.error || '❌ Ошибка при открытии кейса', 'error');
+        onToast?.(data.error || 'Ошибка при открытии', 'error');
+        onUpdateBalance(price); // Возвращаем деньги
       }
-    } catch (err) {
-      onToast('❌ Не удалось связаться с сервером', 'error');
+    } catch (e) {
+      onToast?.('Ошибка сети', 'error');
+      onUpdateBalance(price); // Возвращаем деньги
     } finally {
+      setIsOpening(false);
       setLoading(false);
     }
   };
@@ -168,30 +163,10 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance }: Props) 
   };
 return (
     <div style={{ padding: spacing.md, color: colors.text, overflow: 'hidden' }}>
-      {/* ─── Кнопка "Назад" в левом верхнем углу ─── */}
-      <div
-        onClick={onBack}
-        style={{
-          position: 'fixed',
-          top: 12,
-          left: 12,
-          zIndex: 100,
-          width: 36,
-          height: 36,
-          borderRadius: '50%',
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          color: '#fff',
-          fontSize: 20,
-          backdropFilter: 'blur(4px)',
-        }}
-        aria-label="Назад"
-      >
-        ←
-      </div>
+      {/* ─── Кнопка "Назад" ─── */}
+      <Button variant="ghost" size="sm" onClick={onBack}>
+        ← Назад
+      </Button>
 
       <h1 style={{ marginTop: spacing.md, marginBottom: 4 }}>🎁 {caseData.name}</h1>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -270,8 +245,8 @@ return (
       </div>
 
       <div style={{ marginTop: spacing.lg }}>
-        <Button size="lg" fullWidth onClick={spin} disabled={spinning || loading}>
-          {loading
+        <Button size="lg" fullWidth onClick={handleOpenCase} disabled={spinning || loading || isOpening}>
+          {loading || isOpening
             ? '⏳ Загрузка...'
             : spinning
             ? '🎲 Открываем...'

@@ -108,7 +108,7 @@ export function Root() {
           {gameScreen === 'menu' && <GamePage onOpen={setGameScreen} />}
           {gameScreen === 'upgrader' && <UpgraderPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'case' && (caseData
-            ? <CasePage caseData={caseData} onBack={() => setGameScreen('menu')} onToast={showToast} onUpdateBalance={changeBalance} />
+            ? <CasePage caseData={caseData} onBack={() => setGameScreen('menu')} onToast={showToast} onUpdateBalance={changeBalance} balance={balance} />
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'pvp' && <PvPPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}

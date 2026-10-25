@@ -14,7 +14,7 @@ export interface InventoryItem {
   floor: number;
 }
 
-const API_URL = 'https://jubilant-muscular-regulator.ngrok-free.dev';
+const API_URL = 'https://cazino-api.fxtun.ru';
 
 /**
  * fetchUserData — запрашивает баланс пользователя по user_id.
@@ -71,13 +71,20 @@ export async function topUpStars(_initData: string, amount: number): Promise<boo
 /**
  * addToInventory — сохраняет предмет в localStorage (ключ 'inventory')
  * как запасной вариант, если бэкенд не отвечает.
+ * Принимает любой объект (InventoryItem, DropItem и т.д.)
  */
-export function addToInventory(item: InventoryItem): void {
+export function addToInventory(item: unknown): void {
   try {
     const raw = localStorage.getItem('inventory');
-    const list: InventoryItem[] = raw ? JSON.parse(raw) : [];
-    // Избегаем дубликатов по id
-    if (!list.some((i) => i.id === item.id)) {
+    const list: unknown[] = raw ? JSON.parse(raw) : [];
+    // Избегаем дубликатов по id (если есть)
+    const itemRecord = item as Record<string, unknown>;
+    if (itemRecord.id != null) {
+      if (!list.some((i) => (i as Record<string, unknown>).id === itemRecord.id)) {
+        list.push(item);
+        localStorage.setItem('inventory', JSON.stringify(list));
+      }
+    } else {
       list.push(item);
       localStorage.setItem('inventory', JSON.stringify(list));
     }
