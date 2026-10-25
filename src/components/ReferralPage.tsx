@@ -10,7 +10,8 @@ interface Props {
 
 export function ReferralPage({ onBack, onToast }: Props) {
   const { user, haptic } = useTelegram();
-  const refLink = `https://t.me/YourBot?start=ref_${user?.id || 123}`;
+  const botUsername = 'GAMERR_777_BOT';
+  const refLink = `https://t.me/${botUsername}?startapp=ref_${user?.id || '6267608438'}`;
 
   const handleCopy = async () => {
     haptic('light');
@@ -40,7 +41,7 @@ export function ReferralPage({ onBack, onToast }: Props) {
   const handleShare = () => {
     const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
     const userId = tgUser ? tgUser.id : '6267608438';
-    const botUsername = 'GAMERR_BOT';
+    const botUsername = 'GAMERR_777_BOT';
 
     const refLink = `https://t.me/${botUsername}?startapp=ref_${userId}`;
     const shareText = `🎁 Открывай бесплатный кейс — каждые 24 часа!\n\nПолучи +20% к удаче на первое открытие по ссылке ниже 👇`;

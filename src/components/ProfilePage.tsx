@@ -25,9 +25,22 @@ export function ProfilePage({ onNavigate }: Props) {
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Данные пользователя из Telegram
+  const [userName, setUserName] = useState('Пользователь');
+  const [username, setUsername] = useState('@username');
+  const [avatarUrl, setAvatarUrl] = useState('');
+
   const refLink = `https://t.me/YourBot?start=ref_${user?.id || 123}`;
 
   useEffect(() => {
+    // Извлекаем данные пользователя напрямую из Telegram WebApp
+    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (tgUser) {
+      setUserName(tgUser.first_name + (tgUser.last_name ? ' ' + tgUser.last_name : ''));
+      setUsername(tgUser.username ? '@' + tgUser.username : '');
+      setAvatarUrl(tgUser.photo_url || '');
+    }
+
     let cancelled = false;
     Promise.all([fetchUserData(initData), fetchInventory(initData)])
       .then(([userData, inventory]) => {
@@ -61,22 +74,22 @@ export function ProfilePage({ onNavigate }: Props) {
     }
   };
 
-  const firstLetter = user?.first_name?.charAt(0)?.toUpperCase() || '?';
+  const firstLetter = userName?.charAt(0)?.toUpperCase() || '?';
 
   return (
     <div style={{ padding: spacing.md, color: colors.text, paddingBottom: 140 }}>
       {/* ── Шапка профиля ─────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: spacing.lg }}>
-        {user?.photo_url ? (
-          <img src={user.photo_url} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
         ) : (
           <div style={{ width: 48, height: 48, borderRadius: '50%', background: colors.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 'bold', color: '#fff' }}>
             {firstLetter}
           </div>
         )}
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 'bold', fontSize: 17 }}>{user?.first_name || 'Пользователь'}</div>
-          <div style={{ color: colors.textMuted, fontSize: 13 }}>@{user?.username || 'username'}</div>
+          <div style={{ fontWeight: 'bold', fontSize: 17 }}>{userName}</div>
+          <div style={{ color: colors.textMuted, fontSize: 13 }}>{username}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <img src={publicUrl('TON.png')} alt="" style={{ width: 20, height: 20 }} />
