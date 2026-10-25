@@ -17,10 +17,16 @@ export interface InventoryItem {
 const API_URL = 'https://cazino-api.fxtun.ru';
 
 export const getInitData = () => {
-  if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.initData) {
-    return (window as any).Telegram.WebApp.initData;
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg && tg.initData) {
+      return tg.initData;
+    }
+    // Если это Telegram Desktop, иногда initData лежит в другом месте
+    return '';
+  } catch (e) {
+    return '';
   }
-  return ''; // Если открыто в браузере, отправляем пустую строку
 };
 
 /**
