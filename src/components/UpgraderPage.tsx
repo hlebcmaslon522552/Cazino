@@ -14,7 +14,8 @@ import { getInitData, fetchInventory, addToInventory } from '../api';
    =================================================================== */
 
 interface Nft {
-  id: number;
+  // id может быть числом (из инвентаря сервера) или строкой (из my_nfts.json)
+  id: number | string;
   name: string;
   floor: number;
   image: string;
@@ -269,7 +270,10 @@ interface Props {
 export function UpgraderPage({ onBack, onToast }: Props) {
   const { haptic, vibrate, user } = useTelegram();
 
-  const [nfts, setNfts] = useState<Nft[]>([]);
+  // «Начальный NFT» — берётся ТОЛЬКО из инвентаря пользователя (сервер)
+  const [inventoryNfts, setInventoryNfts] = useState<Nft[]>([]);
+  // «Конечный NFT» — берётся из ВСЕГО пула предметов (my_nfts.json)
+  const [allNfts, setAllNfts] = useState<Nft[]>([]);
   const [loadingNfts, setLoadingNfts] = useState(true);
 
   const [startNft, setStartNft] = useState<Nft | null>(null);
@@ -282,7 +286,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const [angle, setAngle] = useState(0);
   const [duration, setDuration] = useState(6000);
 
-  // Загружаем NFT из инвентаря через API
+  // Загружаем «начальные» NFT из инвентаря через API
   useEffect(() => {
     const initData = getInitData();
     const userId = String(user?.id ?? '6267608438');
@@ -294,11 +298,33 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           floor: item.floor,
           image: item.image,
         }));
-        setNfts(mapped);
+        setInventoryNfts(mapped);
         setLoadingNfts(false);
       })
       .catch(() => {
         setLoadingNfts(false);
+      });
+  }, []);
+
+  // Загружаем «конечные» NFT из общего пула предметов (my_nfts.json)
+  useEffect(() => {
+    fetch(publicUrl('my_nfts.json'))
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load my_nfts.json');
+        return res.json();
+      })
+      .then((data: Array<{ id: number | string; name: string; floor: number; image: string }>) => {
+        const mapped: Nft[] = data.map((item) => ({
+          id: item.id,
+          name: item.name,
+          floor: Number(item.floor) || 0,
+          image: item.image,
+        }));
+        setAllNfts(mapped);
+      })
+      .catch((e) => {
+        console.error('Ошибка загрузки пула NFT:', e);
+        setAllNfts([]);
       });
   }, []);
 
@@ -316,7 +342,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     );
   }
 
-  if (nfts.length === 0) {
+  if (inventoryNfts.length === 0) {
     return (
       <div style={{ padding: spacing.md, color: colors.text }}>
         <Button variant="ghost" onClick={onBack} size="sm">← Назад</Button>
@@ -382,20 +408,20 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         if (isWin && data.item) {
           // Успех — синхронизируем инвентарь на сервере
           try {
-            // Удаляем startNft из инвентаря
+            // 1) Удаляем начальный NFT из инвентаря
             await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ user_id: userId, item_id: startNft!.id }),
             });
-            // Добавляем выигранный NFT в инвентарь
+            // 2) Добавляем выигранный (конечный) NFT в инвентарь
             await addToInventory(data.item, userId);
           } catch (e) {
             console.error('Inventory sync error:', e);
           }
 
-          // Обновляем локальное состояние
-          setNfts((prev) => {
+          // Обновляем локальное состояние инвентаря
+          setInventoryNfts((prev) => {
             let updated = prev.filter((n) => n.id !== startNft!.id);
             if (!updated.find((n) => n.id === data.item!.id)) {
               updated = [...updated, data.item as Nft];
@@ -403,7 +429,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             return updated;
           });
         } else if (!isWin) {
-          // Неудача — удаляем startNft из инвентаря на сервере
+          // Неудача — удаляем начальный NFT из инвентаря на сервере
           try {
             await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
               method: 'POST',
@@ -414,8 +440,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             console.error('Inventory sync error:', e);
           }
 
-          // Обновляем локальное состояние — убираем startNft
-          setNfts((prev) => {
+          // Обновляем локальное состояние инвентаря — убираем startNft
+          setInventoryNfts((prev) => {
             const updated = prev.filter((n) => n.id !== startNft!.id);
             return updated;
           });
@@ -517,7 +543,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         <div>
           <h3 style={{ marginTop: 0, color: colors.text, fontSize: 17, marginBottom: 12 }}>Выберите начальный NFT</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
-            {nfts.map((nft) => (
+            {inventoryNfts.map((nft) => (
               <NftGridCard
                 key={nft.id}
                 nft={nft}
@@ -535,18 +561,18 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         </div>
       </Modal>
 
-      {/* ── Модалка: выбор конечного NFT (только дороже начального) ── */}
+      {/* ── Модалка: выбор конечного NFT (из всего пула, не дешевле начального) ── */}
       <Modal open={targetModalOpen} onClose={() => setTargetModalOpen(false)}>
         <div>
           <h3 style={{ marginTop: 0, color: colors.text, fontSize: 17, marginBottom: 12 }}>Выберите конечный NFT</h3>
           {startNft && (
             <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 10 }}>
-              Цель должна быть дороже: <b style={{ color: colors.accent }}>{startNft.floor.toFixed(2)} TON</b>
+              Цель должна быть дороже или равна: <b style={{ color: colors.accent }}>{startNft.floor.toFixed(2)} TON</b>
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
-            {nfts
-              .filter((nft) => !startNft || nft.floor > startNft.floor)
+            {allNfts
+              .filter((nft) => !startNft || nft.floor >= startNft.floor)
               .map((nft) => (
                 <NftGridCard
                   key={nft.id}
