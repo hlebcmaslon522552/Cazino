@@ -151,10 +151,9 @@ interface WheelProps {
   chance: number;           // шанс в % (0..75)
   angle: number;            // текущий угол вращения дуги (град)
   spinning: boolean;
-  duration: number;         // ms, время вращения
 }
 
-function Wheel({ chance, angle, spinning, duration }: WheelProps) {
+function Wheel({ chance, angle, spinning }: WheelProps) {
   const dash = (chance / 100) * CIRC;
 
   return (
@@ -182,7 +181,7 @@ function Wheel({ chance, angle, spinning, duration }: WheelProps) {
           transform: `rotate(${angle}deg)`,
           transformOrigin: '50% 50%',
           transition: spinning
-            ? `transform ${duration}ms cubic-bezier(0.12, 0.7, 0.1, 1)`
+            ? 'transform 3s ease-out'
             : 'none',
         }}
       >
@@ -284,7 +283,6 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<'win' | 'lose' | null>(null);
   const [angle, setAngle] = useState(0);
-  const [duration, setDuration] = useState(6000);
 
   // Загружаем «начальные» NFT из инвентаря через API
   useEffect(() => {
@@ -382,7 +380,33 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     resetGame();
     setSpinning(true);
 
-    // Отправляем запрос на сервер
+    // Локально определяем результат (для визуала и времени анимации)
+    const isWin = Math.random() < chance / 100;
+
+    // Рассчитываем угол так, чтобы стрелка остановилась на нужном секторе
+    const winArc = (chance / 100) * 360;
+    const finalDeg = isWin
+      ? (360 - winArc) + Math.random() * winArc
+      : Math.random() * (360 - winArc);
+    const fullSpins = (5 + Math.floor(Math.random() * 5)) * 360;
+    setAngle(angle + fullSpins + finalDeg);
+
+    // Через 3 секунды останавливаем анимацию и показываем результат
+    setTimeout(() => {
+      setSpinning(false);
+      setResult(isWin ? 'win' : 'lose');
+      vibrate(isWin ? 'success' : 'error');
+      // Начальный NFT потрачен (сгорел / обменян) — сбрасываем выбор
+      setStartNft(null);
+      setTargetNft(null);
+      if (isWin) {
+        onToast('🎉 Апгрейд успешен!', 'success');
+      } else {
+        onToast('💀 Неудача! Начальный NFT сгорел.', 'error');
+      }
+    }, 3000);
+
+    // Серверная синхронизация инвентаря (не управляет анимацией)
     fetch(`${CONFIG.API_URL}/api/play_game`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -402,10 +426,10 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         return res.json();
       })
       .then(async (data: { success: boolean; item?: Nft }) => {
-        const isWin = data.success === true;
+        const serverWin = data.success === true;
         const userId = String(user?.id ?? '6267608438');
 
-        if (isWin && data.item) {
+        if (serverWin && data.item) {
           // Успех — синхронизируем инвентарь на сервере
           try {
             // 1) Удаляем начальный NFT из инвентаря
@@ -428,7 +452,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             }
             return updated;
           });
-        } else if (!isWin) {
+        } else if (!serverWin) {
           // Неудача — удаляем начальный NFT из инвентаря на сервере
           try {
             await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
@@ -446,44 +470,10 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             return updated;
           });
         }
-
-        // Начальный NFT потрачен (сгорел / обменян) — сбрасываем выбор в обоих
-        // колонках, чтобы его нельзя было прокрутить ещё раз.
-        setStartNft(null);
-        setTargetNft(null);
-
-        // Рассчитываем угол для анимации (оставляем локальную симуляцию для визуала)
-        const winArc = (chance / 100) * 360;
-        let finalDeg: number;
-        if (isWin) {
-          finalDeg = (360 - winArc) + Math.random() * winArc;
-        } else {
-          finalDeg = Math.random() * (360 - winArc);
-        }
-
-        const dur = 5000 + Math.random() * 2000;
-        setDuration(dur);
-
-        const start = ((angle % 360) + 360) % 360;
-        const delta = ((finalDeg - start) + 360) % 360;
-        const fullSpins = (5 + Math.floor(Math.random() * 5)) * 360;
-        setAngle(angle + fullSpins + delta);
-
-        setTimeout(() => {
-          setSpinning(false);
-          setResult(isWin ? 'win' : 'lose');
-          vibrate(isWin ? 'success' : 'error');
-          if (isWin) {
-            onToast('🎉 Апгрейд успешен!', 'success');
-          } else {
-            onToast('💀 Неудача! Начальный NFT сгорел.', 'error');
-          }
-        }, dur);
       })
       .catch((err) => {
         console.error('Upgrade error:', err);
-        setSpinning(false);
-        onToast('Ошибка сервера, попробуйте позже', 'error');
+        onToast('Ошибка сервера при синхронизации, попробуйте позже', 'error');
       });
   };
 
@@ -508,7 +498,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
       {/* Круг с оранжевой дугой */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: spacing.sm }}>
-        <Wheel chance={chance} angle={angle} spinning={spinning} duration={duration} />
+        <Wheel chance={chance} angle={angle} spinning={spinning} />
       </div>
 
       {/* Подпись шанса */}
