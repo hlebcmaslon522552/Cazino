@@ -31,13 +31,19 @@ export function ProfilePage({ onNavigate, balance }: Props) {
   const [avatarUrl, setAvatarUrl] = useState('');
 
   useEffect(() => {
-    // Прямое получение данных из глобального объекта Telegram (без задержек)
-    const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
-    if (tgUser) {
-      setUserName(tgUser.first_name || 'Игрок');
-      setUsername(tgUser.username ? '@' + tgUser.username : '');
-      setAvatarUrl(tgUser.photo_url || '');
-    }
+    // Даём Telegram WebApp время прогрузить initData, затем читаем данные пользователя
+    const timer = setTimeout(() => {
+      const tg = (window as any).Telegram?.WebApp;
+      const tgUser = tg?.initDataUnsafe?.user;
+
+      if (tgUser) {
+        setUserName(tgUser.first_name || 'Игрок');
+        setUsername(tgUser.username ? '@' + tgUser.username : '');
+        setAvatarUrl(tgUser.photo_url || '');
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
