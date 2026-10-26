@@ -948,44 +948,76 @@ def create_invoice():
     if amount < 50:
         return jsonify({"error": "Минимум 50 Stars"}), 400
 
-    try:
-        bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
-        url = f"https://stars.gleb0256149.workers.dev/bot{bot_token}/createInvoiceLink"
-        payload = {
-            "title": "Пополнение баланса",
-            "description": f"Покупка {amount} Stars",
-            "payload": f"topup_{user_id}_{amount}",
-            "currency": "XTR",
-            "provider_token": "",
-            "prices": [{"label": "Stars", "amount": int(amount)}]
-        }
-        print(f"[create_invoice] Sending to Telegram: {url}")
-        print(f"[create_invoice] Payload: {json.dumps(payload, ensure_ascii=False)}")
-        response = requests.post(url, json=payload, timeout=15)
-        print("TELEGRAM RESPONSE:", response.json())
+    bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
+    url = f"https://stars.gleb0256149.workers.dev/bot{bot_token}/createInvoiceLink"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "title": "Пополнение баланса",
+        "description": f"Покупка {amount} Stars",
+        "payload": f"topup_{user_id}_{amount}",
+        "currency": "XTR",
+        "provider_token": "",
+        "prices": [{"label": "Stars", "amount": int(amount)}]
+    }
 
-        result = response.json()
-        if not result.get("ok"):
-            error_desc = result.get("description", "Unknown error")
-            print("TELEGRAM ERROR:", result)
-            print(f"[create_invoice] Telegram error: {error_desc}")
-            return jsonify({"error": f"Ошибка Telegram: {error_desc}"}), 400
+    # ── Повторные попытки (retry) для Cloudflare Worker ─────────────
+    max_attempts = 3
+    retry_delay_sec = 2
+    timeout_sec = 30
+    response = None
 
-        invoice_link = result.get("result")
-        if not invoice_link:
-            return jsonify({"error": "Telegram не вернул ссылку на счёт"}), 500
+    for attempt in range(1, max_attempts + 1):
+        try:
+            print(f"[create_invoice] Attempt {attempt}/{max_attempts}: POST {url}")
+            headers["Content-Type"] = "application/json"
+            print(f"[create_invoice] Attempt {attempt}: Payload: {json.dumps(payload, ensure_ascii=False)}")
+            print(f"[create_invoice] Attempt {attempt}: Timeout={timeout_sec}s, waiting for worker...")
+            response = requests.post(url, json=payload, headers=headers, timeout=timeout_sec)
+            print(f"[create_invoice] Attempt {attempt}: Status {response.status_code}")
+            print(f"[create_invoice] Attempt {attempt}: Response: {response.text[:500]}")
+        except requests.exceptions.Timeout:
+            print(f"[create_invoice] Attempt {attempt}: TIMEOUT after {timeout_sec}s (Cloudflare Worker не ответил)")
+            response = None
+        except requests.exceptions.RequestException as e:
+            print(f"[create_invoice] Attempt {attempt}: REQUEST ERROR -> {e}")
+            response = None
+        except Exception as e:
+            print(f"[create_invoice] Attempt {attempt}: UNEXPECTED ERROR -> {e}")
+            response = None
 
-        return jsonify({"invoiceLink": invoice_link})
+        if response is not None:
+            # Запрос выполнен — обрабатываем ответ
+            try:
+                result = response.json()
+            except Exception as json_err:
+                print(f"[create_invoice] Attempt {attempt}: Невалидный JSON в ответе -> {json_err}")
+                result = None
 
-    except requests.exceptions.Timeout:
-        print("[create_invoice] Timeout connecting to Telegram API")
-        return jsonify({"error": "Таймаут при обращении к Telegram"}), 500
-    except requests.exceptions.RequestException as e:
-        print(f"[create_invoice] Request error: {e}")
-        return jsonify({"error": f"Ошибка соединения с Telegram: {str(e)}"}), 500
-    except Exception as e:
-        print(f"[create_invoice] Unexpected error: {e}")
-        return jsonify({"error": "Внутренняя ошибка сервера"}), 500
+            if result is not None and result.get("ok"):
+                invoice_link = result.get("result")
+                if not invoice_link:
+                    print(f"[create_invoice] Attempt {attempt}: ok=true, но нет ссылки на счёт")
+                    return jsonify({"error": "Telegram не вернул ссылку на счёт"}), 500
+                print(f"[create_invoice] Attempt {attempt}: SUCCESS, invoiceLink = {invoice_link}")
+                return jsonify({"invoiceLink": invoice_link})
+
+            if result is not None:
+                error_desc = result.get("description", "Unknown error")
+                print(f"[create_invoice] Attempt {attempt}: Telegram error -> {error_desc}")
+                return jsonify({"error": f"Ошибка Telegram: {error_desc}"}), 400
+
+            # result = None (невалидный JSON) — считаем неудачей и повторяем
+        else:
+            print(f"[create_invoice] Attempt {attempt}: Запрос завершился без ответа (неудача)")
+
+        # Если это не последняя попытка — пауза перед ретраем
+        if attempt < max_attempts:
+            print(f"[create_invoice] Retry через {retry_delay_sec} сек...")
+            time.sleep(retry_delay_sec)
+
+    # Все попытки исчерпаны
+    print(f"[create_invoice] FAILED: все {max_attempts} попытки не удались")
+    return jsonify({"error": "Не удалось создать счет. Попробуйте позже"}), 500
 
 
 @app.route("/api/health", methods=["GET"])
