@@ -632,7 +632,7 @@ def get_inventory():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("SELECT item_id, name, image, floor, timestamp FROM inventory WHERE user_id = ?", (user_id,))
+        c.execute("SELECT id, item_id, name, image, floor, timestamp FROM inventory WHERE user_id = ?", (user_id,))
         rows = c.fetchall()
     except Exception as e:
         print(f"[get_inventory] error: {e}")
@@ -643,11 +643,12 @@ def get_inventory():
 
     items = [
         {
-            "id": row[0],
-            "name": row[1],
-            "image": row[2],
-            "floor": row[3],
-            "timestamp": row[4]
+            "id": row[0],          # ← УНИКАЛЬНЫЙ ID записи (PRIMARY KEY)
+            "item_id": row[1],      # ← ID предмета (может повторяться для одинаковых NFT)
+            "name": row[2],
+            "image": row[3],
+            "floor": row[4],
+            "timestamp": row[5]
         }
         for row in rows
     ]
@@ -698,17 +699,17 @@ def inventory_remove():
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
     user_id = str(data.get("user_id", "unknown"))
-    item_id = data.get("item_id")
+    inventory_id = data.get("inventory_id")
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
-    if item_id is None:
-        return jsonify({"error": "item_id is required"}), 400
+    if inventory_id is None:
+        return jsonify({"error": "inventory_id is required"}), 400
 
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("DELETE FROM inventory WHERE user_id = ? AND item_id = ?", (user_id, item_id))
+        c.execute("DELETE FROM inventory WHERE id = ?", (inventory_id,))
         conn.commit()
     except Exception as e:
         print(f"[inventory_remove] delete error: {e}")
@@ -808,7 +809,7 @@ def sell_nft():
         return jsonify({"error": "Invalid JSON"}), 400
     user_id = str(data.get("user_id", "unknown"))
     price = float(data.get("price", 0))
-    item_id = data.get("item_id")
+    inventory_id = data.get("inventory_id")
 
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
@@ -825,10 +826,11 @@ def sell_nft():
         c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
                   (user_id, new_balance, new_balance))
 
-        # Удаляем проданный предмет из инвентаря (если передан item_id),
-        # чтобы нельзя было продать один и тот же NFT несколько раз.
-        if item_id is not None:
-            c.execute("DELETE FROM inventory WHERE user_id = ? AND item_id = ?", (user_id, str(item_id)))
+        # Удаляем проданный предмет из инвентаря по уникальному ID записи,
+        # чтобы нельзя было продать один и тот же NFT несколько раз,
+        # и чтобы не снести два одинаковых предмета.
+        if inventory_id is not None:
+            c.execute("DELETE FROM inventory WHERE id = ?", (inventory_id,))
 
         conn.commit()
     except Exception as e:
@@ -954,6 +956,7 @@ def create_invoice():
             "description": f"Покупка {amount} Stars",
             "payload": f"topup_{user_id}_{amount}",
             "currency": "XTR",
+            "provider_token": "",
             "prices": [{"label": "Stars", "amount": int(amount)}]
         }
         print(f"[create_invoice] Sending to Telegram: {url}")

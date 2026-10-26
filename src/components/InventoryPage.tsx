@@ -93,7 +93,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
         },
         body: JSON.stringify({
           user_id: userId,
-          item_id: selected.id,
+          inventory_id: selected.id,  // ← уникальный ID записи в БД
           price: selected.floor,
         }),
       });
@@ -232,9 +232,6 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
             </div>
 
             <div style={{ marginTop: spacing.lg, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Button fullWidth onClick={handleSell}>
-                💸 Продать за {selected.floor > 0 ? calcStars(selected.floor).toLocaleString() : '—'} Stars
-              </Button>
               <Button fullWidth variant="secondary" onClick={handleSell}>
                 💎 Продать за {selected.floor > 0 ? selected.floor.toFixed(2) : '—'} TON
               </Button>

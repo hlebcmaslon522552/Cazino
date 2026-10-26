@@ -412,7 +412,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: userId, item_id: startNft!.id }),
+              body: JSON.stringify({ user_id: userId, inventory_id: startNft!.id }),
             });
             // 2) Добавляем выигранный (конечный) NFT в инвентарь
             await addToInventory(data.item, userId);
@@ -434,7 +434,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: userId, item_id: startNft!.id }),
+              body: JSON.stringify({ user_id: userId, inventory_id: startNft!.id }),
             });
           } catch (e) {
             console.error('Inventory sync error:', e);
