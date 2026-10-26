@@ -5,32 +5,28 @@ import { Button } from './ui/Button';
 
 interface PvPPageProps {
   balance: number;
-  onUpdateBalance: (newBalance: number) => void;
+  onUpdateBalance: (amount: number) => void;
   onToast?: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
-
-type Phase = 'setup' | 'waiting' | 'timeout' | 'finished';
 
 const COUNTDOWN_SECONDS = 15;
 
 export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => {
-  const [betInput, setBetInput] = useState<string>('1.0');
-  const [phase, setPhase] = useState<Phase>('setup');
-  const [timer, setTimer] = useState<number>(COUNTDOWN_SECONDS);
-  const [opponentJoined, setOpponentJoined] = useState<boolean>(false);
-  const [result, setResult] = useState<'win' | 'lose' | null>(null);
+  const [betInput, setBetInput] = useState('1.0');
+  const [phase, setPhase] = useState<'setup' | 'waiting' | 'timeout'>('setup');
+  const [timer, setTimer] = useState(COUNTDOWN_SECONDS);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const opponentRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const waitingRef = useRef<boolean>(false);
+  const phaseRef = useRef<'setup' | 'waiting' | 'timeout'>('setup');
+  phaseRef.current = phase;
 
-  const finalBet = parseFloat(betInput) || 0;
+  const bet = parseFloat(betInput) || 0;
 
   const clearTimers = () => {
-    waitingRef.current = false;
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     if (opponentRef.current) {
       clearTimeout(opponentRef.current);
@@ -38,92 +34,57 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
     }
   };
 
-  // Очищаем таймеры при размонтировании
   useEffect(() => {
     return () => clearTimers();
   }, []);
 
-  const resetToSetup = (refund: boolean, message?: string) => {
+  const resetToSetup = (msg?: string) => {
     clearTimers();
-    setPhase('setup');
     setTimer(COUNTDOWN_SECONDS);
-    setOpponentJoined(false);
-    setResult(null);
-    if (refund) onUpdateBalance(finalBet);
-    if (message) onToast?.(message, 'info');
+    setPhase('setup');
+    if (msg) onToast?.(msg, 'info');
   };
 
   const createGame = () => {
-    if (finalBet <= 0) {
+    if (bet <= 0) {
       onToast?.('Введите корректную ставку', 'error');
       return;
     }
-    if (finalBet > balance) {
+    if (bet > balance) {
       onToast?.('Недостаточно TON на балансе', 'error');
       return;
     }
 
     // Списываем ставку
-    onUpdateBalance(-finalBet);
+    onUpdateBalance(-bet);
 
-    setPhase('waiting');
     setTimer(COUNTDOWN_SECONDS);
-    setOpponentJoined(false);
-    setResult(null);
-    waitingRef.current = true;
+    setPhase('waiting');
 
-    // Запускаем отсчёт 15 секунд
-    timerRef.current = setInterval(() => {
+    // Обратный отсчёт 15 секунд
+    intervalRef.current = setInterval(() => {
       setTimer((prev) => {
         if (prev <= 1) {
           clearTimers();
           // Соперник не найден — возвращаем ставку
           setPhase('timeout');
-          setOpponentJoined(false);
-          onUpdateBalance(finalBet);
+          onUpdateBalance(bet);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    // Имитация: соперник может найтись в течение 15 секунд
-    const delay = 5000 + Math.random() * 8000;
+    // Имитация поиска соперника
+    const delay = 6000 + Math.random() * 4000;
     opponentRef.current = setTimeout(() => {
-      if (waitingRef.current) {
-        setOpponentJoined(true);
+      if (phaseRef.current === 'waiting') {
+        clearTimers();
+        setPhase('timeout');
+        onUpdateBalance(bet);
+        onToast?.('🎉 Соперник найден! +' + (bet * 2).toFixed(2) + ' TON', 'success');
       }
     }, delay);
-  };
-
-  // Когда соперник найден — подводим итог
-  useEffect(() => {
-    if (opponentJoined && phase === 'waiting') {
-      clearTimers();
-      const win = Math.random() > 0.5;
-      setResult(win ? 'win' : 'lose');
-      setPhase('finished');
-      if (win) {
-        onUpdateBalance(finalBet * 2);
-        onToast?.('🎉 Вы победили! +' + (finalBet * 2).toFixed(2) + ' TON', 'success');
-      } else {
-        onToast?.('😔 Вы проиграли. Соперник оказался сильнее', 'error');
-      }
-    }
-  }, [opponentJoined, phase, finalBet, onUpdateBalance, onToast]);
-
-  const cardStyle: React.CSSProperties = {
-    background: colors.bgCard,
-    border: `1px solid ${colors.border}`,
-    borderRadius: 16,
-    padding: spacing.md,
-    flex: 1,
-  };
-
-  const labelStyle: React.CSSProperties = {
-    color: colors.textMuted,
-    fontSize: 13,
-    marginBottom: 8,
   };
 
   return (
@@ -137,8 +98,16 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
 
       {/* Два блока: Вы и Соперник */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <div style={cardStyle}>
-          <div style={labelStyle}>Вы</div>
+        <div
+          style={{
+            flex: 1,
+            background: colors.bgCard,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 16,
+            padding: spacing.md,
+          }}
+        >
+          <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 8 }}>Вы</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div
               style={{
@@ -156,40 +125,42 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
             <div>
               <div style={{ fontWeight: 'bold', fontSize: 15 }}>Игрок</div>
               <div style={{ color: colors.gold, fontSize: 13, fontWeight: 'bold' }}>
-                {finalBet > 0 ? finalBet.toFixed(2) + ' TON' : '—'}
+                {bet > 0 ? bet.toFixed(2) + ' TON' : '—'}
               </div>
             </div>
           </div>
         </div>
 
-        <div style={cardStyle}>
-          <div style={labelStyle}>Соперник</div>
+        <div
+          style={{
+            flex: 1,
+            background: colors.bgCard,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 16,
+            padding: spacing.md,
+          }}
+        >
+          <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 8 }}>Соперник</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div
               style={{
                 width: 42,
                 height: 42,
                 borderRadius: 999,
-                background: opponentJoined ? colors.bgCardActive : 'rgba(255,255,255,0.05)',
+                background: phase === 'waiting' ? colors.bgCardActive : 'rgba(255,255,255,0.05)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Users size={22} color={opponentJoined ? colors.danger : colors.textDim} />
+              <Users size={22} color={phase === 'waiting' ? colors.accent : colors.textDim} />
             </div>
             <div>
               <div style={{ fontWeight: 'bold', fontSize: 15 }}>
-                {opponentJoined ? 'Соперник' : 'Ожидание'}
+                {phase === 'waiting' ? 'Поиск' : 'Ожидание'}
               </div>
               <div style={{ color: colors.textMuted, fontSize: 13 }}>
-                {phase === 'finished'
-                  ? result === 'win'
-                    ? 'Вы победили'
-                    : 'Вы проиграли'
-                  : phase === 'waiting'
-                  ? 'Поиск...'
-                  : '—'}
+                {phase === 'waiting' ? 'Ищем соперника...' : '—'}
               </div>
             </div>
           </div>
@@ -235,26 +206,8 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
         </div>
       )}
 
-      {/* Результат боя */}
-      {phase === 'finished' && (
-        <div
-          style={{
-            padding: 16,
-            background: result === 'win' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-            border: `1px solid ${result === 'win' ? colors.success : colors.danger}`,
-            borderRadius: 16,
-            textAlign: 'center',
-            marginBottom: 16,
-            fontWeight: 'bold',
-            fontSize: 16,
-          }}
-        >
-          {result === 'win' ? '🎉 Победа!' : '💔 Поражение'}
-        </div>
-      )}
-
       {/* Ввод ставки и кнопка создания игры */}
-      {(phase === 'setup' || phase === 'timeout') && (
+      {phase !== 'waiting' && (
         <div
           style={{
             background: colors.bgCard,
@@ -263,7 +216,7 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
             padding: spacing.md,
           }}
         >
-          <div style={labelStyle}>Ставка (TON)</div>
+          <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 8 }}>Ставка (TON)</div>
           <div style={{ position: 'relative', marginBottom: 12 }}>
             <Coins
               size={18}
@@ -297,8 +250,8 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
                 style={{
                   flex: 1,
                   padding: '8px 0',
-                  background: finalBet === val ? colors.bgCardActive : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${finalBet === val ? colors.borderActive : colors.border}`,
+                  background: bet === val ? colors.bgCardActive : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${bet === val ? colors.borderActive : colors.border}`,
                   borderRadius: 10,
                   color: colors.text,
                   fontSize: 13,
@@ -325,24 +278,15 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
         <Button
           fullWidth
           variant="ghost"
-          onClick={() => resetToSetup(true, 'Поиск отменён, ставка возвращена')}
+          onClick={() => {
+            clearTimers();
+            onUpdateBalance(bet);
+            resetToSetup('Поиск отменён, ставка возвращена');
+          }}
         >
           Отменить поиск
-        </Button>
-      )}
-
-      {/* После результата — играть снова */}
-      {phase === 'finished' && (
-        <Button
-          fullWidth
-          size="lg"
-          onClick={() => resetToSetup(false, 'Создайте новую игру')}
-        >
-          <Plus size={20} /> Играть снова
         </Button>
       )}
     </div>
   );
 };
-
-
