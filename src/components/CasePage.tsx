@@ -9,8 +9,8 @@ import { CONFIG } from '../config';
 import { addToInventory } from '../api';
 
 /* ─── Константы условий бесплатного кейса ─── */
-const TG_CHANNEL = '@cazino_channel';
-const TG_CHANNEL_LINK = 'https://t.me/cazino_channel';
+const TG_CHANNEL = '@Test_Erra';
+const TG_CHANNEL_LINK = 'https://t.me/Test_Erra';
 const BOT_USERNAME = 'GAMERR_777_BOT';
 
 interface Props {
@@ -328,8 +328,8 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     }
   };
 
-  const checkSubscription = async () => {
-    if (checkingSub.current) return;
+  const checkSubscription = async (): Promise<boolean> => {
+    if (checkingSub.current) return subscribed;
     checkingSub.current = true;
     try {
       const res = await fetch(`${CONFIG.API_URL}/api/check_subscription`, {
@@ -340,10 +340,12 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       const data = await res.json();
       if (data.subscribed) {
         setSubscribed(true);
-        onToast?.('✅ Подписка подтверждена!', 'success');
+        return true;
       }
+      return false;
     } catch (e) {
       console.error('[checkSubscription] error:', e);
+      return false;
     } finally {
       checkingSub.current = false;
     }
@@ -359,7 +361,21 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     } else {
       window.open(TG_CHANNEL_LINK, '_blank');
     }
-    checkSubscription();
+  };
+
+  /** Проверяем условия на кнопке «Выполнить условия» */
+  const handleVerify = async () => {
+    haptic('light');
+    if (!shareDone) {
+      onToast?.('Выполните все условия', 'error');
+      return;
+    }
+    const ok = await checkSubscription();
+    if (ok && shareDone) {
+      onToast?.('✅ Условия выполнены!', 'success');
+    } else {
+      onToast?.('Выполните все условия', 'error');
+    }
   };
 
 return (
@@ -865,6 +881,7 @@ return (
             {/* Условие 1: Поделиться */}
             <div style={{
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
               gap: 12,
               padding: 12,
@@ -891,7 +908,7 @@ return (
               {!shareDone && (
                 <button onClick={handleShare} style={{
                   background: '#22c55e',
-                  color: '#000',
+                  color: '#fff',
                   border: 'none',
                   borderRadius: 10,
                   padding: '8px 16px',
@@ -948,6 +965,25 @@ return (
                 </button>
               )}
             </div>
+
+            {/* Кнопка «Выполнить условия» */}
+            <button
+              onClick={handleVerify}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: 14,
+                fontWeight: 'bold',
+                fontSize: 16,
+                border: 'none',
+                cursor: 'pointer',
+                background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                color: '#fff',
+                transition: 'all 0.2s',
+              }}
+            >
+              ✅ Выполнить условия
+            </button>
           </div>
         </div>
       )}
