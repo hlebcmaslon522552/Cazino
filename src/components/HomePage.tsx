@@ -15,13 +15,7 @@ export function HomePage({ onNavigate }: Props) {
   useEffect(() => {
     let cancelled = false;
 
-    // Определяем userId: либо из Telegram WebApp, либо хардкод для браузера
-    let userId: string;
-    if (window.Telegram?.WebApp) {
-      userId = String(window.Telegram.WebApp.initDataUnsafe.user?.id ?? '6267608438');
-    } else {
-      userId = '6267608438';
-    }
+    const userId = String(user?.id ?? '6267608438');
 
     fetchUserData(userId)
       .then((data) => {

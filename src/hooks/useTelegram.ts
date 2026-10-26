@@ -1,11 +1,20 @@
+import { initData, useSignal, miniApp } from '@tma.js/sdk-react';
+
 export function useTelegram() {
+  const initDataState = useSignal(initData.state);
+  const initDataRaw = useSignal(initData.raw);
+  const isDark = useSignal(miniApp.isDark);
+
+  const user = initDataState?.user;
+
+  // Haptic / showAlert / openInvoice — всё ещё через глобальный объект,
+  // так как SDK их не экспортирует напрямую
   const tg = window.Telegram?.WebApp;
-  const user = tg?.initDataUnsafe?.user;
 
   return {
     user,
-    initData: tg?.initData || '',
-    theme: tg?.colorScheme || 'dark',
+    initData: initDataRaw || '',
+    theme: isDark ? 'dark' : 'light',
     showAlert: (msg: string) => tg?.showAlert(msg),
     haptic: (style: 'light' | 'medium' | 'heavy' = 'light') => {
       tg?.HapticFeedback?.impactOccurred(style);
@@ -18,7 +27,7 @@ export function useTelegram() {
   };
 }
 
-// Типы для window.Telegram
+// Типы для window.Telegram (только для haptic / showAlert / openInvoice)
 declare global {
   interface Window {
     Telegram?: {

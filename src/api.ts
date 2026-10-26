@@ -146,7 +146,9 @@ export async function withdrawNft(itemId: number, initData: string): Promise<boo
  * Извлекает userId из Telegram WebApp или использует значение по умолчанию.
  */
 export const getBalance = async (): Promise<number> => {
-  const userId = String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id ?? '6267608438');
+  // Берём userId из SDK (signal state), а не из window.Telegram
+  const sdkUser = initData.state()?.user;
+  const userId = String(sdkUser?.id ?? '6267608438');
   const data = await fetchUserData(userId);
   return data.balance_ton;
 };
