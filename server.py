@@ -55,14 +55,8 @@ TG_ADMIN_CHAT_ID = os.environ.get("TG_ADMIN_CHAT_ID", "")
 
 
 def init_db():
-    # Удаляем старый файл БД, чтобы создать новую чистую структуру
-    if os.path.exists(DB_PATH):
-        try:
-            os.remove(DB_PATH)
-            print(f"[init_db] Старый файл {DB_PATH} удалён.")
-        except Exception as e:
-            print(f"[init_db] Не удалось удалить {DB_PATH}: {e}")
-
+    # НЕ удаляем существующую БД — только создаём недостающие таблицы
+    db_exists = os.path.exists(DB_PATH)
     conn = sqlite3.connect(DB_PATH)
     # Включаем WAL-режим для предотвращения блокировок при конкурентном доступе
     conn.execute("PRAGMA journal_mode=WAL")
@@ -70,7 +64,7 @@ def init_db():
 
     # 1. Таблица пользователей
     c.execute("""
-        CREATE TABLE users (
+        CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             balance_ton REAL DEFAULT 15.0,
             balance_stars REAL DEFAULT 0.0
@@ -79,7 +73,7 @@ def init_db():
 
     # 2. Таблица инвентаря
     c.execute("""
-        CREATE TABLE inventory (
+        CREATE TABLE IF NOT EXISTS inventory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
             item_id TEXT,
@@ -92,7 +86,7 @@ def init_db():
 
     # 3. Таблица оборота (для лидерборда turnover)
     c.execute("""
-        CREATE TABLE turnover (
+        CREATE TABLE IF NOT EXISTS turnover (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
             username TEXT,
@@ -103,7 +97,7 @@ def init_db():
 
     # 4. Таблица депозитов (для лидерборда deposits)
     c.execute("""
-        CREATE TABLE deposits (
+        CREATE TABLE IF NOT EXISTS deposits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
             username TEXT,
@@ -114,9 +108,17 @@ def init_db():
 
     # 5. Таблица конфигов (для хранения времени последнего сброса лидерборда)
     c.execute("""
-        CREATE TABLE config (
+        CREATE TABLE IF NOT EXISTS config (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
+        )
+    """)
+
+    # 6. Таблица для бесплатных кейсов (отслеживание получения)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS free_case_claims (
+            user_id TEXT PRIMARY KEY,
+            last_claim_date TEXT
         )
     """)
 
@@ -128,7 +130,10 @@ def init_db():
 
     conn.commit()
     conn.close()
-    print("[init_db] База данных создана заново — все таблицы готовы.")
+    if db_exists:
+        print(f"[init_db] База данных {DB_PATH} уже существует — таблицы проверены/дополнены.")
+    else:
+        print("[init_db] База данных создана — все таблицы готовы.")
 
 
 init_db()
@@ -167,6 +172,17 @@ CASE_GOLD_POOL = [
     {"name": "Perfume Bottle", "image": "/nft_images/perfume_bottle.webp", "rarity": "uncommon", "chance": 50, "price": 83.1096},
 ]
 
+FREE_CASE_POOL = [
+    {"name": "0.01 TON", "image": "/nft_images/ton_coin.webp", "rarity": "common", "chance": 55, "price": 0.01, "is_ton": True},
+    {"name": "0.05 TON", "image": "/nft_images/ton_coin.webp", "rarity": "common", "chance": 20, "price": 0.05, "is_ton": True},
+    {"name": "Common Box", "image": "/nft_images/common_box.webp", "rarity": "common", "chance": 10, "price": 1.5},
+    {"name": "Mystery Card", "image": "/nft_images/mystery_card.webp", "rarity": "uncommon", "chance": 7, "price": 2.5},
+    {"name": "Bronze Token", "image": "/nft_images/bronze_token.webp", "rarity": "uncommon", "chance": 4, "price": 5.0},
+    {"name": "Silver Badge", "image": "/nft_images/silver_badge.webp", "rarity": "rare", "chance": 2, "price": 10.0},
+    {"name": "Gold Medallion", "image": "/nft_images/gold_medallion.webp", "rarity": "epic", "chance": 1, "price": 25.0},
+    {"name": "Big Year", "image": "/nft_images/big_year.webp", "rarity": "legendary", "chance": 1, "price": 100.0},
+]
+
 # Соответствие ID кейса (фронтенд) и пула предметов
 CASE_POOLS = {
     "case_wood": CASE_WOOD_POOL,
@@ -189,6 +205,10 @@ def generate_crash_point():
 
 def pick_case_item(case_id=""):
     pool = CASE_POOLS.get(case_id, CASE_WOOD_POOL)
+    return pick_case_item_from_pool(pool)
+
+
+def pick_case_item_from_pool(pool):
     total_chance = sum(item["chance"] for item in pool)
     roll = random.uniform(0, total_chance)
     cumulative = 0.0
@@ -443,6 +463,30 @@ def update_balance():
             conn.close()
 
 
+# ── Server Time ──────────────────────────────────────────────────────
+@app.route("/api/time", methods=["GET"])
+def get_server_time():
+    now = datetime.utcnow()
+    return jsonify({
+        "timestamp": now.timestamp() * 1000,  # миллисекунды
+        "date": now.isoformat()
+    })
+
+
+# ── Check Telegram Subscription ─────────────────────────────────────
+@app.route("/api/check_subscription", methods=["POST"])
+def check_subscription():
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    user_id = str(data.get("user_id", ""))
+    # Проверка: если user_id передан, считаем что пользователь подписался
+    # (реальную проверку через Bot API можно добавить позже)
+    if user_id:
+        return jsonify({"subscribed": True})
+    return jsonify({"subscribed": False})
+
+
 # API endpoints
 @app.route("/api/play_game", methods=["POST"])
 def play_game():
@@ -565,6 +609,58 @@ def open_case():
     case_id = str(data.get("case_id", "")).strip()
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
+
+    # ── Бесплатный кейс ─────────────────────────────────────────────
+    if case_id == "case_free" or case_price == 0:
+        # Проверяем, не забрал ли уже пользователь кейс сегодня
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("SELECT last_claim_date FROM free_case_claims WHERE user_id = ?", (user_id,))
+            row = c.fetchone()
+            today = datetime.utcnow().strftime("%Y-%m-%d")
+            if row and row[0] == today:
+                return jsonify({"error": "Вы уже забрали бесплатный кейс сегодня"}), 400
+
+            # Выбираем случайный предмет из FREE_CASE_POOL
+            item = pick_case_item_from_pool(FREE_CASE_POOL)
+            item_id = str(uuid.uuid4())
+
+            # Если выпал TON — начисляем на баланс
+            if item.get("is_ton"):
+                c.execute(
+                    "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+                    (item["price"], user_id)
+                )
+                c.execute(
+                    "INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, ?)",
+                    (user_id, item["price"])
+                )
+            else:
+                # Добавляем предмет в инвентарь
+                c.execute(
+                    "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, item_id, item["name"], item["image"], item["price"])
+                )
+
+            # Записываем дату получения бесплатного кейса
+            c.execute(
+                "INSERT OR REPLACE INTO free_case_claims (user_id, last_claim_date) VALUES (?, ?)",
+                (user_id, today)
+            )
+            conn.commit()
+            if conn:
+                conn.close()
+        except Exception as e:
+            print(f"[open_case/free] error: {e}")
+            if conn:
+                conn.close()
+            return jsonify({"error": "Database error"}), 500
+
+        return jsonify({"success": True, "item": {**item, "id": item_id}})
+
+    # ── Платные кейсы ───────────────────────────────────────────────
     if case_price <= 0:
         return jsonify({"error": "case_price must be > 0"}), 400
 

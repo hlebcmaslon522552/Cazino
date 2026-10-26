@@ -62,6 +62,21 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
   const playersRef = useRef(playersCount);
   const betRef = useRef(bet);
   const balanceRef = useRef(balance);
+  const timeOffsetRef = useRef<number>(0);
+
+  // Серверная синхронизация времени
+  useEffect(() => {
+    fetch(`${CONFIG.API_URL}/api/time`, {
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    })
+      .then(res => res.json())
+      .then(data => {
+        const serverTime = data.timestamp;
+        timeOffsetRef.current = serverTime - Date.now();
+        console.log(`[PvPPage] Time offset: ${timeOffsetRef.current}ms`);
+      })
+      .catch(err => console.error('[PvPPage] Time sync error:', err));
+  }, []);
 
   // Синхронизируем refs при каждом рендере
   statusRef.current = myStatus;

@@ -32,6 +32,21 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const startTimeRef = useRef<number>();
   const lastPointTimeRef = useRef<number>(0);
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
+  const timeOffsetRef = useRef<number>(0);
+
+  // Серверная синхронизация времени
+  useEffect(() => {
+    fetch(`${CONFIG.API_URL}/api/time`, {
+      headers: { 'ngrok-skip-browser-warning': 'true' }
+    })
+      .then(res => res.json())
+      .then(data => {
+        const serverTime = data.timestamp;
+        timeOffsetRef.current = serverTime - Date.now();
+        console.log(`[CrashPage] Time offset: ${timeOffsetRef.current}ms`);
+      })
+      .catch(err => console.error('[CrashPage] Time sync error:', err));
+  }, []);
 
   const startRound = async () => {
     setMultiplier(1.00);
