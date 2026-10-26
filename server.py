@@ -949,8 +949,16 @@ def create_invoice():
         return jsonify({"error": "Минимум 50 Stars"}), 400
 
     bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
-    url = f"https://stars.gleb0256149.workers.dev/bot{bot_token}/createInvoiceLink"
+    url = f"https://api.telegram.org/bot{bot_token}/createInvoiceLink"
     headers = {"Content-Type": "application/json"}
+
+    # ── Прокси через QuantumProxies ──────────────────────────────────
+    proxy_url = (
+        "http://qp_live_63883d50984c71728cd4f125bdfa64c229299b2f4cf338cbc7000c01ac56a226"
+        ":@gate.quantumproxies.io:8000"
+    )
+    proxies = {"http": proxy_url, "https": proxy_url}
+
     payload = {
         "title": "Пополнение баланса",
         "description": f"Покупка {amount} Stars",
@@ -972,7 +980,7 @@ def create_invoice():
             headers["Content-Type"] = "application/json"
             print(f"[create_invoice] Attempt {attempt}: Payload: {json.dumps(payload, ensure_ascii=False)}")
             print(f"[create_invoice] Attempt {attempt}: Timeout={timeout_sec}s, waiting for worker...")
-            response = requests.post(url, json=payload, headers=headers, timeout=timeout_sec)
+            response = requests.post(url, json=payload, headers=headers, proxies=proxies, timeout=timeout_sec)
             print(f"[create_invoice] Attempt {attempt}: Status {response.status_code}")
             print(f"[create_invoice] Attempt {attempt}: Response: {response.text[:500]}")
         except requests.exceptions.Timeout:
