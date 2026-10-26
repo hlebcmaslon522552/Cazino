@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { CheckCircle } from 'lucide-react';
 import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { useTelegram } from '../hooks/useTelegram';
@@ -6,6 +7,11 @@ import type { CaseItem } from './CaseShop';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 import { addToInventory } from '../api';
+
+/* ─── Константы условий бесплатного кейса ─── */
+const TG_CHANNEL = '@cazino_channel';
+const TG_CHANNEL_LINK = 'https://t.me/cazino_channel';
+const BOT_USERNAME = 'GAMERR_777_BOT';
 
 interface Props {
   caseData: CaseItem;
@@ -51,6 +57,15 @@ const CASE_POOLS: Record<string, DropItem[]> = {
     { name: 'Durovs Cap', image: '/nft_images/durovs_cap.webp', rarity: 'rare', chance: 15, price: 420.24 },
     { name: 'Mighty Arm', image: '/nft_images/mighty_arm.webp', rarity: 'rare', chance: 30, price: 127.4592 },
     { name: 'Perfume Bottle', image: '/nft_images/perfume_bottle.webp', rarity: 'uncommon', chance: 50, price: 83.1096 },
+  ],
+  case_free: [
+    { name: '0.01 TON', image: '/TON.png', rarity: 'common', chance: 40, price: 0.01 },
+    { name: '0.1 TON', image: '/TON.png', rarity: 'common', chance: 25, price: 0.1 },
+    { name: '0.2 TON', image: '/TON.png', rarity: 'common', chance: 15, price: 0.2 },
+    { name: '0.3 TON', image: '/TON.png', rarity: 'common', chance: 10, price: 0.3 },
+    { name: '0.5 TON', image: '/TON.png', rarity: 'common', chance: 6, price: 0.5 },
+    { name: '1 TON', image: '/TON.png', rarity: 'common', chance: 3, price: 1 },
+    { name: 'Big Year', image: '/nft_images/big_year.webp', rarity: 'legendary', chance: 1, price: 3.89 },
   ],
 };
 
@@ -105,6 +120,14 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
   const [showResult, setShowResult] = useState(false);
   const [spinItems, setSpinItems] = useState<DropItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<DropItem | null>(null);
+
+  /* ─── Условия бесплатного кейса ─── */
+  const isFree = caseData.id === 'case_free';
+  const [shareDone, setShareDone] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+  const checkingSub = useRef(false);
+  const shareListenerRegistered = useRef(false);
+  const conditionsMet = !isFree || (shareDone && subscribed);
 
   const stripRef = useRef<HTMLDivElement>(null);
   const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -266,6 +289,79 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     setShowResult(false);
     setWonItem(null);
   };
+
+  /* ─── Обработчики для бесплатного кейса ─── */
+
+  /** Регистрируем слушатель shareMessageSent (только один раз) */
+  const initShareListener = () => {
+    if (shareListenerRegistered.current) return;
+    shareListenerRegistered.current = true;
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.onEvent) {
+      tg.onEvent('shareMessageSent', () => {
+        setShareDone(true);
+        onToast?.('✅ Сообщение отправлено!', 'success');
+      });
+    } else if (tg?.addEventListener) {
+      tg.addEventListener('shareMessageSent', () => {
+        setShareDone(true);
+        onToast?.('✅ Сообщение отправлено!', 'success');
+      });
+    }
+  };
+
+  const handleShare = () => {
+    haptic('light');
+    initShareListener();
+    const userId = String(user?.id ?? '6267608438');
+    const refLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${userId}`;
+    const shareText = '🎁 Забирай бесплатный кейс в Cazino! Переходи по ссылке 👇';
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
+
+    const tg = window.Telegram?.WebApp as any;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(shareUrl);
+    } else if (tg?.openLink) {
+      tg.openLink(shareUrl);
+    } else {
+      window.open(shareUrl, '_blank');
+    }
+  };
+
+  const checkSubscription = async () => {
+    if (checkingSub.current) return;
+    checkingSub.current = true;
+    try {
+      const res = await fetch(`${CONFIG.API_URL}/api/check_subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({ user_id: String(user?.id ?? '6267608438') })
+      });
+      const data = await res.json();
+      if (data.subscribed) {
+        setSubscribed(true);
+        onToast?.('✅ Подписка подтверждена!', 'success');
+      }
+    } catch (e) {
+      console.error('[checkSubscription] error:', e);
+    } finally {
+      checkingSub.current = false;
+    }
+  };
+
+  const handleSubscribe = () => {
+    haptic('light');
+    const tg = window.Telegram?.WebApp as any;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(TG_CHANNEL_LINK);
+    } else if (tg?.openLink) {
+      tg.openLink(TG_CHANNEL_LINK);
+    } else {
+      window.open(TG_CHANNEL_LINK, '_blank');
+    }
+    checkSubscription();
+  };
+
 return (
     <div style={{ padding: spacing.md, color: colors.text, overflow: 'hidden' }}>
       {/* ─── Кнопка "Назад" ─── */}
@@ -446,10 +542,12 @@ return (
 
       {/* ─── Кнопка открытия ─── */}
       <div style={{ marginTop: spacing.lg }}>
-        <Button size="lg" fullWidth onClick={handleOpenCase} disabled={isSpinning}>
+        <Button size="lg" fullWidth onClick={handleOpenCase} disabled={!conditionsMet || isSpinning}>
           {isSpinning
             ? '🎲 Открываем...'
-            : `🎰 Открыть кейс (${caseData.price.toFixed(2)} TON)`}
+            : !conditionsMet
+              ? '🎰 Выполните условия, чтобы открыть'
+              : `🎰 Открыть кейс (${caseData.price.toFixed(2)} TON)`}
         </Button>
       </div>
 
@@ -724,6 +822,131 @@ return (
                   {selectedItem.chance} %
                 </span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Условия бесплатного кейса (модалка) ─── */}
+      {isFree && !conditionsMet && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            background: 'rgba(0,0,0,0.7)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            animation: 'ug-fade 0.3s ease',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#1a1a2e',
+              border: '1px solid #22c55e',
+              borderRadius: 24,
+              padding: 24,
+              width: '90%',
+              maxWidth: 380,
+              color: '#fff',
+            }}
+          >
+            <h2 style={{ fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 }}>
+              🎁 Бонусный кейс
+            </h2>
+            <p style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', marginBottom: 20 }}>
+              Выполните условия, чтобы открыть бесплатный кейс
+            </p>
+
+            {/* Условие 1: Поделиться */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: 12,
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: 16,
+              marginBottom: 12,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 12,
+                background: shareDone ? '#22c55e' : 'rgba(255,255,255,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 20, flexShrink: 0,
+              }}>
+                {shareDone ? <CheckCircle size={20} color="#fff" /> : '📤'}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>
+                  Отправьте сообщение другу
+                </div>
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                  {shareDone ? 'Готово ✓' : 'Нажмите кнопку'}
+                </div>
+              </div>
+              {!shareDone && (
+                <button onClick={handleShare} style={{
+                  background: '#22c55e',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '8px 16px',
+                  fontWeight: 'bold',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Поделиться
+                </button>
+              )}
+            </div>
+
+            {/* Условие 2: Подписка (исправлено: flex justify-between items-center) */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              padding: 12,
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: 16,
+              marginBottom: 20,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 12,
+                background: subscribed ? '#22c55e' : 'rgba(255,255,255,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 20, flexShrink: 0,
+              }}>
+                {subscribed ? <CheckCircle size={20} color="#fff" /> : '📢'}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>
+                  Подпишитесь на канал {TG_CHANNEL}
+                </div>
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                  {subscribed ? 'Подписка подтверждена ✓' : 'Нажмите кнопку'}
+                </div>
+              </div>
+              {!subscribed && (
+                <button onClick={handleSubscribe} style={{
+                  background: '#229ed9',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '8px 16px',
+                  fontWeight: 'bold',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}>
+                  Подписаться
+                </button>
+              )}
             </div>
           </div>
         </div>

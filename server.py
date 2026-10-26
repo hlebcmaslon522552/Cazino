@@ -173,14 +173,13 @@ CASE_GOLD_POOL = [
 ]
 
 FREE_CASE_POOL = [
-    {"name": "0.01 TON", "image": "/nft_images/ton_coin.webp", "rarity": "common", "chance": 55, "price": 0.01, "is_ton": True},
-    {"name": "0.05 TON", "image": "/nft_images/ton_coin.webp", "rarity": "common", "chance": 20, "price": 0.05, "is_ton": True},
-    {"name": "Common Box", "image": "/nft_images/common_box.webp", "rarity": "common", "chance": 10, "price": 1.5},
-    {"name": "Mystery Card", "image": "/nft_images/mystery_card.webp", "rarity": "uncommon", "chance": 7, "price": 2.5},
-    {"name": "Bronze Token", "image": "/nft_images/bronze_token.webp", "rarity": "uncommon", "chance": 4, "price": 5.0},
-    {"name": "Silver Badge", "image": "/nft_images/silver_badge.webp", "rarity": "rare", "chance": 2, "price": 10.0},
-    {"name": "Gold Medallion", "image": "/nft_images/gold_medallion.webp", "rarity": "epic", "chance": 1, "price": 25.0},
-    {"name": "Big Year", "image": "/nft_images/big_year.webp", "rarity": "legendary", "chance": 1, "price": 100.0},
+    {"name": "0.01 TON", "image": "/TON.png", "rarity": "common", "chance": 40, "price": 0.01, "is_ton": True},
+    {"name": "0.1 TON", "image": "/TON.png", "rarity": "common", "chance": 25, "price": 0.1, "is_ton": True},
+    {"name": "0.2 TON", "image": "/TON.png", "rarity": "common", "chance": 15, "price": 0.2, "is_ton": True},
+    {"name": "0.3 TON", "image": "/TON.png", "rarity": "common", "chance": 10, "price": 0.3, "is_ton": True},
+    {"name": "0.5 TON", "image": "/TON.png", "rarity": "common", "chance": 6, "price": 0.5, "is_ton": True},
+    {"name": "1 TON", "image": "/TON.png", "rarity": "common", "chance": 3, "price": 1, "is_ton": True},
+    {"name": "Big Year", "image": "/nft_images/big_year.webp", "rarity": "legendary", "chance": 1, "price": 3.89},
 ]
 
 # Соответствие ID кейса (фронтенд) и пула предметов
@@ -189,6 +188,7 @@ CASE_POOLS = {
     "case_copper": CASE_COPPER_POOL,
     "case_silver": CASE_SILVER_POOL,
     "case_gold": CASE_GOLD_POOL,
+    "case_free": FREE_CASE_POOL,
 }
 
 def generate_crash_point():
