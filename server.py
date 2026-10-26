@@ -139,32 +139,32 @@ def verify_init_data(init_data):
 
 # ── Пулы предметов для кейсов (по ID кейса) ───────────────────────────
 CASE_WOOD_POOL = [
-    {"name": "Bow Tie", "image": "/nft_images/bow_tie.webp", "rarity": "common", "chance": 40, "price": 5.81},
-    {"name": "Fresh Socks", "image": "/nft_images/fresh_socks.webp", "rarity": "uncommon", "chance": 30, "price": 4.48},
-    {"name": "Candy Cane", "image": "/nft_images/candy_cane.webp", "rarity": "uncommon", "chance": 20, "price": 3.88},
-    {"name": "Snow Globe", "image": "/nft_images/snow_globe.webp", "rarity": "rare", "chance": 10, "price": 6.42},
+    {"name": "Bow Tie", "image": "/nft_images/bow_tie.webp", "rarity": "common", "chance": 40, "price": 5.814},
+    {"name": "Fresh Socks", "image": "/nft_images/fresh_socks.webp", "rarity": "uncommon", "chance": 30, "price": 4.488},
+    {"name": "Candy Cane", "image": "/nft_images/candy_cane.webp", "rarity": "uncommon", "chance": 20, "price": 3.8862},
+    {"name": "Snow Globe", "image": "/nft_images/snow_globe.webp", "rarity": "rare", "chance": 10, "price": 6.426},
 ]
 
 CASE_COPPER_POOL = [
-    {"name": "Swiss Watch", "image": "/nft_images/swiss_watch.webp", "rarity": "rare", "chance": 30, "price": 56.06},
-    {"name": "Signet Ring", "image": "/nft_images/signet_ring.webp", "rarity": "rare", "chance": 30, "price": 36.00},
+    {"name": "Swiss Watch", "image": "/nft_images/swiss_watch.webp", "rarity": "rare", "chance": 30, "price": 56.0694},
+    {"name": "Signet Ring", "image": "/nft_images/signet_ring.webp", "rarity": "rare", "chance": 30, "price": 36.006},
     {"name": "Valentine Box", "image": "/nft_images/valentine_box.webp", "rarity": "uncommon", "chance": 20, "price": 12.75},
-    {"name": "Jingle Bells", "image": "/nft_images/jingle_bells.webp", "rarity": "uncommon", "chance": 20, "price": 10.77},
+    {"name": "Jingle Bells", "image": "/nft_images/jingle_bells.webp", "rarity": "uncommon", "chance": 20, "price": 10.7712},
 ]
 
 CASE_SILVER_POOL = [
-    {"name": "Astral Shard", "image": "/nft_images/astral_shard.webp", "rarity": "epic", "chance": 10, "price": 120.81},
-    {"name": "Genie Lamp", "image": "/nft_images/genie_lamp.webp", "rarity": "rare", "chance": 20, "price": 38.72},
-    {"name": "Toy Bear", "image": "/nft_images/toy_bear.webp", "rarity": "rare", "chance": 30, "price": 34.59},
+    {"name": "Astral Shard", "image": "/nft_images/astral_shard.webp", "rarity": "epic", "chance": 10, "price": 120.819},
+    {"name": "Genie Lamp", "image": "/nft_images/genie_lamp.webp", "rarity": "rare", "chance": 20, "price": 38.7294},
+    {"name": "Toy Bear", "image": "/nft_images/toy_bear.webp", "rarity": "rare", "chance": 30, "price": 34.5984},
     {"name": "Love Potion", "image": "/nft_images/love_potion.webp", "rarity": "uncommon", "chance": 40, "price": 14.79},
 ]
 
 CASE_GOLD_POOL = [
-    {"name": "Heart Locket", "image": "/nft_images/heart_locket-removebg-preview.png", "rarity": "legendary", "chance": 1, "price": 1249.48},
-    {"name": "Precious Peach", "image": "/nft_images/precious_peach.webp", "rarity": "epic", "chance": 4, "price": 259.57},
+    {"name": "Heart Locket", "image": "/nft_images/heart_locket-removebg-preview.png", "rarity": "legendary", "chance": 1, "price": 1249.4897},
+    {"name": "Precious Peach", "image": "/nft_images/precious_peach.webp", "rarity": "epic", "chance": 4, "price": 259.5798},
     {"name": "Durovs Cap", "image": "/nft_images/durovs_cap.webp", "rarity": "rare", "chance": 15, "price": 420.24},
-    {"name": "Mighty Arm", "image": "/nft_images/mighty_arm.webp", "rarity": "rare", "chance": 30, "price": 127.45},
-    {"name": "Perfume Bottle", "image": "/nft_images/perfume_bottle.webp", "rarity": "uncommon", "chance": 50, "price": 83.10},
+    {"name": "Mighty Arm", "image": "/nft_images/mighty_arm.webp", "rarity": "rare", "chance": 30, "price": 127.4592},
+    {"name": "Perfume Bottle", "image": "/nft_images/perfume_bottle.webp", "rarity": "uncommon", "chance": 50, "price": 83.1096},
 ]
 
 # Соответствие ID кейса (фронтенд) и пула предметов
@@ -808,6 +808,7 @@ def sell_nft():
         return jsonify({"error": "Invalid JSON"}), 400
     user_id = str(data.get("user_id", "unknown"))
     price = float(data.get("price", 0))
+    item_id = data.get("item_id")
 
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
@@ -823,6 +824,12 @@ def sell_nft():
         new_balance = balance + price
         c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
                   (user_id, new_balance, new_balance))
+
+        # Удаляем проданный предмет из инвентаря (если передан item_id),
+        # чтобы нельзя было продать один и тот же NFT несколько раз.
+        if item_id is not None:
+            c.execute("DELETE FROM inventory WHERE user_id = ? AND item_id = ?", (user_id, str(item_id)))
+
         conn.commit()
     except Exception as e:
         print(f"[sell_nft] error: {e}")
@@ -957,6 +964,7 @@ def create_invoice():
         result = response.json()
         if not result.get("ok"):
             error_desc = result.get("description", "Unknown error")
+            print("TELEGRAM ERROR:", result)
             print(f"[create_invoice] Telegram error: {error_desc}")
             return jsonify({"error": f"Ошибка Telegram: {error_desc}"}), 400
 

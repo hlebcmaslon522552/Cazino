@@ -5,6 +5,7 @@ import { useTelegram } from '../hooks/useTelegram';
 import type { CaseItem } from './CaseShop';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
+import { addToInventory } from '../api';
 
 interface Props {
   caseData: CaseItem;
@@ -27,41 +28,37 @@ interface DropItem {
 /* Пулы предметов по кейсам — синхронизированы с server.py */
 const CASE_POOLS: Record<string, DropItem[]> = {
   case_wood: [
-    { name: 'Bow Tie', image: '/nft_images/bow_tie.webp', rarity: 'common', chance: 40, price: 5.81 },
-    { name: 'Fresh Socks', image: '/nft_images/fresh_socks.webp', rarity: 'uncommon', chance: 30, price: 4.48 },
-    { name: 'Candy Cane', image: '/nft_images/candy_cane.webp', rarity: 'uncommon', chance: 20, price: 3.88 },
-    { name: 'Snow Globe', image: '/nft_images/snow_globe.webp', rarity: 'rare', chance: 10, price: 6.42 },
+    { name: 'Bow Tie', image: '/nft_images/bow_tie.webp', rarity: 'common', chance: 40, price: 5.814 },
+    { name: 'Fresh Socks', image: '/nft_images/fresh_socks.webp', rarity: 'uncommon', chance: 30, price: 4.488 },
+    { name: 'Candy Cane', image: '/nft_images/candy_cane.webp', rarity: 'uncommon', chance: 20, price: 3.8862 },
+    { name: 'Snow Globe', image: '/nft_images/snow_globe.webp', rarity: 'rare', chance: 10, price: 6.426 },
   ],
   case_copper: [
-    { name: 'Swiss Watch', image: '/nft_images/swiss_watch.webp', rarity: 'rare', chance: 30, price: 56.06 },
-    { name: 'Signet Ring', image: '/nft_images/signet_ring.webp', rarity: 'rare', chance: 30, price: 36.00 },
+    { name: 'Swiss Watch', image: '/nft_images/swiss_watch.webp', rarity: 'rare', chance: 30, price: 56.0694 },
+    { name: 'Signet Ring', image: '/nft_images/signet_ring.webp', rarity: 'rare', chance: 30, price: 36.006 },
     { name: 'Valentine Box', image: '/nft_images/valentine_box.webp', rarity: 'uncommon', chance: 20, price: 12.75 },
-    { name: 'Jingle Bells', image: '/nft_images/jingle_bells.webp', rarity: 'uncommon', chance: 20, price: 10.77 },
+    { name: 'Jingle Bells', image: '/nft_images/jingle_bells.webp', rarity: 'uncommon', chance: 20, price: 10.7712 },
   ],
   case_silver: [
-    { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'epic', chance: 10, price: 120.81 },
-    { name: 'Genie Lamp', image: '/nft_images/genie_lamp.webp', rarity: 'rare', chance: 20, price: 38.72 },
-    { name: 'Toy Bear', image: '/nft_images/toy_bear.webp', rarity: 'rare', chance: 30, price: 34.59 },
+    { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'epic', chance: 10, price: 120.819 },
+    { name: 'Genie Lamp', image: '/nft_images/genie_lamp.webp', rarity: 'rare', chance: 20, price: 38.7294 },
+    { name: 'Toy Bear', image: '/nft_images/toy_bear.webp', rarity: 'rare', chance: 30, price: 34.5984 },
     { name: 'Love Potion', image: '/nft_images/love_potion.webp', rarity: 'uncommon', chance: 40, price: 14.79 },
   ],
   case_gold: [
-    { name: 'Heart Locket', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'legendary', chance: 1, price: 1249.48 },
-    { name: 'Precious Peach', image: '/nft_images/precious_peach.webp', rarity: 'epic', chance: 4, price: 259.57 },
+    { name: 'Heart Locket', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'legendary', chance: 1, price: 1249.4897 },
+    { name: 'Precious Peach', image: '/nft_images/precious_peach.webp', rarity: 'epic', chance: 4, price: 259.5798 },
     { name: 'Durovs Cap', image: '/nft_images/durovs_cap.webp', rarity: 'rare', chance: 15, price: 420.24 },
-    { name: 'Mighty Arm', image: '/nft_images/mighty_arm.webp', rarity: 'rare', chance: 30, price: 127.45 },
-    { name: 'Perfume Bottle', image: '/nft_images/perfume_bottle.webp', rarity: 'uncommon', chance: 50, price: 83.10 },
+    { name: 'Mighty Arm', image: '/nft_images/mighty_arm.webp', rarity: 'rare', chance: 30, price: 127.4592 },
+    { name: 'Perfume Bottle', image: '/nft_images/perfume_bottle.webp', rarity: 'uncommon', chance: 50, price: 83.1096 },
   ],
 };
 
 const DEFAULT_POOL: DropItem[] = CASE_POOLS['case_wood'];
 
+/* ─── Источник пула — только обновлённые статические массивы (никакого localStorage/старого кода) ─── */
 function loadPool(caseId: string): DropItem[] {
-  const fallback = CASE_POOLS[caseId] ?? DEFAULT_POOL;
-  try {
-    const raw = localStorage.getItem('drop_chances');
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return fallback;
+  return CASE_POOLS[caseId] ?? DEFAULT_POOL;
 }
 
 /* ─── Цвет редкости ─── */
@@ -87,12 +84,19 @@ function pickRandomItem(pool: DropItem[]): DropItem {
 }
 
 /* ─── Константы рулетки ─── */
-const ITEM_WIDTH = 80;
+const ITEM_WIDTH = 80;              // ширина слота
+const ITEM_STRIP_WIDTH = ITEM_WIDTH - 8; // фактическая ширина элемента в ленте (width: ITEM_WIDTH - 8)
+const ITEM_GAP = 4;                 // gap между слотами
+const STRIP_PADDING_LEFT = 8;       // paddingLeft ленты
 const VIEWPORT_WIDTH = 240;
 const ITEMS_COUNT = () => 30 + Math.floor(Math.random() * 11); // 30–40
 
+/* Центр i-го слота в координатах ленты — с учётом gap и padding */
+const stripItemCenter = (index: number): number =>
+  STRIP_PADDING_LEFT + index * (ITEM_STRIP_WIDTH + ITEM_GAP) + ITEM_STRIP_WIDTH / 2;
+
 export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
-  const { haptic, user } = useTelegram();
+  const { haptic, vibrate, user } = useTelegram();
 
   const pool = loadPool(caseData.id);
 
@@ -117,11 +121,13 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
   };
 
   /* ─── Генерация массива для рулетки с Near Miss ─── */
-  const generateSpinArray = (winningItem: DropItem): DropItem[] => {
+  const generateSpinArray = (
+    winningItem: DropItem,
+  ): { items: DropItem[]; winIndex: number } => {
     const count = ITEMS_COUNT();
     const arr: DropItem[] = [];
 
-    /* Win-индекс — ~25, ближе к концу */
+    /* Win-индекс — ~25, ближе к концу. Именно сюда кладём `winningItem` (data.item). */
     const winIndex = Math.min(25, count - 3);
 
     /* Near Miss: 35% — ставим самый дорогой предмет прямо перед выигрышным */
@@ -139,7 +145,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       }
     }
 
-    return arr;
+    return { items: arr, winIndex };
   };
 
   /* ─── Запуск CSS-анимации translateX ─── */
@@ -152,7 +158,10 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       }
 
       const viewportCenter = VIEWPORT_WIDTH / 2;
-      const finalX = -(targetIndex * ITEM_WIDTH + ITEM_WIDTH / 2 - viewportCenter);
+      // Точная позиция выигрышного слота: учитываем gap и padding ленты.
+      // Раньше тут использовалась формула без gap/padding, из-за чего к
+      // финишу лента смещалась на несколько слотов и в центре оказывался НЕ data.item.
+      const finalX = -(stripItemCenter(targetIndex) - viewportCenter);
       const extraSpin = targetIndex * ITEM_WIDTH + 2000; // откат назад для раскрутки
 
       /* Фаза 1 — мгновенный откат назад (имитация раскрутки) */
@@ -177,7 +186,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
 
     if (isNaN(currentBalance) || currentBalance < price) {
       onToast('Недостаточно TON на балансе!', 'error');
-      haptic('error');
+      vibrate('error');
       return;
     }
 
@@ -220,27 +229,27 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       onUpdateBalance(-price);
       haptic('medium');
 
-      /* 3. Генерируем рулетку */
+      /* 3. Генерируем рулетку. `winIndex` — детерминированный индекс, по которому
+           в ленту положен ровно `data.item`: центр после анимации = data.item. */
       const serverItem = data.item as DropItem;
-      const items = generateSpinArray(serverItem);
-      // Ищем индекс выигрышного предмета в массиве
-      let winIndex = -1;
-      for (let i = 0; i < items.length; i++) {
-        const matchPrice = items[i].price === serverItem.price;
-        const matchFloor = items[i].floor === serverItem.floor || items[i].floor === serverItem.price;
-        if (items[i].name === serverItem.name && (matchPrice || matchFloor)) {
-          winIndex = i;
-          break;
-        }
-      }
-      const safeWinIndex = winIndex >= 0 ? winIndex : 25;
+      const { items, winIndex } = generateSpinArray(serverItem);
 
       setSpinItems(items);
 
-      /* 4. Запускаем анимацию рулетки */
-      await runSpinAnimation(safeWinIndex);
+      /* 3.1 Синхронизируем инвентарь теми же данными, что попали в центр рулетки.
+           Запрос идёт параллельно с анимацией, а результат ждём перед показом. */
+      const inventorySync = addToInventory(serverItem, userId).catch((err) => {
+        console.error('Ошибка синхронизации инвентаря:', err);
+        return false;
+      });
 
-      /* 5. Анимация завершена — показываем результат (предмет уже сохранён на сервере) */
+      /* 4. Запускаем анимацию рулетки */
+      await runSpinAnimation(winIndex);
+
+      /* 4.1 Дожидаемся записи именно этого предмета (data.item) в инвентарь */
+      await inventorySync;
+
+      /* 5. Анимация завершена — показываем результат */
       setIsSpinning(false);
 
       setWonItem(serverItem);
@@ -457,48 +466,75 @@ return (
         <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 8 }}>
           Возможные предметы ({pool.length} шт.):
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {/* Сетка карточек как в Маркете: grid-cols-2, картинка 4:3, название и цена в TON */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {pool.map((p, i) => (
             <div
-              key={i}
+              key={`${p.name}-${i}`}
               onClick={() => setSelectedItem(p)}
               style={{
-                background: 'rgba(255,255,255,0.06)',
-                borderRadius: 10,
-                padding: '6px 10px',
-                fontSize: 12,
-                color: rarityColor(p.rarity),
+                background: '#1a1a2e',
+                borderRadius: 12 /* rounded-xl */,
+                border: `1px solid ${colors.border}`,
+                overflow: 'hidden',
                 cursor: 'pointer',
                 display: 'flex',
-                alignItems: 'center',
-                gap: 6,
+                flexDirection: 'column',
+                transition: 'transform 0.15s, border-color 0.15s',
               }}
             >
+              {/* Картинка в пропорции 4:3 */}
               <div
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
-                  background: '#2a2a40',
+                  aspectRatio: '4 / 3',
+                  background: '#0f0f13',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   overflow: 'hidden',
-                  flexShrink: 0,
+                  padding: 8,
                 }}
               >
                 <img
                   src={publicUrl(p.image.replace(/^\//, ''))}
                   alt={p.name}
                   style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  loading="lazy"
                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               </div>
-              <span style={{ fontWeight: 500 }}>{p.name}</span>
-              <span style={{ color: '#f5c842', fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>
-                <img src={publicUrl('TON.png')} alt="TON" style={{ width: 12, height: 12, objectFit: 'contain' }} />
-                {p.price.toFixed(2)}
-              </span>
+              {/* Название */}
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#fff',
+                  textAlign: 'center',
+                  padding: '8px 8px 0',
+                  lineHeight: 1.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {p.name}
+              </div>
+              {/* Цена в TON */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                  color: colors.gold,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  padding: '4px 8px 10px',
+                }}
+              >
+                <img src={publicUrl('TON.png')} alt="TON" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                {p.price.toFixed(2)} TON
+              </div>
             </div>
           ))}
         </div>

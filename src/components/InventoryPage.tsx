@@ -3,7 +3,7 @@ import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Modal } from './ui/Modal';
-import { sellNft, getFloorPrice, fetchInventory } from '../api';
+import { getFloorPrice, fetchInventory } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
@@ -15,29 +15,24 @@ interface Props {
 }
 
 interface Nft {
-  id: number;
+  id: string;
   name: string;
   image: string;
   collection?: string;
   floor: number;
 }
 
-// Курс для пересчета TON в звезды
-const MARKET_FEE = 0.15; // 15% комиссия маркета
-const STARS_USD = 0.0133; // Курс звезды в долларах
-const TON_USD = 5.5; // Примерный курс TON в долларах
+// Курс для пересчета TON в звезды: 1 TON = 100 Stars
+const STARS_PER_TON = 100;
 
 function calcStars(floorTon: number): number {
-  const usd = floorTon * TON_USD; 
-  const afterFee = usd * (1 - MARKET_FEE); 
-  return Math.round(afterFee / STARS_USD); 
+  return Math.round(floorTon * STARS_PER_TON);
 }
 
 export function InventoryPage({ onToast, onBalanceChange }: Props) {
   const [selected, setSelected] = useState<Nft | null>(null);
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sellingItemId, setSellingItemId] = useState<number | null>(null);
   const { haptic, vibrate, initData, user } = useTelegram();
 
   // Загружаем инвентарь с сервера
@@ -60,7 +55,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
               }
             }
             return {
-              id: Number(item.id ?? Date.now() + Math.random()),
+              id: String(item.id ?? Date.now() + Math.random()),
               name: item.name || 'Unknown',
               image: item.image || '',
               collection: item.collection,
@@ -88,7 +83,26 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     
     try {
       const userId = String(user?.id ?? '6267608438');
-      await sellNft(selected.id, initData, selected.floor, userId);
+      // Отправляем item_id, чтобы сервер СРАЗУ удалил предмет из инвентаря
+      // (иначе можно продавать один и тот же NFT бесконечно)
+      const res = await fetch(`${CONFIG.API_URL}/api/sell_nft`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          item_id: selected.id,
+          price: selected.floor,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Ошибка при продаже');
+      }
+
       vibrate('success');
       onToast('Продано!', 'success');
       onBalanceChange?.();
@@ -99,31 +113,6 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     } catch (err) {
       console.error('Ошибка продажи:', err);
       onToast('Ошибка при продаже', 'error');
-    }
-  };
-
-  /** Быстрая продажа прямо из карточки (без открытия модалки) */
-  const handleQuickSell = async (item: Nft) => {
-    haptic('medium');
-    setSellingItemId(item.id);
-    try {
-      const userId = String(user?.id ?? '6267608438');
-      await sellNft(item.id, initData, item.floor, userId);
-      vibrate('success');
-      onToast('Продано!', 'success');
-      onBalanceChange?.();
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-      // Синхронизируем с localStorage
-      try {
-        const raw = localStorage.getItem('inventory');
-        const local: Nft[] = raw ? JSON.parse(raw) : [];
-        localStorage.setItem('inventory', JSON.stringify(local.filter((i) => i.id !== item.id)));
-      } catch {}
-    } catch (err) {
-      console.error('Ошибка продажи:', err);
-      onToast('Ошибка при продаже', 'error');
-    } finally {
-      setSellingItemId(null);
     }
   };
 
@@ -217,10 +206,10 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
               <Button
                 size="sm"
                 fullWidth
-                loading={sellingItemId === nft.id}
-                onClick={() => handleQuickSell(nft)}
+                variant="secondary"
+                onClick={() => { haptic('light'); setSelected(nft); }}
               >
-                💸 Продать
+                👁 Подробнее
               </Button>
             </div>
           </Card>
@@ -238,12 +227,18 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
             <div style={{ color: colors.accent, marginTop: 4, fontWeight: 'bold', fontSize: 16 }}>
               {selected.floor > 0 ? `${selected.floor.toFixed(2)} TON` : '— TON'}
             </div>
+            <div style={{ color: colors.textMuted, marginTop: 2, fontSize: 14 }}>
+              ≈ {selected.floor > 0 ? calcStars(selected.floor).toLocaleString() : '—'} ⭐
+            </div>
 
             <div style={{ marginTop: spacing.lg, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Button fullWidth onClick={handleSell}>
-                💸 Продать за {calcStars(selected.floor).toLocaleString()} ⭐
+                💸 Продать за {selected.floor > 0 ? calcStars(selected.floor).toLocaleString() : '—'} Stars
               </Button>
-              <Button fullWidth variant="secondary" onClick={handleWithdraw}>
+              <Button fullWidth variant="secondary" onClick={handleSell}>
+                💎 Продать за {selected.floor > 0 ? selected.floor.toFixed(2) : '—'} TON
+              </Button>
+              <Button fullWidth variant="danger" onClick={handleWithdraw}>
                 📤 Вывести (холд 1 час)
               </Button>
               <Button fullWidth variant="ghost" onClick={() => setSelected(null)}>
