@@ -955,7 +955,7 @@ def create_invoice():
     # ── Прокси через QuantumProxies ──────────────────────────────────
     proxy_url = (
         "http://qp_live_63883d50984c71728cd4f125bdfa64c229299b2f4cf338cbc7000c01ac56a226"
-        ":@gate.quantumproxies.io:8000"
+        ":@residentialboson.quantumproxies.io:10000"
     )
     proxies = {"http": proxy_url, "https": proxy_url}
 
