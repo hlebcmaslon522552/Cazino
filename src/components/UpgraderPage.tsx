@@ -447,6 +447,11 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           });
         }
 
+        // Начальный NFT потрачен (сгорел / обменян) — сбрасываем выбор в обоих
+        // колонках, чтобы его нельзя было прокрутить ещё раз.
+        setStartNft(null);
+        setTargetNft(null);
+
         // Рассчитываем угол для анимации (оставляем локальную симуляцию для визуала)
         const winArc = (chance / 100) * 360;
         let finalDeg: number;

