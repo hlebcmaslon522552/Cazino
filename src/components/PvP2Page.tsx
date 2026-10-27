@@ -41,10 +41,6 @@ const randomRange = (min: number, max: number) => Math.random() * (max - min) + 
 const aabbOverlap = (a: Shape, b: Shape) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 const generateShape = (existingShapes: Shape[], bet: number): Shape => {
-  const X1 = randomRange(0, FIELD_H);
-  const X2 = randomRange(0, FIELD_H);
-  const Y1 = randomRange(0, FIELD_W);
-  const Y2 = randomRange(0, FIELD_W);
   let base = 40 + bet * 2;
   let w = Math.min(base, FIELD_W - 50);
   let h = Math.min(base, FIELD_H - 30);
@@ -178,22 +174,24 @@ const reset = () => {
 useEffect(() => {
     const socket = io(CONFIG.API_URL, { transports: ['websocket', 'polling'] });
     socket.on('connect', () => { console.log('[PvP2] Socket connected'); });
-    socket.on('pvp_waiting', (data: { room_id: string }) => {
+    socket.on('pvp_waiting', (_data: { room_id: string }) => {
       setPhase('waiting');
       waitCountRef.current = 15;
       setWaitSeconds(15);
       setWaitExpired(false);
-      countdownRef.current = setInterval(() => {
-        waitCountRef.current -= 1;
-        setWaitSeconds(waitCountRef.current);
-        if (waitCountRef.current <= 0) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          countdownRef.current = null;
-          setWaitExpired(true);
-          if (pendingBetRef.current > 0) { onUpdateBalance(pendingBetRef.current); pendingBetRef.current = 0; }
-          setPhase('setup');
-        }
-      }, 1000);
+      if (!countdownRef.current) {
+        countdownRef.current = setInterval(() => {
+          waitCountRef.current -= 1;
+          setWaitSeconds(waitCountRef.current);
+          if (waitCountRef.current <= 0) {
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            countdownRef.current = null;
+            setWaitExpired(true);
+            if (pendingBetRef.current > 0) { onUpdateBalance(pendingBetRef.current); pendingBetRef.current = 0; }
+            setPhase('setup');
+          }
+        }, 1000);
+      }
     });
     socket.on('pvp_started', (data: { room_id: string; players: Player[]; total_pot: number }) => {
       if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
@@ -236,9 +234,30 @@ useEffect(() => {
     onUpdateBalance(-bet);
     pendingBetRef.current = bet;
     const socket = socketRef.current;
-    if (!socket) return;
-    userIdRef.current = socket.id || '';
-    socket.emit('pvp_create', { bet });
+    const uid = socket?.id || 'local_' + Date.now();
+    userIdRef.current = uid;
+    const newPlayer: Player = { user_id: uid, username: 'You', bet, color: '#a855f7' };
+    setPlayers([newPlayer]);
+    const newShape = generateShape([], bet);
+    newShape.playerId = uid;
+    setShapes([newShape]);
+    setPhase('waiting');
+    waitCountRef.current = 15;
+    setWaitSeconds(15);
+    setWaitExpired(false);
+    if (countdownRef.current) { clearInterval(countdownRef.current); }
+    countdownRef.current = setInterval(() => {
+      waitCountRef.current -= 1;
+      setWaitSeconds(waitCountRef.current);
+      if (waitCountRef.current <= 0) {
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        setWaitExpired(true);
+        if (pendingBetRef.current > 0) { onUpdateBalance(pendingBetRef.current); pendingBetRef.current = 0; }
+        setPhase('setup');
+      }
+    }, 1000);
+    if (socket) { socket.emit('pvp_create', { bet }); }
   };
 
   const renderArena = () => {
