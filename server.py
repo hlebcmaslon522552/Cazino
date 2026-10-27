@@ -192,13 +192,13 @@ CASE_GOLD_POOL = [
 ]
 
 FREE_CASE_POOL = [
-    {"name": "0.01 TON", "image": "/TON.png", "rarity": "common", "chance": 40, "price": 0.01, "is_ton": True},
-    {"name": "0.1 TON", "image": "/TON.png", "rarity": "common", "chance": 25, "price": 0.1, "is_ton": True},
-    {"name": "0.2 TON", "image": "/TON.png", "rarity": "common", "chance": 15, "price": 0.2, "is_ton": True},
-    {"name": "0.3 TON", "image": "/TON.png", "rarity": "common", "chance": 10, "price": 0.3, "is_ton": True},
-    {"name": "0.5 TON", "image": "/TON.png", "rarity": "common", "chance": 6, "price": 0.5, "is_ton": True},
-    {"name": "1 TON", "image": "/TON.png", "rarity": "common", "chance": 3, "price": 1, "is_ton": True},
-    {"name": "Big Year", "image": "/nft_images/big_year.webp", "rarity": "legendary", "chance": 1, "price": 3.89},
+    {"name": "0.01 TON", "image": "/TON.png", "rarity": "common", "type": "ton", "chance": 55, "price": 0.01},
+    {"name": "0.1 TON", "image": "/TON.png", "rarity": "common", "type": "ton", "chance": 20, "price": 0.1},
+    {"name": "0.2 TON", "image": "/TON.png", "rarity": "common", "type": "ton", "chance": 10, "price": 0.2},
+    {"name": "0.3 TON", "image": "/TON.png", "rarity": "common", "type": "ton", "chance": 7, "price": 0.3},
+    {"name": "0.5 TON", "image": "/TON.png", "rarity": "common", "type": "ton", "chance": 5, "price": 0.5},
+    {"name": "1 TON", "image": "/TON.png", "rarity": "common", "type": "ton", "chance": 2.99, "price": 1},
+    {"name": "Big Year", "image": "/nft_images/big_year.webp", "rarity": "legendary", "type": "item", "chance": 0.01, "price": 3.89},
 ]
 
 # Соответствие ID кейса (фронтенд) и пула предметов
@@ -797,8 +797,8 @@ def open_case():
             item = pick_case_item_from_pool(FREE_CASE_POOL)
             item_id = str(uuid.uuid4())
 
-            # Если выпал TON — начисляем на баланс
-            if item.get("is_ton"):
+            # Если выпал TON (type === 'ton') — начисляем на баланс, а не в инвентарь
+            if item.get("type") == "ton":
                 c.execute(
                     "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
                     (item["price"], user_id)
@@ -867,17 +867,24 @@ def open_case():
         item = pick_case_item(case_id)
         item_id = str(uuid.uuid4())
 
-        # Добавляем предмет в отдельную таблицу инвентаря
-        c.execute(
-            "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
-            (user_id, item_id, item["name"], item["image"], item["price"])
-        )
-
-        # Обновляем баланс
-        c.execute(
-            "UPDATE users SET balance_ton = ? WHERE id = ?",
-            (new_balance, user_id)
-        )
+        # Если выпал TON — начисляем на баланс, а не в инвентарь
+        if item.get("type") == "ton":
+            new_balance = round(balance - case_price + item["price"], 2)
+            c.execute(
+                "UPDATE users SET balance_ton = ? WHERE id = ?",
+                (new_balance, user_id)
+            )
+        else:
+            # Добавляем предмет в отдельную таблицу инвентаря
+            c.execute(
+                "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+                (user_id, item_id, item["name"], item["image"], item["price"])
+            )
+            # Обновляем баланс
+            c.execute(
+                "UPDATE users SET balance_ton = ? WHERE id = ?",
+                (new_balance, user_id)
+            )
         conn.commit()
         if conn:
             conn.close()

@@ -28,6 +28,7 @@ interface DropItem {
   chance: number;
   price: number;
   floor?: number;
+  type?: string; // 'ton' — TON-приз: начисляется на баланс, а не в инвентарь
 }
 
 /* Пулы предметов по кейсам — синхронизированы с server.py */
@@ -58,13 +59,13 @@ const CASE_POOLS: Record<string, DropItem[]> = {
     { name: 'Perfume Bottle', image: '/nft_images/perfume_bottle.webp', rarity: 'uncommon', chance: 50, price: 83.1096 },
   ],
   case_free: [
-    { name: '0.01 TON', image: '/TON.png', rarity: 'common', chance: 40, price: 0.01 },
-    { name: '0.1 TON', image: '/TON.png', rarity: 'common', chance: 25, price: 0.1 },
-    { name: '0.2 TON', image: '/TON.png', rarity: 'common', chance: 15, price: 0.2 },
-    { name: '0.3 TON', image: '/TON.png', rarity: 'common', chance: 10, price: 0.3 },
-    { name: '0.5 TON', image: '/TON.png', rarity: 'common', chance: 6, price: 0.5 },
-    { name: '1 TON', image: '/TON.png', rarity: 'common', chance: 3, price: 1 },
-    { name: 'Big Year', image: '/nft_images/big_year.webp', rarity: 'legendary', chance: 1, price: 3.89 },
+    { name: '0.01 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 55, price: 0.01 },
+    { name: '0.1 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 20, price: 0.1 },
+    { name: '0.2 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 10, price: 0.2 },
+    { name: '0.3 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 7, price: 0.3 },
+    { name: '0.5 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 5, price: 0.5 },
+    { name: '1 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 2.99, price: 1 },
+    { name: 'Big Year', image: '/nft_images/big_year.webp', rarity: 'legendary', type: 'item', chance: 0.01, price: 3.89 },
   ],
 };
 
@@ -74,6 +75,9 @@ const DEFAULT_POOL: DropItem[] = CASE_POOLS['case_wood'];
 function loadPool(caseId: string): DropItem[] {
   return CASE_POOLS[caseId] ?? DEFAULT_POOL;
 }
+
+/* ─── Форматирование шанса из пула ─── */
+const formatChance = (chance: number): string => `${+chance.toFixed(2)}%`;
 
 /* ─── Цвет редкости ─── */
 function rarityColor(rarity: string): string {
@@ -247,16 +251,22 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
         }).catch(() => {});
       }
 
-      /* 2. Сервер списал деньги — обновляем баланс на фронтенде */
-      onUpdateBalance(-price);
-      haptic('medium');
-
       /* 3. Генерируем рулетку. `winIndex` — детерминированный индекс, по которому
            в ленту положен ровно `data.item`: центр после анимации = data.item. */
       const serverItem = data.item as DropItem;
       const { items, winIndex } = generateSpinArray(serverItem);
 
       setSpinItems(items);
+
+      /* 2. Сервер списал деньги — обновляем баланс на фронтенде */
+      onUpdateBalance(-price);
+
+      /* 2.1 TON-приз (type === 'ton') — НЕ добавляем в инвентарь (addToInventory не вызывается).
+           Сервер уже начислил сумму на баланс; здесь синхронизируем UI. */
+      if (serverItem.type === 'ton') {
+        onUpdateBalance(serverItem.price);
+      }
+      haptic('medium');
 
       /* 3.1 Сервер уже сам записал предмет в inventory при вызове /api/open_case.
            Клиент НЕ вызывает addToInventory — это предотвращает рассинхрон
@@ -586,8 +596,8 @@ return (
         <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 8 }}>
           Возможные предметы ({pool.length} шт.):
         </div>
-        {/* Сетка карточек как в Маркете: grid-cols-2, картинка 4:3, название и цена в TON */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Сетка карточек как в Маркете: grid-cols-2 (2 равные колонки), gap-2 — равномерное распределение */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {pool.map((p, i) => (
             <div
               key={`${p.name}-${i}`}
@@ -693,7 +703,7 @@ return (
               Вы выиграли
             </div>
             <img
-              src={publicUrl(wonItem.image.replace(/^\//, ''))}
+              src={publicUrl(wonItem.type === 'ton' ? 'TON.png' : wonItem.image.replace(/^\//, ''))}
               onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
               alt={wonItem.name}
               style={{ width: 120, height: 120, objectFit: 'contain', marginBottom: 12 }}
@@ -708,8 +718,25 @@ return (
             >
               {wonItem.name}
             </div>
-            <div style={{ fontSize: 14, color: colors.gold, marginBottom: 16 }}>
-              ≈ {wonItem.price.toFixed(2)} TON
+            <div
+              style={{
+                fontSize: 14,
+                color: colors.gold,
+                marginBottom: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+            >
+              {wonItem.type === 'ton' ? (
+                <>
+                  <img src={publicUrl('TON.png')} alt="TON" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+                  <span>+{wonItem.price.toFixed(2)} TON</span>
+                </>
+              ) : (
+                <>≈ {wonItem.price.toFixed(2)} TON</>
+              )}
             </div>
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Button size="lg" fullWidth onClick={closeResult}>
@@ -841,7 +868,7 @@ return (
               >
                 <span style={{ color: '#9ca3af' }}>Шанс</span>
                 <span style={{ color: '#fff', fontWeight: 'bold' }}>
-                  {selectedItem.chance} %
+                  {formatChance(selectedItem.chance)}
                 </span>
               </div>
             </div>
