@@ -36,6 +36,7 @@ CRASH_STATE = "waiting"       # 'waiting' | 'flying'
 CRASH_TIMER = 15              # секунд до старта
 CRASH_POINT = 1.00
 CRASH_START_TIME = 0.0
+CRASH_PLAYERS = []            # ставки текущего раунда: [{ user_id, username, bet, sid }]
 CRASH_LOCK = threading.Lock()
 
 
@@ -230,20 +231,28 @@ def generate_crash_point():
 
 # ── Crash Game Loop (фоновый поток) ───────────────────────────────────────
 def crash_game_loop():
-    """Фоновый поток: обновляет CRASH_STATE, CRASH_TIMER, CRASH_POINT каждую секунду."""
-    global CRASH_STATE, CRASH_TIMER, CRASH_POINT, CRASH_START_TIME
+    """Фоновый поток: обновляет CRASH_STATE, CRASH_TIMER, CRASH_POINT каждую секунду
+    и рассылает всем подключённым клиентам события через WebSocket."""
+    global CRASH_STATE, CRASH_TIMER, CRASH_POINT, CRASH_START_TIME, CRASH_PLAYERS
     print("[CrashLoop] Поток запущен.")
     while True:
         try:
             with CRASH_LOCK:
                 if CRASH_STATE == "waiting":
                     CRASH_TIMER -= 1
+                    # Глобальный обратный отсчёт для всех игроков
+                    socketio.emit('crash_timer', {'timer': max(CRASH_TIMER, 0)})
+
                     if CRASH_TIMER <= 0:
-                        # Генерируем точку краша
+                        # Генерируем точку краша и стартуем раунд
                         CRASH_POINT = generate_crash_point()
                         CRASH_START_TIME = time.time()
                         CRASH_STATE = "flying"
                         print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x")
+                        socketio.emit('crash_started', {
+                            'crash_point': CRASH_POINT,
+                            'start_time': CRASH_START_TIME,
+                        })
 
                 elif CRASH_STATE == "flying":
                     elapsed = time.time() - CRASH_START_TIME
@@ -252,7 +261,9 @@ def crash_game_loop():
                         CRASH_STATE = "waiting"
                         CRASH_TIMER = 15
                         CRASH_POINT = 1.00
+                        CRASH_PLAYERS = []
                         print("[CrashLoop] Раунд завершён. Ожидание следующего...")
+                        socketio.emit('crash_ended')
 
         except Exception as e:
             print(f"[CrashLoop] Ошибка: {e}")
@@ -1436,7 +1447,7 @@ def leaderboard_turnover():
 # ── PvP WebSocket Handlers ────────────────────────────────────────────
 @socketio.on('join_pvp')
 def handle_join_pvp(data):
-    \"\"\"Принимает { user_id, username, bet }. Ищет комнату или создаёт новую.\"\"\"
+    """Принимает { user_id, username, bet }. Ищет комнату или создаёт новую."""
     user_id = str(data.get('user_id', ''))
     username = str(data.get('username', 'Unknown'))
     bet = float(data.get('bet', 0))
@@ -1508,7 +1519,7 @@ def handle_join_pvp(data):
 
 @socketio.on('spin_pvp')
 def handle_spin_pvp(data):
-    \"\"\"Принимает { room_id }. Генерирует случайного победителя.\"\"\"
+    """Принимает { room_id }. Генерирует случайного победителя."""
     room_id = data.get('room_id')
     if not room_id or room_id not in PVP_ROOMS:
         emit('pvp_error', {'error': 'Room not found'})
@@ -1536,9 +1547,41 @@ def handle_spin_pvp(data):
         del PVP_ROOMS[room_id]
 
 
+# ── Crash WebSocket Handlers ───────────────────────────────────────────
+@socketio.on('crash_bet')
+def handle_crash_bet(data):
+    # Принимает { user_id, username, bet }. Добавляет игрока в CRASH_PLAYERS
+    # и рассылает всем обновлённый список ставок.
+    global CRASH_PLAYERS
+    user_id = str(data.get('user_id', ''))
+    username = str(data.get('username', 'Игрок'))
+    bet = float(data.get('bet', 0))
+
+    if not user_id or bet <= 0:
+        emit('crash_error', {'error': 'Invalid bet data'})
+        return
+
+    with CRASH_LOCK:
+        # Если игрок уже в списке — обновляем его ставку вместо дубля
+        CRASH_PLAYERS = [p for p in CRASH_PLAYERS if p['user_id'] != user_id]
+        CRASH_PLAYERS.append({
+            'user_id': user_id,
+            'username': username,
+            'bet': bet,
+            'sid': request.sid,
+        })
+        players_snapshot = [
+            {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet']}
+            for p in CRASH_PLAYERS
+        ]
+
+    socketio.emit('crash_players_update', {'players': players_snapshot})
+    print(f"[Crash] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(CRASH_PLAYERS)}")
+
+
 @socketio.on('disconnect')
 def handle_disconnect():
-    \"\"\"При отключении удаляем игрока из комнат.\"\"\"
+    """При отключении удаляем игрока из комнат."""
     for room_id, room in list(PVP_ROOMS.items()):
         before = len(room['players'])
         room['players'] = [p for p in room['players'] if p['sid'] != request.sid]
@@ -1552,6 +1595,19 @@ def handle_disconnect():
                 # Уведомляем оставшегося игрока
                 emit('pvp_error', {'error': 'Соперник отключился'}, room=room_id)
 
+    # Убираем отключившегося игрока из глобального пула Crash
+    global CRASH_PLAYERS
+    with CRASH_LOCK:
+        before = len(CRASH_PLAYERS)
+        CRASH_PLAYERS = [p for p in CRASH_PLAYERS if p.get('sid') != request.sid]
+        if len(CRASH_PLAYERS) != before:
+            socketio.emit('crash_players_update', {
+                'players': [
+                    {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet']}
+                    for p in CRASH_PLAYERS
+                ]
+            })
+            print(f"[Crash] Игрок отключился. Осталось в пуле: {len(CRASH_PLAYERS)}")
 
 # ── Запуск фоновой задачи сброса лидерборда ───────────────────────────
 def start_leaderboard_reset_worker():

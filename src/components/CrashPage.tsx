@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TrendingUp, RefreshCw, Coins, Clock, Users } from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
+import { Coins, Clock, Users } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 import { loadInventoryFromLocal } from '../api';
@@ -11,6 +12,12 @@ interface CrashPageProps {
 }
 
 type ServerRoundState = 'waiting' | 'flying' | 'crashed';
+
+interface CrashPlayer {
+  user_id: string;
+  username: string;
+  bet: number;
+}
 
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user, initData } = useTelegram();
@@ -29,88 +36,106 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [points, setPoints] = useState<{ x: number; y: number }[]>([{ x: 0, y: 100 }]);
   const [countdown, setCountdown] = useState<number>(15);
   const [hasBet, setHasBet] = useState<boolean>(false);
-  const [players, setPlayers] = useState<{ name: string; bet: number }[]>([]);
+  const [players, setPlayers] = useState<CrashPlayer[]>([]);
+  const socketRef = useRef<Socket | null>(null);
   const requestRef = useRef<number>();
   const startTimeRef = useRef<number>();
   const lastPointTimeRef = useRef<number>(0);
+  const crashedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const prevServerStateRef = useRef<string>('waiting');
   const serverCrashPointRef = useRef<number>(1.01);
-  const crashHandledRef = useRef<boolean>(false);
 
-  // ── Polling /api/crash_state каждую секунду ───────────────────────────
+  // ── WebSocket-синхронизация глобального раунда ───────────────────────
   useEffect(() => {
-    const fetchState = async () => {
-      try {
-        const res = await fetch(`${CONFIG.API_URL}/api/crash_state`, {
-          headers: { 'ngrok-skip-browser-warning': 'true' }
-        });
-        const data = await res.json();
-        // data: { state, timer, crash_point, start_time }
+    const socket = io(CONFIG.API_URL, {
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = socket;
 
-        const serverState: string = data.state;
-        const serverCrashPt: number = data.crash_point || 1.01;
-        const serverTimer: number = data.timer || 15;
-
-        serverCrashPointRef.current = serverCrashPt;
-
-        if (serverState === 'waiting') {
-          setCountdown(serverTimer);
-        }
-
-        // ── Определяем момент краша ──
-        if (prevServerStateRef.current === 'flying' && serverState === 'waiting') {
-          if (!crashHandledRef.current) {
-            crashHandledRef.current = true;
-            setGameState('crashed');
-            setMultiplier(serverCrashPt);
-            setHistory(prev => [serverCrashPt, ...prev].slice(0, 15));
-            setTimeout(() => {
-              setGameState('waiting');
-              setMultiplier(1.00);
-              setPoints([{ x: 0, y: 100 }]);
-              setHasCashedOut(false);
-              setHasBet(false);
-              setPlayers([]);
-              crashHandledRef.current = false;
-            }, 5000);
+    socket.on('connect', () => {
+      console.log('[Crash] Socket connected');
+      // ── Первичная синхронизация: игрок может войти в середине раунда ──
+      fetch(`${CONFIG.API_URL}/api/crash_state`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
+        .then(res => res.json())
+        .then((data) => {
+          if (data.state === 'waiting') {
+            setCountdown(data.timer || 15);
+          } else if (data.state === 'flying') {
+            serverCrashPointRef.current = data.crash_point || 1.01;
+            setCrashPoint(data.crash_point || 1.01);
+            startTimeRef.current = (data.start_time || 0) * 1000;
+            lastPointTimeRef.current = Date.now();
+            setGameState('flying');
+            setMultiplier(1.00);
+            setPoints([{ x: 0, y: 100 }]);
+            setHasCashedOut(false);
           }
-        }
+        })
+        .catch(err => console.error('[Crash] Initial state fetch error:', err));
+    });
 
-        // ── Переход waiting → flying ──
-        if (serverState === 'flying' && prevServerStateRef.current === 'waiting') {
-          setGameState('flying');
-          setMultiplier(1.00);
-          setCrashPoint(serverCrashPt);
-          setPoints([{ x: 0, y: 100 }]);
-          setHasCashedOut(false);
-          startTimeRef.current = performance.now();
-          lastPointTimeRef.current = performance.now();
-          crashHandledRef.current = false;
-          setPlayers(prev => prev.filter(p => p.bet > 0));
-        }
+    // ── Глобальный обратный отсчёт ──
+    socket.on('crash_timer', (data: { timer: number }) => {
+      setCountdown(data.timer);
+    });
 
-        prevServerStateRef.current = serverState;
-      } catch (err) {
-        console.error('[CrashPage] Polling error:', err);
-      }
+    // ── Раунд стартовал ──
+    socket.on('crash_started', (data: { crash_point: number; start_time: number }) => {
+      serverCrashPointRef.current = data.crash_point;
+      setCrashPoint(data.crash_point);
+      startTimeRef.current = data.start_time * 1000;
+      lastPointTimeRef.current = Date.now();
+      setGameState('flying');
+      setMultiplier(1.00);
+      setPoints([{ x: 0, y: 100 }]);
+      setHasCashedOut(false);
+    });
+
+    // ── Раунд завершился (RUG PULL) ──
+    socket.on('crash_ended', () => {
+      const finalPt = serverCrashPointRef.current;
+      setMultiplier(finalPt);
+      setGameState('crashed');
+      setHistory(prev => [finalPt, ...prev].slice(0, 15));
+      if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
+      crashedResetRef.current = setTimeout(() => {
+        setGameState('waiting');
+        setMultiplier(1.00);
+        setPoints([{ x: 0, y: 100 }]);
+        setHasCashedOut(false);
+        setHasBet(false);
+        setPlayers([]);
+      }, 5000);
+    });
+
+    // ── Обновление пула ставок ──
+    socket.on('crash_players_update', (data: { players: CrashPlayer[] }) => {
+      setPlayers(data.players || []);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('[Crash] Socket disconnected');
+    });
+
+    return () => {
+      if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
+      socket.disconnect();
     };
-
-    fetchState();
-    const interval = setInterval(fetchState, 1000);
-    return () => clearInterval(interval);
   }, []);
 
   // ── Анимация графика ──
   useEffect(() => {
     if (gameState !== 'flying') return;
 
-    const animate = (time: number) => {
-      if (!startTimeRef.current) startTimeRef.current = time;
-      const elapsed = time - startTimeRef.current;
+    const animate = () => {
+      if (!startTimeRef.current) startTimeRef.current = Date.now();
+      const now = Date.now();
+      const elapsed = now - startTimeRef.current;
       const newMultiplier = Math.pow(1.00015, elapsed);
 
-      if (time - lastPointTimeRef.current > 300 + Math.random() * 200) {
+      if (now - lastPointTimeRef.current > 300 + Math.random() * 200) {
         setPoints(prev => {
           const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
           const prevY = prev.length > 0 ? prev[prev.length - 1].y : 100;
@@ -128,7 +153,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           newPoints = newPoints.map(p => ({ ...p, y: Math.min(Math.max(p.y, 0), 100) }));
           return newPoints;
         });
-        lastPointTimeRef.current = time;
+        lastPointTimeRef.current = now;
       }
 
       if (newMultiplier >= serverCrashPointRef.current) {
@@ -162,11 +187,19 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       onToast?.(`Ставка NFT: ${selectedNft.model || selectedNft.name}`, 'success');
     }
     setHasBet(true);
-    setPlayers(prev => [...prev, { name: user?.first_name || 'Вы', bet: betType === 'ton' ? finalBet : (selectedNft?.floor || 0) }]);
+
+    // Отправляем ставку на сервер — он рассылает crash_players_update всем
+    const betAmount = betType === 'ton' ? finalBet : (selectedNft?.floor || 0);
+    socketRef.current?.emit('crash_bet', {
+      user_id: String(user?.id ?? 'unknown'),
+      username: user?.first_name || 'Игрок',
+      bet: betAmount,
+    });
+
     if (betType === 'ton') onToast?.('Ставка принята!', 'success');
 
     // Отправляем оборот
-    const turnoverAmount = betType === 'ton' ? finalBet : (selectedNft?.floor || 0);
+    const turnoverAmount = betAmount;
     if (turnoverAmount > 0) {
       fetch(`${CONFIG.API_URL}/api/add_turnover`, {
         method: 'POST',
@@ -215,8 +248,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         <div className="flex flex-col gap-1 w-1/2">
           <div className="flex items-center gap-1 text-gray-400 text-xs mb-1"><Users size={12}/> Игроки:</div>
           <div className="flex flex-wrap gap-1">
-            {players.map((p, i) => (
-              <span key={i} className="bg-gray-800 text-xs px-2 py-1 rounded-full">{p.name}: {p.bet}</span>
+            {players.map((p) => (
+              <span key={p.user_id} className="bg-gray-800 text-xs px-2 py-1 rounded-full">{p.username}: {p.bet.toFixed(2)}</span>
             ))}
             {players.length === 0 && <span className="text-xs text-gray-600">Пока никого...</span>}
           </div>
@@ -244,7 +277,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       <div className="mt-4 bg-[#1a1a2e] rounded-3xl p-4 border border-gray-800 shadow-xl flex-1 flex flex-col justify-end">
         <div className="flex justify-between items-center mb-4">
           <div className="flex flex-col"><span className="text-gray-400 text-sm">Баланс</span><span className="text-xl font-bold text-white flex items-center gap-1"><Coins size={18} className="text-yellow-500" /> {balance.toFixed(2)}</span></div>
-          <div className="flex flex-col text-right"><span className="text-gray-400 text-sm">Потенциал</span><span className="text-xl font-bold text-green-400">{gameState === 'playing' ? ((betType === 'ton' ? finalBet : (selectedNft?.floor || 0)) * multiplier).toFixed(2) : '0.00'}</span></div>
+          <div className="flex flex-col text-right"><span className="text-gray-400 text-sm">Потенциал</span><span className="text-xl font-bold text-green-400">{gameState === 'flying' ? ((betType === 'ton' ? finalBet : (selectedNft?.floor || 0)) * multiplier).toFixed(2) : '0.00'}</span></div>
         </div>
 
         {gameState === 'waiting' && (
