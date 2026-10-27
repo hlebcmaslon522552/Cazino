@@ -23,6 +23,17 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "test.db")
 # Активные игры в Mines (серверный анти-чит)
 active_mines_games = {}
 
+active_mines_games = {}
+
+# ── Crash Game State (серверный таймер) ──────────────────────────────────
+CRASH_STATE = "waiting"       # 'waiting' | 'flying'
+CRASH_TIMER = 15              # секунд до старта
+CRASH_POINT = 1.00
+CRASH_START_TIME = 0.0
+CRASH_LOCK = threading.Lock()
+
+
+
 # ── Leaderboard / Prizes Config ─────────────────────────────────────
 LEADERBOARD_PRIZES = {
     1: 500.0,
@@ -209,6 +220,41 @@ def generate_crash_point():
     if point > 111.0:
         return 111.0
     return round(point, 2)
+
+
+# ── Crash Game Loop (фоновый поток) ───────────────────────────────────────
+def crash_game_loop():
+    """Фоновый поток: обновляет CRASH_STATE, CRASH_TIMER, CRASH_POINT каждую секунду."""
+    global CRASH_STATE, CRASH_TIMER, CRASH_POINT, CRASH_START_TIME
+    print("[CrashLoop] Поток запущен.")
+    while True:
+        try:
+            with CRASH_LOCK:
+                if CRASH_STATE == "waiting":
+                    CRASH_TIMER -= 1
+                    if CRASH_TIMER <= 0:
+                        # Генерируем точку краша
+                        CRASH_POINT = generate_crash_point()
+                        CRASH_START_TIME = time.time()
+                        CRASH_STATE = "flying"
+                        print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x")
+
+                elif CRASH_STATE == "flying":
+                    elapsed = time.time() - CRASH_START_TIME
+                    if elapsed >= CRASH_POINT - 1.0:
+                        # Раунд завершён (краш)
+                        CRASH_STATE = "waiting"
+                        CRASH_TIMER = 15
+                        CRASH_POINT = 1.00
+                        print("[CrashLoop] Раунд завершён. Ожидание следующего...")
+
+        except Exception as e:
+            print(f"[CrashLoop] Ошибка: {e}")
+
+        time.sleep(1)
+
+
+
 
 
 def pick_case_item(case_id=""):
@@ -1189,6 +1235,21 @@ def health():
     return jsonify({"status": "ok", "service": "cazino-game-server"})
 
 
+
+# ── Crash State ──────────────────────────────────────────────────────────
+@app.route("/api/crash_state", methods=["GET"])
+def crash_state():
+    """Возвращает текущее состояние Crash-раунда."""
+    with CRASH_LOCK:
+        return jsonify({
+            "state": CRASH_STATE,
+            "timer": CRASH_TIMER,
+            "crash_point": CRASH_POINT,
+            "start_time": CRASH_START_TIME
+        })
+
+
+
 # ── Withdraw NFT (уведомление админу) ─────────────────────────────────
 @app.route("/api/withdraw_nft", methods=["POST"])
 def withdraw_nft():
@@ -1296,6 +1357,13 @@ def start_leaderboard_reset_worker():
 
 
 start_leaderboard_reset_worker()
+
+# ── Запуск фонового потока Crash ─────────────────────────────────────────
+crash_thread = threading.Thread(target=crash_game_loop, daemon=True)
+crash_thread.start()
+print("[Server] Фоновый поток Crash запущен.")
+
+
 
 
 if __name__ == "__main__":

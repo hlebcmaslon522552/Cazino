@@ -10,6 +10,8 @@ interface CrashPageProps {
   onToast?: (msg: string, type: 'success' | 'error') => void;
 }
 
+type ServerRoundState = 'waiting' | 'flying' | 'crashed';
+
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user, initData } = useTelegram();
   const [betInput, setBetInput] = useState<string>("1.0");
@@ -19,7 +21,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [showNftModal, setShowNftModal] = useState(false);
   const [nftList, setNftList] = useState<any[]>([]);
   const [multiplier, setMultiplier] = useState<number>(1.00);
-  const [gameState, setGameState] = useState<'waiting' | 'playing' | 'crashed'>('waiting');
+  const [gameState, setGameState] = useState<ServerRoundState>('waiting');
   const [crashPoint, setCrashPoint] = useState<number>(1.01);
   const [hasCashedOut, setHasCashedOut] = useState<boolean>(false);
   const [cashedOutAt, setCashedOutAt] = useState<number>(0);
@@ -31,118 +33,115 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const requestRef = useRef<number>();
   const startTimeRef = useRef<number>();
   const lastPointTimeRef = useRef<number>(0);
-  const countdownRef = useRef<ReturnType<typeof setInterval>>();
-  const timeOffsetRef = useRef<number>(0);
 
-  // Серверная синхронизация времени
+  const prevServerStateRef = useRef<string>('waiting');
+  const serverCrashPointRef = useRef<number>(1.01);
+  const crashHandledRef = useRef<boolean>(false);
+
+  // ── Polling /api/crash_state каждую секунду ───────────────────────────
   useEffect(() => {
-    fetch(`${CONFIG.API_URL}/api/time`, {
-      headers: { 'ngrok-skip-browser-warning': 'true' }
-    })
-      .then(res => res.json())
-      .then(data => {
-        const serverTime = data.timestamp;
-        timeOffsetRef.current = serverTime - Date.now();
-        console.log(`[CrashPage] Time offset: ${timeOffsetRef.current}ms`);
-      })
-      .catch(err => console.error('[CrashPage] Time sync error:', err));
+    const fetchState = async () => {
+      try {
+        const res = await fetch(`${CONFIG.API_URL}/api/crash_state`, {
+          headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+        const data = await res.json();
+        // data: { state, timer, crash_point, start_time }
+
+        const serverState: string = data.state;
+        const serverCrashPt: number = data.crash_point || 1.01;
+        const serverTimer: number = data.timer || 15;
+
+        serverCrashPointRef.current = serverCrashPt;
+
+        if (serverState === 'waiting') {
+          setCountdown(serverTimer);
+        }
+
+        // ── Определяем момент краша ──
+        if (prevServerStateRef.current === 'flying' && serverState === 'waiting') {
+          if (!crashHandledRef.current) {
+            crashHandledRef.current = true;
+            setGameState('crashed');
+            setMultiplier(serverCrashPt);
+            setHistory(prev => [serverCrashPt, ...prev].slice(0, 15));
+            setTimeout(() => {
+              setGameState('waiting');
+              setMultiplier(1.00);
+              setPoints([{ x: 0, y: 100 }]);
+              setHasCashedOut(false);
+              setHasBet(false);
+              setPlayers([]);
+              crashHandledRef.current = false;
+            }, 5000);
+          }
+        }
+
+        // ── Переход waiting → flying ──
+        if (serverState === 'flying' && prevServerStateRef.current === 'waiting') {
+          setGameState('flying');
+          setMultiplier(1.00);
+          setCrashPoint(serverCrashPt);
+          setPoints([{ x: 0, y: 100 }]);
+          setHasCashedOut(false);
+          startTimeRef.current = performance.now();
+          lastPointTimeRef.current = performance.now();
+          crashHandledRef.current = false;
+          setPlayers(prev => prev.filter(p => p.bet > 0));
+        }
+
+        prevServerStateRef.current = serverState;
+      } catch (err) {
+        console.error('[CrashPage] Polling error:', err);
+      }
+    };
+
+    fetchState();
+    const interval = setInterval(fetchState, 1000);
+    return () => clearInterval(interval);
   }, []);
 
-  const startRound = async () => {
-    setMultiplier(1.00);
-    setHasCashedOut(false);
-    setPoints([{ x: 0, y: 100 }]);
-    startTimeRef.current = performance.now();
-    lastPointTimeRef.current = performance.now();
-    setPlayers(prev => prev.filter(p => p.bet > 0));
-    try {
-      const res = await fetch(`${CONFIG.API_URL}/api/play_game`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({ user_id: user?.id ?? 'unknown', game_type: 'crash', bet_amount: 1, initData })
-      });
-      const data = await res.json();
-      setCrashPoint(Math.max(1.01, data.crash_point || 1.01));
-    } catch (e) {
-      setCrashPoint(1.5);
-    }
-    setGameState('playing');
-  };
+  // ── Анимация графика ──
+  useEffect(() => {
+    if (gameState !== 'flying') return;
 
-  useEffect(() => {
-    if (gameState !== 'waiting') {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      return;
-    }
-    setPlayers([]);
-    setHasBet(false);
-    setCountdown(15);
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          startRound();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
-  }, [gameState]);
-  useEffect(() => {
-    if (gameState !== 'playing') return;
     const animate = (time: number) => {
       if (!startTimeRef.current) startTimeRef.current = time;
       const elapsed = time - startTimeRef.current;
       const newMultiplier = Math.pow(1.00015, elapsed);
+
       if (time - lastPointTimeRef.current > 300 + Math.random() * 200) {
         setPoints(prev => {
           const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
           const prevY = prev.length > 0 ? prev[prev.length - 1].y : 100;
           const newX = Math.min(prevX + 10, 100);
-          // Вычисляем новую Y: уменьшаем (двигаем вверх), но с плавной кривой
           const rawY = prevY - (Math.random() * 8 + 2);
           let newY = Math.min(Math.max(rawY, 10), 100);
           let newPoints = [...prev, { x: newX, y: newY }];
-          // Сдвигаем график влево, если точек больше 10 (эффект бегущей строки)
           if (newPoints.length > 10) {
             newPoints = newPoints.map(p => ({ ...p, x: Math.max(p.x - 5, 0) }));
           }
-          // Если последняя точка поднялась слишком высоко (Y < 20) — сдвигаем всё вниз
           const lastY = newPoints[newPoints.length - 1].y;
           if (lastY < 20) {
-            newPoints = newPoints.map(p => ({
-              ...p,
-              y: Math.min(p.y + 10, 100),
-            }));
+            newPoints = newPoints.map(p => ({ ...p, y: Math.min(p.y + 10, 100) }));
           }
-          // Финальное ограничение всех точек в пределах [0, 100]
-          newPoints = newPoints.map(p => ({
-            ...p,
-            y: Math.min(Math.max(p.y, 0), 100),
-          }));
+          newPoints = newPoints.map(p => ({ ...p, y: Math.min(Math.max(p.y, 0), 100) }));
           return newPoints;
         });
         lastPointTimeRef.current = time;
       }
-      if (newMultiplier >= crashPoint) {
-        setMultiplier(crashPoint);
-        setGameState('crashed');
-        setHistory(prev => [crashPoint, ...prev].slice(0, 15));
-        setTimeout(() => setGameState('waiting'), 5000);
+
+      if (newMultiplier >= serverCrashPointRef.current) {
+        setMultiplier(serverCrashPointRef.current);
       } else {
         setMultiplier(newMultiplier);
         requestRef.current = requestAnimationFrame(animate);
       }
     };
+
     requestRef.current = requestAnimationFrame(animate);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, [gameState, crashPoint]);
-
-  const loadNftList = () => {
-    const local = loadInventoryFromLocal();
-    setNftList(local);
-  };
+  }, [gameState]);
 
   const placeBet = () => {
     if (gameState !== 'waiting') return;
@@ -182,7 +181,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   };
 
   const cashOut = () => {
-    if (gameState === 'playing' && !hasCashedOut) {
+    if (gameState === 'flying' && !hasCashedOut) {
       const winAmount = betType === 'ton' ? finalBet * multiplier : (selectedNft?.floor || 0) * multiplier;
       setHasCashedOut(true);
       setCashedOutAt(multiplier);
@@ -302,7 +301,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           </div>
         )}
 
-        {gameState === 'playing' && (
+        {gameState === 'flying' && (
           <button onClick={cashOut} disabled={hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)} className={`w-full font-black text-xl py-4 rounded-xl transition-all flex items-center justify-center gap-2 ${hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft) ? 'bg-gray-700 text-gray-400' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}>
             {hasCashedOut
               ? 'Вы забрали'
