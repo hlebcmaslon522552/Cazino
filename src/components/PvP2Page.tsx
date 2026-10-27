@@ -201,19 +201,62 @@ useEffect(() => {
       setPlayers(data.players);
       setTotalPot(data.total_pot);
       if (data.players.length >= 2) {
-        const p1 = data.players[0];
-        const p2 = data.players[1];
-        const s1 = generateShape([], p1.bet);
-        s1.playerId = p1.user_id;
-        const s2 = generateShape([s1], p2.bet);
-        s2.playerId = p2.user_id;
-        setShapes([s1, s2]);
+        const totalBet = data.players.reduce((sum, p) => sum + p.bet, 0);
+        let currentX = 0;
+        const newShapes: Shape[] = data.players.map((p) => {
+          const pW = FIELD_W * (p.bet / totalBet);
+          const shape: Shape = {
+            x: currentX,
+            y: 0,
+            w: Math.max(pW, 1),
+            h: FIELD_H,
+            hue: randomRange(0, 360),
+            bet: p.bet,
+            playerId: p.user_id,
+            winner: false,
+          };
+          currentX += pW;
+          return shape;
+        });
+        setShapes(newShapes);
       }
       setPhase('playing');
     });
     socket.on('pvp_room_data', (data: { players: Player[]; total_pot: number }) => {
       setPlayers(data.players);
       setTotalPot(data.total_pot);
+    });
+    // Hockey-specific events — full replace, no merge
+    socket.on('hockey_players_update', (data: { players: Player[] }) => {
+      setPlayers(data.players);
+    });
+    socket.on('hockey_started', (data: { players: Player[]; shapes?: Shape[]; total_pot: number }) => {
+      setPlayers(data.players);
+      setTotalPot(data.total_pot);
+      if (data.shapes && data.shapes.length >= 2) {
+        setShapes(data.shapes);
+      } else if (data.players.length >= 2) {
+        // Fallback: split proportionally on client
+        const totalBet = data.players.reduce((sum, p) => sum + p.bet, 0);
+        let currentX = 0;
+        const newShapes: Shape[] = data.players.map((p) => {
+          const pW = FIELD_W * (p.bet / totalBet);
+          const shape: Shape = {
+            x: currentX,
+            y: 0,
+            w: Math.max(pW, 1),
+            h: FIELD_H,
+            hue: randomRange(0, 360),
+            bet: p.bet,
+            playerId: p.user_id,
+            winner: false,
+          };
+          currentX += pW;
+          return shape;
+        });
+        setShapes(newShapes);
+      }
+      setPhase('playing');
     });
     socket.on('disconnect', () => { console.log('[PvP2] Socket disconnected'); });
     socketRef.current = socket;
@@ -303,8 +346,8 @@ useEffect(() => {
         <rect x="0" y="0" width={FIELD_W} height={FIELD_H} fill="#1a1a2e" rx="8" ry="8" />
         <line x1={FIELD_W/2} y1="0" x2={FIELD_W/2} y2={FIELD_H} stroke="rgba(255,255,255,0.15)" strokeWidth="2" strokeDasharray="6,4" />
         <circle cx={FIELD_W/2} cy={FIELD_H/2} r={40} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" />
-        {shapes.map((shape, i) => (
-          <g key={i}>
+        {shapes.map((shape) => (
+          <g key={shape.playerId}>
             <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx="4" ry="4"
               fill={'hsl('+shape.hue+',70%,'+(shape.winner?'55%':'45%')+')'} fillOpacity="0.85"
               stroke={shape.winner?'#22c55e':'#000'} strokeWidth={shape.winner?3:1.5}
