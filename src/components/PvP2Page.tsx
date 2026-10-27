@@ -40,7 +40,10 @@ const randomRange = (min: number, max: number) => Math.random() * (max - min) + 
 
 const aabbOverlap = (a: Shape, b: Shape) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-const generateShape = (existingShapes: Shape[], bet: number): Shape => {
+const generateShape = (existingShapes: Shape[], bet: number, isSolo: boolean = false): Shape => {
+  if (isSolo) {
+    return { x: 0, y: 0, w: FIELD_W, h: FIELD_H, hue: randomRange(0, 360), bet, playerId: '', winner: false };
+  }
   let base = 40 + bet * 2;
   let w = Math.min(base, FIELD_W - 50);
   let h = Math.min(base, FIELD_H - 30);
@@ -236,11 +239,34 @@ useEffect(() => {
     const socket = socketRef.current;
     const uid = socket?.id || 'local_' + Date.now();
     userIdRef.current = uid;
-    const newPlayer: Player = { user_id: uid, username: 'You', bet, color: '#a855f7' };
-    setPlayers([newPlayer]);
-    const newShape = generateShape([], bet);
-    newShape.playerId = uid;
-    setShapes([newShape]);
+    const existing = playersRef.current;
+    if (existing.length === 0) {
+      // First player — solo: full arena
+      const newPlayer: Player = { user_id: uid, username: 'You', bet, color: '#a855f7' };
+      setPlayers([newPlayer]);
+      const newShape = generateShape([], bet, true);
+      newShape.playerId = uid;
+      setShapes([newShape]);
+    } else {
+      // Second player — split arena proportionally
+      const myBet = bet;
+      const totalBet = existing.reduce((sum, p) => sum + p.bet, 0) + myBet;
+      const newPlayers: Player[] = [...existing, { user_id: uid, username: 'You', bet: myBet, color: '#a855f7' }];
+      let currentX = 0;
+      const newShapes: Shape[] = newPlayers.map((p) => {
+        const pW = FIELD_W * (p.bet / totalBet);
+        const shape = generateShape([], p.bet, false);
+        shape.x = currentX;
+        shape.y = 0;
+        shape.w = Math.max(pW, 1);
+        shape.h = FIELD_H;
+        shape.playerId = p.user_id;
+        currentX += pW;
+        return shape;
+      });
+      setPlayers(newPlayers);
+      setShapes(newShapes);
+    }
     setPhase('waiting');
     waitCountRef.current = 15;
     setWaitSeconds(15);
