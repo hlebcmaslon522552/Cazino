@@ -22,6 +22,10 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # ── PvP Rooms ─────────────────────────────────────────────────────────
 PVP_ROOMS = {}
+PVP_ROOMS_LOCK = threading.Lock()
+# Таймаут ожидания соперника (сек). Держим чуть меньше клиентского таймера (15),
+# чтобы "висящая" комната не досталась следующему игроку как фантомный матч.
+PVP_WAIT_TIMEOUT = 12
 
 # ── База данных ──────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(__file__), "test.db")
@@ -1444,6 +1448,22 @@ def leaderboard_turnover():
             conn.close()
 
 
+def purge_expired_pvp_rooms():
+    """Удаляет комнаты, где соперник не появился за PVP_WAIT_TIMEOUT секунд.
+
+    Клиент сам возвращает ставку по своему таймеру (15 сек), а серверная
+    очистка страхует: в устаревшую комнату не должен попасть следующий игрок,
+    иначе получится матч с "фантомом".
+    """
+    now = time.time()
+    with PVP_ROOMS_LOCK:
+        for room_id, room in list(PVP_ROOMS.items()):
+            if room['status'] == 'waiting' and now - room.get('created_at', now) >= PVP_WAIT_TIMEOUT:
+                del PVP_ROOMS[room_id]
+                socketio.emit('pvp_error', {'error': 'Соперник не найден'}, room=room_id, include_self=True)
+                print(f"[PvP] Комната {room_id} удалена по таймауту ожидания")
+
+
 # ── PvP WebSocket Handlers ────────────────────────────────────────────
 @socketio.on('join_pvp')
 def handle_join_pvp(data):
@@ -1456,94 +1476,99 @@ def handle_join_pvp(data):
         emit('pvp_error', {'error': 'Invalid data'})
         return
 
+    # Сначала вычищаем просроченные комнаты ожидания, чтобы не попасть в них
+    purge_expired_pvp_rooms()
+
     # Ищем комнату со статусом 'waiting' и < 2 игроков
     joined_room = None
-    for room_id, room in list(PVP_ROOMS.items()):
-        if room['status'] == 'waiting' and len(room['players']) < 2:
-            # Проверяем, что такой же юзер не в комнате
-            if any(p['user_id'] == user_id for p in room['players']):
-                continue
-            joined_room = room_id
-            break
+    with PVP_ROOMS_LOCK:
+        for room_id, room in list(PVP_ROOMS.items()):
+            if room['status'] == 'waiting' and len(room['players']) < 2:
+                # Проверяем, что такой же юзер не в комнате
+                if any(p['user_id'] == user_id for p in room['players']):
+                    continue
+                joined_room = room_id
+                break
 
-    if joined_room:
-        room = PVP_ROOMS[joined_room]
-        player_num = len(room['players']) + 1
-        player = {
-            'user_id': user_id,
-            'username': username,
-            'bet': bet,
-            'color': '#f43f5e' if player_num == 1 else '#3b82f6',
-            'sid': request.sid,
-        }
-        room['players'].append(player)
-        room['status'] = 'playing'
+        if joined_room:
+            room = PVP_ROOMS[joined_room]
+            player_num = len(room['players']) + 1
+            player = {
+                'user_id': user_id,
+                'username': username,
+                'bet': bet,
+                'color': '#f43f5e' if player_num == 1 else '#3b82f6',
+                'sid': request.sid,
+            }
+            room['players'].append(player)
+            room['status'] = 'playing'
 
-        # Подключаем сокет к комнате
-        join_room(joined_room)
+            # Подключаем сокет к комнате
+            join_room(joined_room)
 
-        # Уведомляем ВСЕХ в комнате (обоих игроков)
-        emit('pvp_started', {
-            'room_id': joined_room,
-            'players': [{
-                'user_id': p['user_id'],
-                'username': p['username'],
-                'bet': p['bet'],
-                'color': p['color'],
-            } for p in room['players']],
-            'total_pot': sum(p['bet'] for p in room['players']),
-        }, room=joined_room)
+            # Уведомляем ВСЕХ в комнате (обоих игроков)
+            emit('pvp_started', {
+                'room_id': joined_room,
+                'players': [{
+                    'user_id': p['user_id'],
+                    'username': p['username'],
+                    'bet': p['bet'],
+                    'color': p['color'],
+                } for p in room['players']],
+                'total_pot': sum(p['bet'] for p in room['players']),
+            }, room=joined_room)
 
-        print(f"[PvP] Матч создан: комната {joined_room}, игроки: {[p['username'] for p in room['players']]}")
-    else:
-        # Создаём новую комнату
-        new_room_id = str(uuid.uuid4())
-        player = {
-            'user_id': user_id,
-            'username': username,
-            'bet': bet,
-            'color': '#f43f5e',
-            'sid': request.sid,
-        }
-        PVP_ROOMS[new_room_id] = {
-            'players': [player],
-            'status': 'waiting',
-        }
-        join_room(new_room_id)
-        emit('pvp_waiting', {
-            'room_id': new_room_id,
-            'message': 'Ожидание соперника...',
-        })
-        print(f"[PvP] Комната создана: {new_room_id}, игрок: {username}")
+            print(f"[PvP] Матч создан: комната {joined_room}, игроки: {[p['username'] for p in room['players']]}")
+        else:
+            # Создаём новую комнату
+            new_room_id = str(uuid.uuid4())
+            player = {
+                'user_id': user_id,
+                'username': username,
+                'bet': bet,
+                'color': '#f43f5e',
+                'sid': request.sid,
+            }
+            PVP_ROOMS[new_room_id] = {
+                'players': [player],
+                'status': 'waiting',
+                'created_at': time.time(),
+            }
+            join_room(new_room_id)
+            emit('pvp_waiting', {
+                'room_id': new_room_id,
+                'message': 'Ожидание соперника...',
+            })
+            print(f"[PvP] Комната создана: {new_room_id}, игрок: {username}")
 
 
 @socketio.on('spin_pvp')
 def handle_spin_pvp(data):
     """Принимает { room_id }. Генерирует случайного победителя."""
     room_id = data.get('room_id')
-    if not room_id or room_id not in PVP_ROOMS:
-        emit('pvp_error', {'error': 'Room not found'})
-        return
+    with PVP_ROOMS_LOCK:
+        if not room_id or room_id not in PVP_ROOMS:
+            emit('pvp_error', {'error': 'Room not found'})
+            return
 
-    room = PVP_ROOMS[room_id]
-    if len(room['players']) < 2:
-        emit('pvp_error', {'error': 'Not enough players'})
-        return
+        room = PVP_ROOMS[room_id]
+        if len(room['players']) < 2:
+            emit('pvp_error', {'error': 'Not enough players'})
+            return
 
-    # Случайный победитель
-    winner = random.choice(room['players'])
-    total_pot = sum(p['bet'] for p in room['players'])
+        # Случайный победитель
+        winner = random.choice(room['players'])
+        total_pot = sum(p['bet'] for p in room['players'])
 
-    emit('pvp_result', {
-        'winner_id': winner['user_id'],
-        'winner_name': winner['username'],
-        'total_pot': total_pot,
-    }, room=room_id)
+        emit('pvp_result', {
+            'winner_id': winner['user_id'],
+            'winner_name': winner['username'],
+            'total_pot': total_pot,
+        }, room=room_id)
 
-    print(f"[PvP] Результат: комната {room_id}, победил {winner['username']}, банк {total_pot}")
+        print(f"[PvP] Результат: комната {room_id}, победил {winner['username']}, банк {total_pot}")
 
-    # Удаляем комнату после завершения
-    if room_id in PVP_ROOMS:
+        # Удаляем комнату после завершения
         del PVP_ROOMS[room_id]
 
 
@@ -1582,18 +1607,19 @@ def handle_crash_bet(data):
 @socketio.on('disconnect')
 def handle_disconnect():
     """При отключении удаляем игрока из комнат."""
-    for room_id, room in list(PVP_ROOMS.items()):
-        before = len(room['players'])
-        room['players'] = [p for p in room['players'] if p['sid'] != request.sid]
-        after = len(room['players'])
-        if before != after:
-            print(f"[PvP] Игрок отключился из комнаты {room_id}")
-            if len(room['players']) == 0:
-                del PVP_ROOMS[room_id]
-                print(f"[PvP] Комната {room_id} удалена (пуста)")
-            else:
-                # Уведомляем оставшегося игрока
-                emit('pvp_error', {'error': 'Соперник отключился'}, room=room_id)
+    with PVP_ROOMS_LOCK:
+        for room_id, room in list(PVP_ROOMS.items()):
+            before = len(room['players'])
+            room['players'] = [p for p in room['players'] if p['sid'] != request.sid]
+            after = len(room['players'])
+            if before != after:
+                print(f"[PvP] Игрок отключился из комнаты {room_id}")
+                if len(room['players']) == 0:
+                    del PVP_ROOMS[room_id]
+                    print(f"[PvP] Комната {room_id} удалена (пуста)")
+                else:
+                    # Уведомляем оставшегося игрока
+                    emit('pvp_error', {'error': 'Соперник отключился'}, room=room_id)
 
     # Убираем отключившегося игрока из глобального пула Crash
     global CRASH_PLAYERS
@@ -1620,6 +1646,20 @@ def start_leaderboard_reset_worker():
 start_leaderboard_reset_worker()
 
 # ── Запуск фонового потока Crash ─────────────────────────────────────────
+def pvp_room_cleanup_loop():
+    """Фоновый поток: раз в 2 секунды чистит просроченные комнаты ожидания PvP."""
+    while True:
+        time.sleep(2)
+        try:
+            purge_expired_pvp_rooms()
+        except Exception as e:
+            print(f"[PvP] Ошибка очистки комнат: {e}")
+
+
+pvp_cleanup_thread = threading.Thread(target=pvp_room_cleanup_loop, daemon=True)
+pvp_cleanup_thread.start()
+print("[Server] Фоновый поток очистки PvP-комнат запущен.")
+
 crash_thread = threading.Thread(target=crash_game_loop, daemon=True)
 crash_thread.start()
 print("[Server] Фоновый поток Crash запущен.")
