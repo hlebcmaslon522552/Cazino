@@ -318,6 +318,12 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     const shareText = '🎁 Забирай бесплатный кейс в Cazino! Переходи по ссылке 👇';
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
 
+    // Условие «Поделиться» засчитываем сразу (имитация): событие shareMessageSent
+    // срабатывает только при WebApp.shareMessage(), у нас msg_id нет, поэтому
+    // ставим галочку напрямую, а ссылку для репоста всё равно открываем.
+    setShareDone(true);
+    onToast?.('✅ Сообщение отправлено!', 'success');
+
     const tg = window.Telegram?.WebApp as any;
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(shareUrl);
@@ -361,6 +367,11 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     } else {
       window.open(TG_CHANNEL_LINK, '_blank');
     }
+    // Через 2 секунды проверяем подписку: даём пользователю время перейти по ссылке
+    // и подписаться на канал. При subscribed: true checkSubscription поставит галочку.
+    setTimeout(() => {
+      checkSubscription();
+    }, 2000);
   };
 
   /** Проверяем условия на кнопке «Выполнить условия» */

@@ -53,6 +53,14 @@ CHECK_INTERVAL_SEC = int(os.environ.get("LEADERBOARD_CHECK_INTERVAL", 3600))
 TG_BOT_TOKEN = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
 TG_ADMIN_CHAT_ID = os.environ.get("TG_ADMIN_CHAT_ID", "")
 
+# Канал для проверки подписки (бонусный кейс) — бот должен быть в нём админом
+TG_SUBSCRIPTION_CHANNEL = os.environ.get("TG_SUBSCRIPTION_CHANNEL", "@Test_Erra")
+
+# Базовый URL Telegram Bot API. Прямой доступ к api.telegram.org из этого
+# окружения недоступен, поэтому идём через Cloudflare Worker-прокси
+# (как в send_telegram_notification и withdraw_nft).
+TG_API_BASE = os.environ.get("TG_API_BASE", "https://stars.gleb0256149.workers.dev")
+
 
 def init_db():
     # НЕ удаляем существующую БД — только создаём недостающие таблицы
@@ -479,12 +487,64 @@ def check_subscription():
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
-    user_id = str(data.get("user_id", ""))
-    # Проверка: если user_id передан, считаем что пользователь подписался
-    # (реальную проверку через Bot API можно добавить позже)
-    if user_id:
-        return jsonify({"subscribed": True})
-    return jsonify({"subscribed": False})
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
+    if not TG_BOT_TOKEN:
+        return jsonify({"error": "Bot token not configured"}), 500
+
+    # ── 1. Проверяем, что бот является админом канала ────────────────
+    try:
+        me_resp = requests.post(
+            f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/getMe",
+            timeout=15,
+        )
+        me_resp.raise_for_status()
+        bot_id = me_resp.json().get("result", {}).get("id")
+        if not bot_id:
+            return jsonify({"error": "Не удалось получить ID бота"}), 500
+    except Exception as e:
+        print(f"[check_subscription] getMe error: {e}")
+        return jsonify({"error": f"Telegram API error: {e}"}), 500
+
+    try:
+        bot_resp = requests.post(
+            f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/getChatMember",
+            json={"chat_id": TG_SUBSCRIPTION_CHANNEL, "user_id": bot_id},
+            timeout=15,
+        )
+        bot_resp.raise_for_status()
+        bot_data = bot_resp.json()
+    except Exception as e:
+        print(f"[check_subscription] getChatMember (bot) error: {e}")
+        return jsonify({"error": f"Telegram API error: {e}"}), 500
+
+    bot_status = bot_data.get("result", {}).get("status", "")
+    if bot_status not in ("administrator", "creator"):
+        print(f"[check_subscription] Bot is NOT admin, status={bot_status}")
+        return jsonify({"error": "Бот не админ канала"}), 500
+
+    # ── 2. Проверяем подписку пользователя ───────────────────────────
+    try:
+        user_resp = requests.post(
+            f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/getChatMember",
+            json={"chat_id": TG_SUBSCRIPTION_CHANNEL, "user_id": int(user_id)},
+            timeout=15,
+        )
+        user_data = user_resp.json()
+    except Exception as e:
+        print(f"[check_subscription] getChatMember (user) error: {e}")
+        return jsonify({"error": f"Telegram API error: {e}"}), 500
+
+    if not user_data.get("ok"):
+        # Пользователь не найден / не в канале — не подписан
+        return jsonify({"subscribed": False})
+
+    user_status = user_data.get("result", {}).get("status", "left")
+    subscribed = user_status in ("member", "administrator", "creator")
+    print(f"[check_subscription] user={user_id} status={user_status} subscribed={subscribed}")
+    return jsonify({"subscribed": subscribed})
 
 
 # API endpoints
