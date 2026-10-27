@@ -190,6 +190,8 @@ useEffect(() => {
             if (countdownRef.current) clearInterval(countdownRef.current);
             countdownRef.current = null;
             setWaitExpired(true);
+            setPlayers([]);
+            setShapes([]);
             if (pendingBetRef.current > 0) { onUpdateBalance(pendingBetRef.current); pendingBetRef.current = 0; }
             setPhase('setup');
           }
@@ -274,6 +276,8 @@ useEffect(() => {
   }, [phase]);
 
   const createGame = () => {
+    setPlayers([]);
+    setShapes([]);
     const bet = parseFloat(betInput);
     if (isNaN(bet) || bet <= 0) { onToast?.('Enter a valid bet amount', 'error'); return; }
     if (bet > balance) { onToast?.('Insufficient balance', 'error'); return; }
@@ -282,34 +286,12 @@ useEffect(() => {
     const socket = socketRef.current;
     const uid = socket?.id || 'local_' + Date.now();
     userIdRef.current = uid;
-    const existing = playersRef.current;
-    if (existing.length === 0) {
-      // First player — solo: full arena
-      const newPlayer: Player = { user_id: uid, username: 'You', bet, color: '#a855f7' };
-      setPlayers([newPlayer]);
-      const newShape = generateShape([], bet, true);
-      newShape.playerId = uid;
-      setShapes([newShape]);
-    } else {
-      // Second player — split arena proportionally
-      const myBet = bet;
-      const totalBet = existing.reduce((sum, p) => sum + p.bet, 0) + myBet;
-      const newPlayers: Player[] = [...existing, { user_id: uid, username: 'You', bet: myBet, color: '#a855f7' }];
-      let currentX = 0;
-      const newShapes: Shape[] = newPlayers.map((p) => {
-        const pW = FIELD_W * (p.bet / totalBet);
-        const shape = generateShape([], p.bet, false);
-        shape.x = currentX;
-        shape.y = 0;
-        shape.w = Math.max(pW, 1);
-        shape.h = FIELD_H;
-        shape.playerId = p.user_id;
-        currentX += pW;
-        return shape;
-      });
-      setPlayers(newPlayers);
-      setShapes(newShapes);
-    }
+    // Solo: one player, full arena shape
+    const newPlayer: Player = { user_id: uid, username: 'You', bet, color: '#a855f7' };
+    setPlayers([newPlayer]);
+    const newShape = generateShape([], bet, true);
+    newShape.playerId = uid;
+    setShapes([newShape]);
     setPhase('waiting');
     waitCountRef.current = 15;
     setWaitSeconds(15);
@@ -322,6 +304,8 @@ useEffect(() => {
         if (countdownRef.current) clearInterval(countdownRef.current);
         countdownRef.current = null;
         setWaitExpired(true);
+        setPlayers([]);
+        setShapes([]);
         if (pendingBetRef.current > 0) { onUpdateBalance(pendingBetRef.current); pendingBetRef.current = 0; }
         setPhase('setup');
       }
