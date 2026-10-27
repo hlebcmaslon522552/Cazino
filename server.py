@@ -43,6 +43,16 @@ CRASH_START_TIME = 0.0
 CRASH_PLAYERS = []            # ставки текущего раунда: [{ user_id, username, bet, sid }]
 CRASH_LOCK = threading.Lock()
 
+# ── Hockey Game State (глобальные раунды, как Crash) ────────────────────
+HOCKEY_STATE = "waiting"       # 'waiting' | 'playing'
+HOCKEY_TIMER = 15              # секунд до старта раунда
+HOCKEY_PLAYERS = []            # ставки текущего раунда: [{ user_id, username, bet, sid }]
+HOCKEY_LOCK = threading.Lock()
+HOCKEY_START_TIME = 0.0
+
+FIELD_W = 500
+FIELD_H = 300
+
 
 
 # ── Leaderboard / Prizes Config ─────────────────────────────────────
@@ -1678,6 +1688,35 @@ def handle_crash_bet(data):
     print(f"[Crash] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(CRASH_PLAYERS)}")
 
 
+# ── Hockey WebSocket Handlers ───────────────────────────────────────────
+@socketio.on('hockey_bet')
+def handle_hockey_bet(data):
+    """Принимает { user_id, username, bet }. Добавляет игрока в HOCKEY_PLAYERS."""
+    user_id = str(data.get('user_id', ''))
+    username = str(data.get('username', 'Игрок'))
+    bet = float(data.get('bet', 0))
+
+    if not user_id or bet <= 0:
+        emit('hockey_error', {'error': 'Invalid bet data'})
+        return
+
+    with HOCKEY_LOCK:
+        HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p['user_id'] != user_id]
+        HOCKEY_PLAYERS.append({
+            'user_id': user_id,
+            'username': username,
+            'bet': bet,
+            'sid': request.sid,
+        })
+        players_snapshot = [
+            {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
+            for p in HOCKEY_PLAYERS
+        ]
+
+    socketio.emit('hockey_players_update', {'players': players_snapshot})
+    print(f"[Hockey] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(HOCKEY_PLAYERS)}")
+
+
 @socketio.on('disconnect')
 def handle_disconnect():
     """При отключении удаляем игрока из комнат."""
@@ -1709,6 +1748,20 @@ def handle_disconnect():
             })
             print(f"[Crash] Игрок отключился. Осталось в пуле: {len(CRASH_PLAYERS)}")
 
+    # Убираем отключившегося игрока из глобального пула Hockey
+    global HOCKEY_PLAYERS
+    with HOCKEY_LOCK:
+        before = len(HOCKEY_PLAYERS)
+        HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p.get('sid') != request.sid]
+        if len(HOCKEY_PLAYERS) != before:
+            socketio.emit('hockey_players_update', {
+                'players': [
+                    {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
+                    for p in HOCKEY_PLAYERS
+                ]
+            })
+            print(f"[Hockey] Игрок отключился. Осталось в пуле: {len(HOCKEY_PLAYERS)}")
+
 # ── Запуск фоновой задачи сброса лидерборда ───────────────────────────
 def start_leaderboard_reset_worker():
     """Запускает фоновый поток для автоматического сброса лидерборда."""
@@ -1718,6 +1771,78 @@ def start_leaderboard_reset_worker():
 
 
 start_leaderboard_reset_worker()
+
+# ── Hockey Game Loop (фоновый поток, глобальные раунды) ─────────────────
+def hockey_game_loop():
+    """Фоновый поток: глобальные раунды Hockey PvP каждые ~20 секунд (15 waiting + 5 playing)."""
+    global HOCKEY_STATE, HOCKEY_TIMER, HOCKEY_PLAYERS, HOCKEY_START_TIME
+    print("[HockeyLoop] Поток запущен.")
+    while True:
+        try:
+            with HOCKEY_LOCK:
+                if HOCKEY_STATE == "waiting":
+                    HOCKEY_TIMER -= 1
+                    socketio.emit('hockey_timer', {'timer': max(HOCKEY_TIMER, 0)})
+
+                    if HOCKEY_TIMER <= 0:
+                        HOCKEY_TIMER = 15  # сброс для следующего раунда
+                        if len(HOCKEY_PLAYERS) >= 2:
+                            # ── Стартуем раунд ──
+                            HOCKEY_STATE = "playing"
+                            HOCKEY_START_TIME = time.time()
+
+                            total_bet = sum(p['bet'] for p in HOCKEY_PLAYERS)
+                            current_x = 0.0
+                            shapes = []
+                            for p in HOCKEY_PLAYERS:
+                                pW = max(FIELD_W * (p['bet'] / total_bet), 1)
+                                import random as rnd
+                                shapes.append({
+                                    'x': current_x,
+                                    'y': 0,
+                                    'w': pW,
+                                    'h': FIELD_H,
+                                    'hue': rnd.uniform(0, 360),
+                                    'bet': p['bet'],
+                                    'playerId': p['user_id'],
+                                    'winner': False,
+                                })
+                                current_x += pW
+
+                            socketio.emit('hockey_started', {
+                                'players': [{
+                                    'user_id': p['user_id'],
+                                    'username': p['username'],
+                                    'bet': p['bet'],
+                                    'color': '#f43f5e' if i == 0 else '#3b82f6',
+                                } for i, p in enumerate(HOCKEY_PLAYERS)],
+                                'shapes': shapes,
+                                'total_pot': total_bet,
+                            })
+                            print(f"[Hockey] Раунд стартовал! Игроков: {len(HOCKEY_PLAYERS)}, банк: {total_bet}")
+                        else:
+                            # Недостаточно игроков — отменяем раунд
+                            HOCKEY_PLAYERS = []
+                            print("[Hockey] Недостаточно игроков, раунд отменён")
+
+                elif HOCKEY_STATE == "playing":
+                    elapsed = time.time() - HOCKEY_START_TIME
+                    if elapsed >= 5.0:
+                        # ── Раунд завершён ──
+                        winner = random.choice(HOCKEY_PLAYERS)
+                        total_pot = sum(p['bet'] for p in HOCKEY_PLAYERS)
+                        socketio.emit('hockey_result', {
+                            'winner_id': winner['user_id'],
+                            'winner_name': winner['username'],
+                            'total_pot': total_pot,
+                        })
+                        HOCKEY_STATE = "waiting"
+                        HOCKEY_PLAYERS = []
+                        print(f"[Hockey] Раунд завершён. Победил {winner['username']}, банк {total_pot}")
+        except Exception as e:
+            print(f"[HockeyLoop] Ошибка: {e}")
+        time.sleep(1)
+
 
 # ── Запуск фонового потока Crash ─────────────────────────────────────────
 def pvp_room_cleanup_loop():
@@ -1737,6 +1862,10 @@ print("[Server] Фоновый поток очистки PvP-комнат зап
 crash_thread = threading.Thread(target=crash_game_loop, daemon=True)
 crash_thread.start()
 print("[Server] Фоновый поток Crash запущен.")
+
+hockey_thread = threading.Thread(target=hockey_game_loop, daemon=True)
+hockey_thread.start()
+print("[Server] Фоновый поток Hockey запущен.")
 
 
 

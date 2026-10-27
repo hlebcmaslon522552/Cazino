@@ -29,7 +29,7 @@ interface Shape {
   winner: boolean;
 }
 
-type Phase = 'setup' | 'waiting' | 'playing' | 'result';
+type Phase = 'setup' | 'playing' | 'result';
 
 const FIELD_W = 500;
 const FIELD_H = 300;
@@ -38,28 +38,6 @@ const PUCK_DURATION_MS = 3000;
 
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-const aabbOverlap = (a: Shape, b: Shape) =>
-  a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-const generateShape = (existingShapes: Shape[], bet: number, isSolo: boolean = false): Shape => {
-  if (isSolo) {
-    return { x: 0, y: 0, w: FIELD_W, h: FIELD_H, hue: randomRange(0, 360), bet, playerId: '', winner: false };
-  }
-  let base = 40 + bet * 2;
-  let w = Math.min(base, FIELD_W - 50);
-  let h = Math.min(base, FIELD_H - 30);
-  w = Math.max(w, 1);
-  h = Math.max(h, 1);
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const nx = randomRange(10, FIELD_W - w - 10);
-    const ny = randomRange(10, FIELD_H - h - 10);
-    if (!existingShapes.some((s) => aabbOverlap({ x: nx, y: ny, w, h, hue: 0, bet: 0, playerId: '', winner: false }, s))) {
-      return { x: nx, y: ny, w, h, hue: randomRange(0, 360), bet, playerId: '', winner: false };
-    }
-  }
-  w = Math.min(50, FIELD_W - 10);
-  h = Math.min(50, FIELD_H - 10);
-  return { x: randomRange(10, FIELD_W - w - 10), y: randomRange(10, FIELD_H - h - 10), w, h, hue: randomRange(0, 360), bet, playerId: '', winner: false };
-};
 export const PvP2Page = ({ balance, onUpdateBalance, onToast }: PvP2PageProps) => {
   const [betInput, setBetInput] = useState('1.0');
   const [phase, setPhase] = useState<Phase>('setup');
@@ -67,25 +45,19 @@ export const PvP2Page = ({ balance, onUpdateBalance, onToast }: PvP2PageProps) =
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [totalPot, setTotalPot] = useState(0);
   const [waitSeconds, setWaitSeconds] = useState(15);
-  const [waitExpired, setWaitExpired] = useState(false);
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [puckPos, setPuckPos] = useState({ x: FIELD_W / 2, y: FIELD_H / 2 });
 
   const socketRef = useRef<Socket | null>(null);
   const userIdRef = useRef<string>('');
-  const playersRef = useRef<Player[]>([]);
   const phaseRef = useRef<Phase>('setup');
-  const shapesRef = useRef<Shape[]>([]);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const waitCountRef = useRef(15);
-  const pendingBetRef = useRef(0);
   const animFrameRef = useRef<number>(0);
   const puckStartTimeRef = useRef<number>(0);
   const puckVxRef = useRef(0);
   const puckVyRef = useRef(0);
   const puckXRef = useRef(FIELD_W / 2);
   const puckYRef = useRef(FIELD_H / 2);
-  const winnerDeterminedRef = useRef(false);
+  const totalPotRef = useRef(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 const reset = () => {
@@ -94,32 +66,9 @@ const reset = () => {
     setWinnerId(null);
     setTotalPot(0);
     setWaitSeconds(15);
-    setWaitExpired(false);
     setShapes([]);
     setPuckPos({ x: FIELD_W / 2, y: FIELD_H / 2 });
-    winnerDeterminedRef.current = false;
-    waitCountRef.current = 15;
-    pendingBetRef.current = 0;
-    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
-  };
-
-  const determineWinner = (px: number, py: number, currentShapes: Shape[]): string | null => {
-    for (const shape of currentShapes) {
-      if (px >= shape.x && px <= shape.x + shape.w && py >= shape.y && py <= shape.y + shape.h) {
-        return shape.playerId;
-      }
-    }
-    let bestPlayerId: string | null = null;
-    let bestWeight = -1;
-    for (const shape of currentShapes) {
-      const shapeCx = shape.x + shape.w / 2;
-      const shapeCy = shape.y + shape.h / 2;
-      const dist = Math.sqrt((px - shapeCx) ** 2 + (py - shapeCy) ** 2);
-      const weight = shape.bet * (1 / (dist + 1));
-      if (weight > bestWeight) { bestWeight = weight; bestPlayerId = shape.playerId; }
-    }
-    return bestPlayerId;
   };
 
   const startPuckAnimation = () => {
@@ -128,7 +77,6 @@ const reset = () => {
     puckVxRef.current = randomRange(-3, 3);
     puckVyRef.current = randomRange(-3, 3);
     puckStartTimeRef.current = performance.now();
-    winnerDeterminedRef.current = false;
     const animate = (now: number) => {
       const elapsed = now - puckStartTimeRef.current;
       if (elapsed >= PUCK_DURATION_MS) {
@@ -137,22 +85,6 @@ const reset = () => {
         const finalX = puckXRef.current;
         const finalY = puckYRef.current;
         setPuckPos({ x: finalX, y: finalY });
-        if (!winnerDeterminedRef.current) {
-          winnerDeterminedRef.current = true;
-          const curShapes = shapesRef.current;
-          const wId = determineWinner(finalX, finalY, curShapes);
-          setWinnerId(wId);
-          if (wId) { setShapes((prev) => prev.map((s) => ({ ...s, winner: s.playerId === wId }))); }
-          if (wId && wId === userIdRef.current) {
-            onUpdateBalance(totalPot);
-            onToast?.('🏆 You won! +' + totalPot.toFixed(2) + ' TON', 'success');
-          } else if (wId) {
-            onToast?.('😔 Opponent won!', 'error');
-          } else {
-            onToast?.("🤝 It's a draw!", 'info');
-          }
-          setPhase('result');
-        }
         return;
       }
       let vx = puckVxRef.current;
@@ -172,98 +104,47 @@ const reset = () => {
     };
     animFrameRef.current = requestAnimationFrame(animate);
   };
-  useEffect(() => { shapesRef.current = shapes; }, [shapes]);
-  useEffect(() => { playersRef.current = players; }, [players]);
-useEffect(() => {
+  useEffect(() => {
     const socket = io(CONFIG.API_URL, { transports: ['websocket', 'polling'] });
-    socket.on('connect', () => { console.log('[PvP2] Socket connected'); });
-    socket.on('pvp_waiting', (_data: { room_id: string }) => {
-      setPhase('waiting');
-      waitCountRef.current = 15;
-      setWaitSeconds(15);
-      setWaitExpired(false);
-      if (!countdownRef.current) {
-        countdownRef.current = setInterval(() => {
-          waitCountRef.current -= 1;
-          setWaitSeconds(waitCountRef.current);
-          if (waitCountRef.current <= 0) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            countdownRef.current = null;
-            setWaitExpired(true);
-            setPlayers([]);
-            setShapes([]);
-            if (pendingBetRef.current > 0) { onUpdateBalance(pendingBetRef.current); pendingBetRef.current = 0; }
-            setPhase('setup');
-          }
-        }, 1000);
-      }
+    socket.on('connect', () => {
+      console.log('[PvP2] Socket connected');
+      userIdRef.current = socket.id || userIdRef.current;
     });
-    socket.on('pvp_started', (data: { room_id: string; players: Player[]; total_pot: number }) => {
-      if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
-      setPlayers(data.players);
-      setTotalPot(data.total_pot);
-      if (data.players.length >= 2) {
-        const totalBet = data.players.reduce((sum, p) => sum + p.bet, 0);
-        let currentX = 0;
-        const newShapes: Shape[] = data.players.map((p) => {
-          const pW = FIELD_W * (p.bet / totalBet);
-          const shape: Shape = {
-            x: currentX,
-            y: 0,
-            w: Math.max(pW, 1),
-            h: FIELD_H,
-            hue: randomRange(0, 360),
-            bet: p.bet,
-            playerId: p.user_id,
-            winner: false,
-          };
-          currentX += pW;
-          return shape;
-        });
-        setShapes(newShapes);
-      }
-      setPhase('playing');
+    socket.on('connect_error', (err: any) => {
+      console.error('[PvP2] Socket connection error:', err.message);
     });
-    socket.on('pvp_room_data', (data: { players: Player[]; total_pot: number }) => {
-      setPlayers(data.players);
-      setTotalPot(data.total_pot);
+    // ── Глобальный таймер раунда (как Crash) ──
+    socket.on('hockey_timer', (data: { timer: number }) => {
+      setWaitSeconds(data.timer);
     });
-    // Hockey-specific events — full replace, no merge
+    // ── Обновление списка игроков в пуле ──
     socket.on('hockey_players_update', (data: { players: Player[] }) => {
       setPlayers(data.players);
     });
-    socket.on('hockey_started', (data: { players: Player[]; shapes?: Shape[]; total_pot: number }) => {
+    // ── Старт раунда (сервер шлёт игроков и фигуры) ──
+    socket.on('hockey_started', (data: { players: Player[]; shapes: Shape[]; total_pot: number }) => {
       setPlayers(data.players);
+      setShapes(data.shapes);
       setTotalPot(data.total_pot);
-      if (data.shapes && data.shapes.length >= 2) {
-        setShapes(data.shapes);
-      } else if (data.players.length >= 2) {
-        // Fallback: split proportionally on client
-        const totalBet = data.players.reduce((sum, p) => sum + p.bet, 0);
-        let currentX = 0;
-        const newShapes: Shape[] = data.players.map((p) => {
-          const pW = FIELD_W * (p.bet / totalBet);
-          const shape: Shape = {
-            x: currentX,
-            y: 0,
-            w: Math.max(pW, 1),
-            h: FIELD_H,
-            hue: randomRange(0, 360),
-            bet: p.bet,
-            playerId: p.user_id,
-            winner: false,
-          };
-          currentX += pW;
-          return shape;
-        });
-        setShapes(newShapes);
-      }
+      totalPotRef.current = data.total_pot;
       setPhase('playing');
+    });
+    // ── Результат раунда (победитель от сервера) ──
+    socket.on('hockey_result', (data: { winner_id: string; winner_name: string; total_pot: number }) => {
+      setWinnerId(data.winner_id);
+      setTotalPot(data.total_pot);
+      setShapes((prev) => prev.map((s) => ({ ...s, winner: s.playerId === data.winner_id })));
+      if (data.winner_id === userIdRef.current) {
+        onUpdateBalance(data.total_pot);
+        onToast?.('🏆 You won! +' + data.total_pot.toFixed(2) + ' TON', 'success');
+      } else {
+        onToast?.('😔 ' + data.winner_name + ' wins!', 'error');
+      }
+      setPhase('result');
     });
     socket.on('disconnect', () => { console.log('[PvP2] Socket disconnected'); });
     socketRef.current = socket;
     return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       socket.disconnect();
     };
@@ -276,41 +157,16 @@ useEffect(() => {
   }, [phase]);
 
   const createGame = () => {
-    setPlayers([]);
-    setShapes([]);
     const bet = parseFloat(betInput);
     if (isNaN(bet) || bet <= 0) { onToast?.('Enter a valid bet amount', 'error'); return; }
     if (bet > balance) { onToast?.('Insufficient balance', 'error'); return; }
-    onUpdateBalance(-bet);
-    pendingBetRef.current = bet;
     const socket = socketRef.current;
     const uid = socket?.id || 'local_' + Date.now();
     userIdRef.current = uid;
-    // Solo: one player, full arena shape
-    const newPlayer: Player = { user_id: uid, username: 'You', bet, color: '#a855f7' };
-    setPlayers([newPlayer]);
-    const newShape = generateShape([], bet, true);
-    newShape.playerId = uid;
-    setShapes([newShape]);
-    setPhase('waiting');
-    waitCountRef.current = 15;
-    setWaitSeconds(15);
-    setWaitExpired(false);
-    if (countdownRef.current) { clearInterval(countdownRef.current); }
-    countdownRef.current = setInterval(() => {
-      waitCountRef.current -= 1;
-      setWaitSeconds(waitCountRef.current);
-      if (waitCountRef.current <= 0) {
-        if (countdownRef.current) clearInterval(countdownRef.current);
-        countdownRef.current = null;
-        setWaitExpired(true);
-        setPlayers([]);
-        setShapes([]);
-        if (pendingBetRef.current > 0) { onUpdateBalance(pendingBetRef.current); pendingBetRef.current = 0; }
-        setPhase('setup');
-      }
-    }, 1000);
-    if (socket) { socket.emit('pvp_create', { bet }); }
+    if (socket) {
+      socket.emit('hockey_bet', { user_id: uid, username: 'You', bet });
+    }
+    onToast?.('Bet placed! Waiting for the round...', 'info');
   };
 
   const renderArena = () => {
@@ -354,17 +210,12 @@ const bet = parseFloat(betInput)||0;
     <div style={{padding:spacing.md,color:colors.text,maxWidth:500,margin:'0 auto'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,marginBottom:spacing.md}}>
         <Swords size={24} color={colors.primary} />
-        <h2 style={{margin:0,fontSize:22,fontWeight:'bold'}}>🏒 Hockey PvP</h2>
+        <h2 style={{margin:0,fontSize:22,fontWeight:'bold'}}>🏒 Hockey Global</h2>
       </div>
       <div style={{aspectRatio:'5/3',maxWidth:400,margin:'0 auto',marginBottom:spacing.md,background:'#0f0f13',border:'2px solid #a855f7',borderRadius:12,overflow:'hidden'}}>
         {renderArena()}
       </div>
       <div style={{background:colors.bgCard,border:'1px solid '+colors.border,borderRadius:16,padding:spacing.md}}>
-        {phase==='waiting'&&<div style={{textAlign:'center'}}>
-          <div style={{fontSize:16,fontWeight:'bold',color:colors.primary,marginBottom:8}}>⏳ Ожидание игроков...</div>
-          {!waitExpired&&<div style={{fontSize:13,color:colors.textMuted}}>Ищем соперника... {waitSeconds}s</div>}
-          {waitExpired&&<div style={{marginTop:12,padding:10,textAlign:'center',background:'rgba(239,68,68,0.12)',border:'1px solid '+colors.danger,borderRadius:10,fontSize:13,color:colors.danger,fontWeight:'bold'}}>Соперник не найден, ваша ставка возвращена</div>}
-        </div>}
         {phase==='playing'&&<div style={{textAlign:'center'}}>
           <div style={{fontSize:16,fontWeight:'bold',color:colors.success,marginBottom:8}}>🏒 Игра идёт!</div>
           <div style={{fontSize:13,color:colors.textMuted}}>Шайба движется...</div>
@@ -374,15 +225,24 @@ const bet = parseFloat(betInput)||0;
         </div>}
         {phase==='result'&&<div style={{textAlign:'center'}}>
           <div style={{fontSize:18,fontWeight:'bold',color:winnerId===userIdRef.current?colors.success:colors.text,marginBottom:8}}>
-            {winnerId===userIdRef.current?'🎉 You win!':winnerId?'😔 Opponent wins!':"🤝 It's a draw!"}
+            {winnerId===userIdRef.current?'🎉 You win!':(players.find(p=>p.user_id===winnerId)?.username||'Opponent')+' wins!'}
           </div>
-          {winnerId&&<div style={{fontSize:14,color:colors.textMuted,marginBottom:12}}>
-            {players.find((p)=>p.user_id===winnerId)?.username} takes the pot!
-          </div>}
+          <div style={{fontSize:14,color:colors.textMuted,marginBottom:12}}>
+            {winnerId&&players.find((p)=>p.user_id===winnerId)?.username} takes the pot!
+          </div>
           <div style={{fontSize:22,fontWeight:'bold',color:colors.success}}>+{displayPot.toFixed(2)} TON</div>
         </div>}
         {phase==='setup'&&<>
-          {waitExpired&&<div style={{marginBottom:12,padding:10,textAlign:'center',background:'rgba(239,68,68,0.12)',border:'1px solid '+colors.danger,borderRadius:10,fontSize:13,color:colors.danger,fontWeight:'bold'}}>Соперник не найден, ваша ставка возвращена</div>}
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:12,fontSize:13}}>
+            <span style={{color:colors.textMuted}}>⏳ Round starts in</span>
+            <span style={{color:colors.primary,fontWeight:'bold',fontSize:16}}>{waitSeconds}s</span>
+          </div>
+          {players.length>0&&<div style={{marginBottom:12,padding:'8px 12px',background:'rgba(168,85,247,0.08)',borderRadius:10,fontSize:12}}>
+            <div style={{color:colors.primary,fontWeight:'bold',marginBottom:4}}>Players in pool ({players.length})</div>
+            {players.map((p,i)=><div key={i} style={{color:colors.textMuted,display:'flex',justifyContent:'space-between',padding:'2px 0'}}>
+              <span>{p.username}</span><span style={{color:colors.gold}}>{p.bet.toFixed(1)} TON</span>
+            </div>)}
+          </div>}
           <div style={{color:colors.textMuted,fontSize:13,marginBottom:8}}>Bet (TON)</div>
           <div style={{position:'relative',marginBottom:12}}>
             <Coins size={18} color={colors.gold} style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}} />
