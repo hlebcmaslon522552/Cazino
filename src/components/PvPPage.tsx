@@ -60,6 +60,11 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
   const phaseRef = useRef<Phase>('setup');
   const spinAngleRef = useRef(0);
   const spinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitCountRef = useRef(15);
+  const pendingBetRef = useRef(0);
+  const [waitSeconds, setWaitSeconds] = useState(15);
+  const [waitExpired, setWaitExpired] = useState(false);
 
   // Синхронизируем актуальные значения для обработчиков socket-событий,
   // которые создаются один раз (useEffect с пустыми зависимостями).
@@ -85,10 +90,16 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
       setRoomId(data.room_id);
       setIsCreator(true);
       setPhase('waiting');
-      onToast?.('Waiting for opponent...', 'info');
     });
 
     socket.on('pvp_started', (data: { room_id: string; players: Player[]; total_pot: number }) => {
+      // Соперник найден — останавливаем таймер ожидания, ставка в игре
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      pendingBetRef.current = 0;
+      setWaitExpired(false);
       setRoomId(data.room_id);
       playersRef.current = data.players;
       setPlayers(data.players);
@@ -137,6 +148,17 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
       }
     });
     socket.on('pvp_error', (data: { error: string }) => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      // Ошибка во время ожидания — возвращаем ставку
+      if (pendingBetRef.current > 0) {
+        onUpdateBalance(pendingBetRef.current);
+        pendingBetRef.current = 0;
+      }
+      setWaitExpired(false);
+      setWaitSeconds(15);
       onToast?.(data.error, 'error');
       setPhase('setup');
       setPlayers([]);
@@ -147,6 +169,17 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
 
     socket.on('disconnect', () => {
       if (phaseRef.current === 'waiting' || phaseRef.current === 'spinning') {
+        if (countdownRef.current) {
+          clearInterval(countdownRef.current);
+          countdownRef.current = null;
+        }
+        // Отключение во время ожидания — возвращаем ставку
+        if (pendingBetRef.current > 0) {
+          onUpdateBalance(pendingBetRef.current);
+          pendingBetRef.current = 0;
+        }
+        setWaitExpired(false);
+        setWaitSeconds(15);
         onToast?.('Lost connection to server', 'error');
         setPhase('setup');
         setPlayers([]);
@@ -168,6 +201,38 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
 
   const bet = parseFloat(betInput) || 0;
 
+  const stopCountdown = () => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  };
+
+  const startCountdown = () => {
+    stopCountdown();
+    waitCountRef.current = 15;
+    setWaitSeconds(15);
+    countdownRef.current = setInterval(() => {
+      waitCountRef.current -= 1;
+      setWaitSeconds(waitCountRef.current);
+      if (waitCountRef.current <= 0) {
+        stopCountdown();
+        // Соперник не найден за 15 секунд — возвращаем ставку
+        if (pendingBetRef.current > 0) {
+          onUpdateBalance(pendingBetRef.current);
+          pendingBetRef.current = 0;
+        }
+        setPlayers([]);
+        playersRef.current = [];
+        setRoomId(null);
+        setIsCreator(false);
+        setWaitExpired(true);
+        setPhase('setup');
+        onToast?.('Соперник не найден, ставка возвращена', 'info');
+      }
+    }, 1000);
+  };
+
   const createGame = () => {
     if (bet <= 0) {
       onToast?.('Enter a valid bet', 'error');
@@ -185,6 +250,23 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
     const username = tgUser?.username || tgUser?.first_name || 'Player';
     userIdRef.current = userId;
 
+    // В рулетке только реальный игрок (себя), ботов нет
+    const self: Player = {
+      user_id: userId,
+      username,
+      bet,
+      color: '#f43f5e',
+    };
+    setPlayers([self]);
+    playersRef.current = [self];
+    pendingBetRef.current = bet;
+
+    // Переходим в ожидание соперника и запускаем таймер на 15 секунд
+    setWaitExpired(false);
+    setWaitSeconds(15);
+    setPhase('waiting');
+    startCountdown();
+
     if (socketRef.current) {
       socketRef.current.emit('join_pvp', {
         user_id: userId,
@@ -195,6 +277,8 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
   };
 
   const reset = () => {
+    stopCountdown();
+    pendingBetRef.current = 0;
     setPlayers([]);
     playersRef.current = [];
     setRoomId(null);
@@ -202,6 +286,8 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
     applySpin(0);
     setTotalPot(0);
     setIsCreator(false);
+    setWaitExpired(false);
+    setWaitSeconds(15);
     setPhase('setup');
   };
 
@@ -328,7 +414,7 @@ return (
           </div>
         </div>
       )}
-{phase === 'waiting' && players.length === 0 && (
+{phase === 'waiting' && (
         <div
           style={{
             padding: 24,
@@ -341,7 +427,7 @@ return (
         >
           <div style={{ fontSize: 32, marginBottom: 12 }}>&#x1F550;</div>
           <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: colors.primary }}>
-            Waiting for opponent...
+            Ожидание соперника... ({waitSeconds} сек)
           </div>
           <div style={{ fontSize: 13, color: colors.textMuted }}>
             Your bet: {bet.toFixed(2)} TON
@@ -389,6 +475,23 @@ return (
             padding: spacing.md,
           }}
         >
+          {waitExpired && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: 10,
+                textAlign: 'center',
+                background: 'rgba(239,68,68,0.12)',
+                border: '1px solid ' + colors.danger,
+                borderRadius: 10,
+                fontSize: 13,
+                color: colors.danger,
+                fontWeight: 'bold',
+              }}
+            >
+              Соперник не найден, ваша ставка возвращена
+            </div>
+          )}
           <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 8 }}>Bet (TON)</div>
           <div style={{ position: 'relative', marginBottom: 12 }}>
             <Coins
