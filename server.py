@@ -1540,6 +1540,80 @@ def handle_join_pvp(data):
                 'message': 'Ожидание соперника...',
             })
             print(f"[PvP] Комната создана: {new_room_id}, игрок: {username}")
+@socketio.on('pvp_create')
+def handle_pvp_create(data):
+    """Принимает { bet }. Использует request.sid как user_id (как и клиент PvP2Page.tsx).
+    НЕ добавляет ботов — только реальные игроки.
+    """
+    bet = float(data.get('bet', 0))
+    user_id = request.sid
+    username = f'Player_{user_id[:8]}'
+
+    if bet <= 0:
+        emit('pvp_error', {'error': 'Invalid bet'})
+        return
+
+    purge_expired_pvp_rooms()
+
+    joined_room = None
+    with PVP_ROOMS_LOCK:
+        # Ищем комнату ожидания с 1 игроком
+        for room_id, room in list(PVP_ROOMS.items()):
+            if room['status'] == 'waiting' and len(room['players']) < 2:
+                if any(p['user_id'] == user_id for p in room['players']):
+                    continue
+                joined_room = room_id
+                break
+
+        if joined_room:
+            # Второй реальный игрок найден — начинаем матч
+            room = PVP_ROOMS[joined_room]
+            player_num = len(room['players']) + 1
+            player = {
+                'user_id': user_id,
+                'username': username,
+                'bet': bet,
+                'color': '#f43f5e' if player_num == 1 else '#3b82f6',
+                'sid': request.sid,
+            }
+            room['players'].append(player)
+            room['status'] = 'playing'
+
+            join_room(joined_room)
+
+            emit('pvp_started', {
+                'room_id': joined_room,
+                'players': [{
+                    'user_id': p['user_id'],
+                    'username': p['username'],
+                    'bet': p['bet'],
+                    'color': p['color'],
+                } for p in room['players']],
+                'total_pot': sum(p['bet'] for p in room['players']),
+            }, room=joined_room)
+
+            print(f"[PvP2] Матч создан: комната {joined_room}, игроки: {[p['username'] for p in room['players']]}")
+        else:
+            # Первый игрок — создаём комнату ожидания
+            new_room_id = str(uuid.uuid4())
+            player = {
+                'user_id': user_id,
+                'username': username,
+                'bet': bet,
+                'color': '#f43f5e',
+                'sid': request.sid,
+            }
+            PVP_ROOMS[new_room_id] = {
+                'players': [player],
+                'status': 'waiting',
+                'created_at': time.time(),
+            }
+            join_room(new_room_id)
+            emit('pvp_waiting', {
+                'room_id': new_room_id,
+                'message': 'Ожидание соперника...',
+            })
+            print(f"[PvP2] Комната создана: {new_room_id}, игрок: {username}")
 
 
 @socketio.on('spin_pvp')
