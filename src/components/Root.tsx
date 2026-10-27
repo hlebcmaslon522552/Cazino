@@ -12,6 +12,7 @@ import { MinesPage } from './MinesPage';
 import { PvPPage } from './PvPPage';
 import { PlinkoPage } from './PlinkoPage';
 import { CrashPage } from './CrashPage';
+import { PvP2Page } from './PvP2Page';
 import { ProfilePage } from './ProfilePage';
 import { InventoryPage } from './InventoryPage';
 import { GiftShop } from './GiftShop';
@@ -123,7 +124,7 @@ export function Root() {
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
           {gameScreen === 'cases' && <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} balance={balance} onUpdateBalance={handleUpdateBalance} />}
-          {gameScreen === 'pvp' && <PvPPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
+          {gameScreen === 'pvp' && <PvP2Page balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
           {gameScreen === 'plinko' && <PlinkoPage balance={balance} onUpdateBalance={handleUpdateBalance} onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
         </>
