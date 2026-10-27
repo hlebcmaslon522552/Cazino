@@ -616,24 +616,54 @@ def play_game():
     if game_type == "upgrade":
         start_price = float(data.get("start_price", 0))
         end_price = float(data.get("end_price", 0))
+        target_name = str(data.get("target_name", "")).strip()
+        target_image = str(data.get("target_image", "")).strip()
         if start_price <= 0 or end_price <= 0:
             return jsonify({"error": "start_price and end_price must be > 0"}), 400
+        if not target_name:
+            return jsonify({"error": "target_name is required"}), 400
 
-        # Шанс: (start_price / end_price) * 100, но не больше 75%
-        raw_chance = (start_price / end_price) * 100
-        chance = min(raw_chance, 75.0)
+        # Шанс успеха — нормирован к диапазону 0..1:
+        #   (start_price / end_price), потолок 0.75 (75%).
+        chance = min(start_price / end_price, 0.75)
 
-        # Генерация случайного числа от 0 до 100
-        roll = random.uniform(0, 100)
-        success = roll < chance
+        # Жёсткая проверка диапазона: 0 <= chance <= 1.
+        if not (0.0 <= chance <= 1.0):
+            return jsonify({"error": "chance is out of range"}), 400
 
-        # Предмет цели (передан с фронтенда)
+        # Единственный источник правды — сервер.
+        # success = random.random() < chance  (именно '<', никогда '>').
+        success = random.random() < chance
+
+        # Предмет цели. ⚠ Серверная валидация:
+        # NFT зачисляется в инвентарь ТОЛЬКО при success == True.
+        # Клиенту не доверяем — фронт больше НЕ вызывает /api/inventory/add
+        # для апгрейда (там нет проверки success), иначе при проигрыше
+        # игрок мог бы «выдать» себе предмет.
         item = None
         if success:
+            conn = None
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                c = conn.cursor()
+                item_id = str(uuid.uuid4())
+                c.execute(
+                    "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, item_id, target_name, target_image, end_price)
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"[play_game upgrade] db error: {e}")
+                return jsonify({"error": "Database error"}), 500
+            finally:
+                if conn:
+                    conn.close()
+
             item = {
-                "name": data.get("target_name", "Unknown"),
+                "id": c.lastrowid,   # id записи в инвентаре (ключ для фронта)
+                "name": target_name,
                 "floor": end_price,
-                "image": data.get("target_image", "")
+                "image": target_image
             }
 
         return jsonify({"success": success, "item": item, "user_id": user_id})
@@ -648,8 +678,42 @@ def play_game():
         return jsonify({"crash_point": crash_point, "user_id": user_id})
 
     elif game_type == "case":
-        item = pick_case_item(data.get("case_id", ""))
-        return jsonify({"success": True, "item": item, "user_id": user_id})
+        # ⚠ Сервер сам выбирает предмет, зачисляет в inventory и возвращает
+        # результат. Клиенту не доверяем — фронт НЕ вызывает /api/inventory/add.
+        # Это исключает рассинхрон и выдачу предмета без участия сервера.
+        case_id = str(data.get("case_id", "")).strip()
+        pool = CASE_POOLS.get(case_id, CASE_WOOD_POOL)
+        item = pick_case_item_from_pool(pool)
+        if not item:
+            return jsonify({"error": "No item selected"}), 500
+
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            item_id = str(uuid.uuid4())
+            c.execute(
+                "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+                (user_id, item_id, item["name"], item["image"], item["price"])
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"[play_game case] db error: {e}")
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            if conn:
+                conn.close()
+
+        return jsonify({
+            "success": True,
+            "item": {
+                "id": c.lastrowid,
+                "name": item["name"],
+                "image": item["image"],
+                "floor": item["price"],
+            },
+            "user_id": user_id
+        })
 
     else:
         return jsonify({"error": f"Unknown game_type: {game_type}"}), 400
@@ -859,6 +923,14 @@ def get_inventory():
 
 @app.route("/api/inventory/add", methods=["POST"])
 def inventory_add():
+    """⚠ Эндпоинт НЕ ЗАЩИЩЁН — принимает любой user_id и item без игрового
+       контекста. Может быть использован для накрутки. Рекомендация:
+       Удалить после того, как весь флоу выдачи переведён на серверную
+       авторитарную запись (play_game, open_case).
+
+       Сейчас не удаляем, т.к. может использоваться старыми клиентами,
+       но НИ ОДИН игровой эндпоинт (upgrade, case) больше не вызывает этот
+       роут — выдача происходит только на сервере при success == True."""
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400

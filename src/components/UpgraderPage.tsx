@@ -7,7 +7,7 @@ import { Modal } from './ui/Modal';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { getInitData, fetchInventory, addToInventory } from '../api';
+import { getInitData, fetchInventory } from '../api';
 
 /* ===================================================================
    NFT данные (из all_gifts.json)
@@ -380,33 +380,13 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     resetGame();
     setSpinning(true);
 
-    // Локально определяем результат (для визуала и времени анимации)
-    const isWin = Math.random() < chance / 100;
+    const userId = String(user?.id ?? '6267608438');
 
-    // Рассчитываем угол так, чтобы стрелка остановилась на нужном секторе
-    const winArc = (chance / 100) * 360;
-    const finalDeg = isWin
-      ? (360 - winArc) + Math.random() * winArc
-      : Math.random() * (360 - winArc);
-    const fullSpins = (5 + Math.floor(Math.random() * 5)) * 360;
-    setAngle(angle + fullSpins + finalDeg);
-
-    // Через 3 секунды останавливаем анимацию и показываем результат
-    setTimeout(() => {
-      setSpinning(false);
-      setResult(isWin ? 'win' : 'lose');
-      vibrate(isWin ? 'success' : 'error');
-      // Начальный NFT потрачен (сгорел / обменян) — сбрасываем выбор
-      setStartNft(null);
-      setTargetNft(null);
-      if (isWin) {
-        onToast('🎉 Апгрейд успешен!', 'success');
-      } else {
-        onToast('💀 Неудача! Начальный NFT сгорел.', 'error');
-      }
-    }, 3000);
-
-    // Серверная синхронизация инвентаря (не управляет анимацией)
+    // Единственный источник результата — СЕРВЕР (server-side random).
+    // Сначала ждём решение /api/play_game, затем крутим рулетку на сектор,
+    // соответствующий СЕРВЕРНОМУ success. Локальный Math.random() больше
+    // НЕ определяет победу — иначе у клиента и сервера два НЕЗАВИСИМЫХ
+    // исхода, и NFT может «прилететь» игроку при проигрыше (и наоборот).
     fetch(`${CONFIG.API_URL}/api/play_game`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -425,54 +405,62 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         if (!res.ok) throw new Error('Server error');
         return res.json();
       })
-      .then(async (data: { success: boolean; item?: Nft }) => {
+      .then((data: { success: boolean; item?: Nft }) => {
+        // Читаем СЕРВЕРНЫЙ success (не полагаемся только на наличие item)
         const serverWin = data.success === true;
-        const userId = String(user?.id ?? '6267608438');
+        const wonNft = data.item;
+        const removedNftId = startNft?.id; // копируем до setTimeout (startNft может измениться)
 
-        if (serverWin && data.item) {
-          // Успех — синхронизируем инвентарь на сервере
-          try {
-            // 1) Удаляем начальный NFT из инвентаря
-            await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: userId, inventory_id: startNft!.id }),
-            });
-            // 2) Добавляем выигранный (конечный) NFT в инвентарь
-            await addToInventory(data.item, userId);
-          } catch (e) {
-            console.error('Inventory sync error:', e);
+        // Анимация: угол остановки стрелки — по серверному результату
+        const winArc = (chance / 100) * 360;
+        const finalDeg = serverWin
+          ? (360 - winArc) + Math.random() * winArc
+          : Math.random() * (360 - winArc);
+        const fullSpins = (5 + Math.floor(Math.random() * 5)) * 360;
+        setAngle(angle + fullSpins + finalDeg);
+
+        // Через 3 секунды останавливаем анимацию, показываем результат
+        // и только потом удаляем NFT с сервера (не прерывая анимацию).
+        setTimeout(async () => {
+          // 1. Останавливаем спин, показываем результат (модалка/тост)
+          setSpinning(false);
+          setResult(serverWin ? 'win' : 'lose');
+          vibrate(serverWin ? 'success' : 'error');
+          setStartNft(null);
+          setTargetNft(null);
+          if (serverWin) {
+            onToast('🎉 Апгрейд успешен!', 'success');
+          } else {
+            onToast('💀 Неудача! Начальный NFT сгорел.', 'error');
           }
 
-          // Обновляем локальное состояние инвентаря
+          // 2. Удаляем начальный NFT с сервера (асинхронно, не ломает UI).
+          //    Выполняется ПОСЛЕ показа результата, чтобы анимация не оборвалась.
+          if (removedNftId) {
+            try {
+              await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, inventory_id: removedNftId }),
+              });
+            } catch (e) {
+              console.error('Inventory sync error:', e);
+            }
+          }
+
+          // 3. Локальное состояние инвентаря — по серверному ответу
           setInventoryNfts((prev) => {
-            let updated = prev.filter((n) => n.id !== startNft!.id);
-            if (!updated.find((n) => n.id === data.item!.id)) {
-              updated = [...updated, data.item as Nft];
+            let updated = prev.filter((n) => n.id !== removedNftId);
+            if (serverWin && wonNft && !updated.find((n) => n.id === wonNft.id)) {
+              updated = [...updated, wonNft as Nft];
             }
             return updated;
           });
-        } else if (!serverWin) {
-          // Неудача — удаляем начальный NFT из инвентаря на сервере
-          try {
-            await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: userId, inventory_id: startNft!.id }),
-            });
-          } catch (e) {
-            console.error('Inventory sync error:', e);
-          }
-
-          // Обновляем локальное состояние инвентаря — убираем startNft
-          setInventoryNfts((prev) => {
-            const updated = prev.filter((n) => n.id !== startNft!.id);
-            return updated;
-          });
-        }
+        }, 3000);
       })
       .catch((err) => {
         console.error('Upgrade error:', err);
+        setSpinning(false);
         onToast('Ошибка сервера при синхронизации, попробуйте позже', 'error');
       });
   };

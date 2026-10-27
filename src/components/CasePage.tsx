@@ -6,7 +6,6 @@ import { useTelegram } from '../hooks/useTelegram';
 import type { CaseItem } from './CaseShop';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { addToInventory } from '../api';
 
 /* ─── Константы условий бесплатного кейса ─── */
 const TG_CHANNEL = '@Test_Erra';
@@ -259,18 +258,14 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
 
       setSpinItems(items);
 
-      /* 3.1 Синхронизируем инвентарь теми же данными, что попали в центр рулетки.
-           Запрос идёт параллельно с анимацией, а результат ждём перед показом. */
-      const inventorySync = addToInventory(serverItem, userId).catch((err) => {
-        console.error('Ошибка синхронизации инвентаря:', err);
-        return false;
-      });
+      /* 3.1 Сервер уже сам записал предмет в inventory при вызове /api/open_case.
+           Клиент НЕ вызывает addToInventory — это предотвращает рассинхрон
+           и выдачу предмета при ошибках. Просто ждём анимацию. */
 
       /* 4. Запускаем анимацию рулетки */
       await runSpinAnimation(winIndex);
 
-      /* 4.1 Дожидаемся записи именно этого предмета (data.item) в инвентарь */
-      await inventorySync;
+      /* 4.1 (блок удалён — сервер пишет самостоятельно, await не требуется) */
 
       /* 5. Анимация завершена — показываем результат */
       setIsSpinning(false);
