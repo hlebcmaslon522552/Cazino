@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Coins, Clock, Users } from 'lucide-react';
+import { Clock, Users } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
@@ -101,7 +101,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       const finalPt = serverCrashPointRef.current;
       setMultiplier(finalPt);
       setGameState('crashed');
-      setHistory(prev => [finalPt, ...prev].slice(0, 15));
+      setHistory(prev => [finalPt, ...prev].slice(0, 30));
       // Новый раунд должен начинаться без «фантомной» ставки
       setHasBet(false);
       if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
@@ -165,7 +165,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         const finalPt = serverCrashPointRef.current;
         setMultiplier(finalPt);
         setGameState('crashed');
-        setHistory(prev => [finalPt, ...prev].slice(0, 15));
+        setHistory(prev => [finalPt, ...prev].slice(0, 30));
         setHasBet(false);
         if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
         crashedResetRef.current = setTimeout(() => {
@@ -269,9 +269,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       
       <div className="flex items-center justify-between mb-4">
         <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">История раундов</span>
-        <div className="flex gap-2 overflow-x-auto flex-nowrap justify-start scrollbar-thin" style={{ scrollbarWidth: 'thin', msOverflowStyle: 'auto' }}>
+        <div className="flex gap-2 overflow-x-auto whitespace-nowrap pb-2 scrollbar-hide w-full">
           {history.map((h, i) => (
-            <span key={i} className={`px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap shrink-0 ${h >= 2 ? 'bg-green-500 text-[#0f0f13] shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}>{h.toFixed(2)}x</span>
+            <span key={i} className={`px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap flex-shrink-0 ${h >= 2 ? 'bg-green-500 text-[#0f0f13] shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}>{h.toFixed(2)}x</span>
           ))}
         </div>
       </div>
@@ -293,7 +293,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
       <div className="mt-4 bg-[#1a1a2e] rounded-3xl p-4 border border-gray-800 shadow-xl">
         <div className="flex justify-between items-center mb-4">
-          <div className="flex flex-col"><span className="text-gray-400 text-sm">Баланс</span><span className="text-xl font-bold text-white flex items-center gap-1"><Coins size={18} className="text-yellow-500" /> {balance.toFixed(2)}</span></div>
+          <div className="flex flex-col"><span className="text-gray-400 text-sm">Баланс</span><span className="text-xl font-bold text-white flex items-center gap-1"><img src="/TON.png" alt="TON" style={{ width: 16, height: 16, objectFit: 'contain' }} /> {balance.toFixed(2)}</span></div>
           <div className="flex flex-col text-right"><span className="text-gray-400 text-sm">Потенциал</span><span className="text-xl font-bold text-green-400">{gameState === 'flying' ? ((betType === 'ton' ? finalBet : (selectedNft?.floor || 0)) * multiplier).toFixed(2) : '0.00'}</span></div>
         </div>
 
@@ -318,7 +318,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
             {betType === 'ton' ? (
               <div className="relative">
                 <input type="text" inputMode="decimal" value={betInput} onChange={(e) => { const val = e.target.value.replace(',', '.'); if (/^\d*\.?\d*$/.test(val)) setBetInput(val); }} className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-4 text-xl font-bold text-white focus:outline-none focus:border-purple-500 pl-12" />
-                <Coins className="absolute left-4 top-1/2 -translate-y-1/2 text-yellow-500" size={24} />
+                <img src="/TON.png" alt="TON" className="absolute left-4 top-1/2 -translate-y-1/2" style={{ width: 16, height: 16, objectFit: 'contain' }} />
               </div>
             ) : (
               <button
