@@ -340,18 +340,6 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     );
   }
 
-  if (inventoryNfts.length === 0) {
-    return (
-      <div style={{ padding: spacing.md, color: colors.text }}>
-        <Button variant="ghost" onClick={onBack} size="sm">← Назад</Button>
-        <h1 style={{ marginTop: spacing.md }}>⬆️ Апгрейдер</h1>
-        <p style={{ color: colors.textMuted, textAlign: 'center', marginTop: 40 }}>
-          Нет NFT для апгрейда
-        </p>
-      </div>
-    );
-  }
-
   const startPrice = startNft?.floor ?? 0;
   const targetPrice = targetNft?.floor ?? 0;
 
@@ -525,22 +513,28 @@ export function UpgraderPage({ onBack, onToast }: Props) {
       <Modal open={startModalOpen} onClose={() => setStartModalOpen(false)}>
         <div>
           <h3 style={{ marginTop: 0, color: colors.text, fontSize: 17, marginBottom: 12 }}>Выберите начальный NFT</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
-            {inventoryNfts.map((nft) => (
-              <NftGridCard
-                key={nft.id}
-                nft={nft}
-                selected={startNft?.id === nft.id}
-                onClick={() => {
-                  setStartNft(nft);
-                  setStartModalOpen(false);
-                  resetGame();
-                  setAngle(0);
-                  haptic('medium');
-                }}
-              />
-            ))}
-          </div>
+          {inventoryNfts.length === 0 ? (
+            <p style={{ color: colors.textMuted, textAlign: 'center', marginTop: 20 }}>
+              У вас нет NFT. Купите в Маркете
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
+              {inventoryNfts.map((nft) => (
+                <NftGridCard
+                  key={nft.id}
+                  nft={nft}
+                  selected={startNft?.id === nft.id}
+                  onClick={() => {
+                    setStartNft(nft);
+                    setStartModalOpen(false);
+                    resetGame();
+                    setAngle(0);
+                    haptic('medium');
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -553,24 +547,30 @@ export function UpgraderPage({ onBack, onToast }: Props) {
               Цель должна быть дороже или равна: <b style={{ color: colors.accent }}>{startNft.floor.toFixed(2)} TON</b>
             </div>
           )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
-            {allNfts
-              .filter((nft) => !startNft || nft.floor >= startNft.floor)
-              .map((nft) => (
-                <NftGridCard
-                  key={nft.id}
-                  nft={nft}
-                  selected={targetNft?.id === nft.id}
-                  onClick={() => {
-                    setTargetNft(nft);
-                    setTargetModalOpen(false);
-                    resetGame();
-                    setAngle(0);
-                    haptic('medium');
-                  }}
-                />
-              ))}
-          </div>
+          {allNfts.length === 0 ? (
+            <p style={{ color: colors.textMuted, textAlign: 'center', marginTop: 20 }}>
+              У вас нет NFT. Купите в Маркете
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
+              {allNfts
+                .filter((nft) => !startNft || nft.floor >= startNft.floor)
+                .map((nft) => (
+                  <NftGridCard
+                    key={nft.id}
+                    nft={nft}
+                    selected={targetNft?.id === nft.id}
+                    onClick={() => {
+                      setTargetNft(nft);
+                      setTargetModalOpen(false);
+                      resetGame();
+                      setAngle(0);
+                      haptic('medium');
+                    }}
+                  />
+                ))}
+            </div>
+          )}
         </div>
       </Modal>
 
