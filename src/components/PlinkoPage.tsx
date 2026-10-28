@@ -486,92 +486,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
         {n} слотов · {rows} рядов · Баланс: <b style={{ color: colors.gold }}>{balance.toFixed(2)} TON</b>
       </p>
 
-      {/* ── Настройки ─────────────────────────── */}
-      <div style={{ marginTop: spacing.md, display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
-
-        {/* Количество рядов */}
-        <Card padding="14px">
-          <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8, fontWeight: 'bold', letterSpacing: 1 }}>
-            РЯДЫ ({rows})
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {ROWS_OPTIONS.map((r) => (
-              <button
-                key={r}
-                disabled={isDropping}
-                onClick={() => { haptic('light'); handleRows(r); }}
-                style={{
-                  flex: '1 1 0',
-                  padding: '8px 0',
-                  borderRadius: radius.md,
-                  border: r === rows ? `1px solid ${colors.primary}` : `1px solid ${colors.border}`,
-                  background: r === rows ? colors.bgCardActive : colors.bgCard,
-                  color: r === rows ? colors.primary : colors.textMuted,
-                  fontWeight: 'bold',
-                  cursor: isDropping ? 'not-allowed' : 'pointer',
-                  opacity: isDropping ? 0.5 : 1,
-                }}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        {/* Количество шариков */}
-        <Card padding="14px">
-          <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8, fontWeight: 'bold', letterSpacing: 1 }}>
-            КОЛИЧЕСТВО ШАРИКОВ
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {BALLS_OPTIONS.map((count) => (
-              <div key={count} style={{ flex: 1, minWidth: 0 }}>
-                <Button
-                  fullWidth
-                  disabled={isDropping}
-                  variant={ballsCount === count ? 'primary' : 'secondary'}
-                  onClick={() => { haptic('light'); setBallsCount(count); }}
-                >
-                  {count === 1 ? '1 шарик' : `${count} шариков`}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Ставка */}
-        <Card padding="14px">
-          <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8, fontWeight: 'bold', letterSpacing: 1 }}>
-            СТАВКА ЗА ШАРИК (TON)
-          </div>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={betAmount}
-            disabled={isDropping}
-            onChange={handleBetChange}
-            placeholder={`мин ${MIN_BET.toFixed(2)}`}
-            style={{
-              width: '100%',
-              boxSizing: 'border-box',
-              padding: '12px 14px',
-              borderRadius: radius.md,
-              border: `1px solid ${colors.border}`,
-              background: '#0d0d14',
-              color: colors.text,
-              fontSize: 16,
-              fontWeight: 'bold',
-              outline: 'none',
-            }}
-          />
-          <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>
-            Итого за серию: {(stake * ballsCount).toFixed(2)} TON · Макс. выигрыш:{' '}
-            {(stake * Math.max(...slotsCfg.map((s) => s.mult))).toFixed(2)} TON
-          </div>
-        </Card>
-      </div>
-
-
       {/* ── Игровое поле ───────────────────────── */}
       <div
         ref={boardRef}
@@ -663,6 +577,91 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             })}
           </div>
         )}
+      </div>
+
+      {/* ── Настройки ─────────────────────────── */}
+      <div style={{ marginTop: spacing.md, display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
+
+        {/* Количество рядов */}
+        <Card padding="14px">
+          <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8, fontWeight: 'bold', letterSpacing: 1 }}>
+            РЯДЫ ({rows})
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {ROWS_OPTIONS.map((r) => (
+              <button
+                key={r}
+                disabled={isDropping}
+                onClick={() => { haptic('light'); handleRows(r); }}
+                style={{
+                  flex: '1 1 0',
+                  padding: '8px 0',
+                  borderRadius: radius.md,
+                  border: r === rows ? `1px solid ${colors.primary}` : `1px solid ${colors.border}`,
+                  background: r === rows ? colors.bgCardActive : colors.bgCard,
+                  color: r === rows ? colors.primary : colors.textMuted,
+                  fontWeight: 'bold',
+                  cursor: isDropping ? 'not-allowed' : 'pointer',
+                  opacity: isDropping ? 0.5 : 1,
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        {/* Количество шариков */}
+        <Card padding="14px">
+          <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8, fontWeight: 'bold', letterSpacing: 1 }}>
+            КОЛИЧЕСТВО ШАРИКОВ
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {BALLS_OPTIONS.map((count) => (
+              <div key={count} style={{ flex: 1, minWidth: 0 }}>
+                <Button
+                  fullWidth
+                  disabled={isDropping}
+                  variant={ballsCount === count ? 'primary' : 'secondary'}
+                  onClick={() => { haptic('light'); setBallsCount(count); }}
+                >
+                  {count}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Ставка */}
+        <Card padding="14px">
+          <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 8, fontWeight: 'bold', letterSpacing: 1 }}>
+            СТАВКА ЗА ШАРИК (TON)
+          </div>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={betAmount}
+            disabled={isDropping}
+            onChange={handleBetChange}
+            placeholder={`мин ${MIN_BET.toFixed(2)}`}
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '12px 14px',
+              borderRadius: radius.md,
+              border: `1px solid ${colors.border}`,
+              background: '#0d0d14',
+              color: colors.text,
+              fontSize: 16,
+              fontWeight: 'bold',
+              outline: 'none',
+            }}
+          />
+          <div style={{ fontSize: 11, color: colors.textMuted, marginTop: 6 }}>
+            Итого за серию: {(stake * ballsCount).toFixed(2)} TON · Макс. выигрыш:{' '}
+            {(stake * Math.max(...slotsCfg.map((s) => s.mult))).toFixed(2)} TON
+          </div>
+        </Card>
       </div>
 
       {/* ── Кнопка «Играть» ──────────────────── */}

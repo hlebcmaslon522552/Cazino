@@ -3,7 +3,7 @@ import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { useTelegram } from '../hooks/useTelegram';
-import { fetchUserData, fetchInventory } from '../api';
+import { fetchInventory } from '../api';
 import { publicUrl } from '../helpers/publicUrl';
 
 interface Props {
@@ -21,7 +21,6 @@ interface Nft {
 export function ProfilePage({ onNavigate, balance }: Props) {
   const { user, initData } = useTelegram();
 
-  const [balanceStars, setBalanceStars] = useState(0);
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,10 +32,9 @@ export function ProfilePage({ onNavigate, balance }: Props) {
   useEffect(() => {
     let cancelled = false;
     const userId = String(user?.id ?? '6267608438');
-    Promise.all([fetchUserData(initData), fetchInventory(initData, userId)])
-      .then(([userData, inventory]) => {
+    fetchInventory(initData, userId)
+      .then((inventory) => {
         if (cancelled) return;
-        setBalanceStars((userData as any).balance_stars ?? 0);
         setItems(inventory);
         setLoading(false);
       })
@@ -63,7 +61,7 @@ export function ProfilePage({ onNavigate, balance }: Props) {
           <div style={{ color: colors.textMuted, fontSize: 13 }}>{username}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <img src={publicUrl('TON.png')} alt="" style={{ width: 20, height: 20 }} />
+          <img src={publicUrl('TON.png')} alt="" style={{ width: 16, height: 16 }} />
           <span style={{ fontWeight: 'bold', fontSize: 15 }}>{Number(balance).toFixed(4)}</span>
         </div>
       </div>
@@ -89,14 +87,6 @@ export function ProfilePage({ onNavigate, balance }: Props) {
           </div>
         </div>
       </div>
-
-      {/* ── Баланс Stars ────────────────────────────── */}
-      <Card padding="14px 16px" glow="none" onClick={() => onNavigate('topup')}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 15 }}>⭐ Stars</span>
-          <span style={{ fontWeight: 'bold', fontSize: 16 }}>{balanceStars.toLocaleString()}</span>
-        </div>
-      </Card>
 
       {/* ── Блок Инвентаря ─────────────────────────── */}
       <div style={{ marginTop: spacing.lg, marginBottom: spacing.lg }}>

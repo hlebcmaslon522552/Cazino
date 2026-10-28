@@ -159,6 +159,18 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
     onToast(`💰 Вы забрали ${potentialWin.toFixed(2)} TON!`, 'success');
   };
 
+  /* ── Возврат в настройки с чистой сеткой ── */
+  const goToSetup = () => {
+    setOpenSafe([]);
+    setRevealedMines([]);
+    setHitMineIndex(null);
+    setShowBomb(false);
+    setFadeOut(false);
+    setIsGameOver(false);
+    setCurrentMultiplier(1.0);
+    setPhase('setup');
+  };
+
   const gridGap = difficulty.size >= 9 ? 3 : 4;
   return (
     <div style={{ padding: spacing.md, color: colors.text, maxWidth: 500, margin: '0 auto' }}>
@@ -173,8 +185,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
       </div>
 
       {/* ── Setup ───────────────────────────── */}
-      {phase === 'setup' && (
-        <div>
+      <div>
           <div style={{ marginBottom: spacing.md }}>
             <label style={{ fontSize: 13, color: colors.textMuted, display: 'block', marginBottom: 6 }}>
               Сумма ставки (TON)
@@ -191,13 +202,16 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
                 <button
                   key={d.id}
                   onClick={() => setDifficulty(d)}
+                  disabled={phase === 'playing'}
                   style={{
                     flex: 1, padding: '12px 8px', fontSize: 14, fontWeight: 'bold',
                     border: `1.5px solid ${difficulty.id === d.id ? colors.primary : colors.border}`,
                     borderRadius: radius.md,
                     background: difficulty.id === d.id ? colors.bgCardActive : colors.bgCard,
                     color: difficulty.id === d.id ? colors.primary : colors.textMuted,
-                    cursor: 'pointer', transition: 'all 0.15s',
+                    cursor: phase === 'playing' ? 'not-allowed' : 'pointer',
+                    opacity: phase === 'playing' ? 0.5 : 1,
+                    transition: 'all 0.15s',
                   }}
                 >
                   {d.label}
@@ -223,12 +237,9 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
             PLAY
           </button>
         </div>
-      )}
 
-{/* ── Game ────────────────────────────── */}
-      {(phase === 'playing' || phase === 'won' || phase === 'lost') && (
-        <div>
-          {/* Info bar */}
+      {/* ── Инфо-бар ─────────────────────────── */}
+      {phase !== 'setup' && (
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             marginBottom: spacing.md, padding: '10px 14px',
@@ -251,13 +262,14 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
               </div>
             </div>
           </div>
+      )}
 
-          {/* Grid */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${difficulty.size}, 1fr)`,
-            gap: gridGap, position: 'relative',
-          }}>
+      {/* ── Игровое поле (видно всегда) ──────── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${difficulty.size}, 1fr)`,
+        gap: gridGap, position: 'relative',
+      }}>
             {Array.from({ length: totalCells }, (_, i) => {
               const isSafe = openSafe.includes(i);
               const isHit = hitMineIndex === i;
@@ -301,10 +313,10 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
                 </div>
               </div>
             )}
-          </div>
+      </div>
 
-          {/* Cashout button */}
-          {phase === 'playing' && (
+      {/* Cashout button */}
+      {phase === 'playing' && (
             <div style={{ marginTop: spacing.lg }}>
               <button onClick={cashout} disabled={!canCashout} style={{
                 width: '100%', padding: '16px 24px', fontSize: 18, fontWeight: 'bold',
@@ -359,7 +371,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
               }}>
                 🔁 Заново
               </button>
-              <button onClick={() => setPhase('setup')} style={{
+              <button onClick={goToSetup} style={{
                 flex: 1, padding: '14px 18px', fontSize: 15, fontWeight: 'bold',
                 color: colors.primary, background: colors.bgCardActive,
                 border: `1px solid ${colors.primary}`, borderRadius: radius.md, cursor: 'pointer',
@@ -368,8 +380,6 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
               </button>
             </div>
           )}
-        </div>
-      )}
     </div>
   );
 }

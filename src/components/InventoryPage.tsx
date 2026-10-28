@@ -165,17 +165,26 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   // Если пусто
   if (items.length === 0) {
     return (
-      <div style={{ padding: spacing.md, color: colors.text, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginTop: 20 }}>
-        <div style={{ textAlign: 'center' }}>
-          <img
-            src={publicUrl('NO_Inventory.png')}
-            alt="Нет предметов"
-            style={{ width: '60%', maxWidth: 200, opacity: 0.7 }}
-          />
-          <p style={{ color: colors.textMuted, marginTop: 16 }}>
-            Нет NFT
-          </p>
-        </div>
+      <div
+        style={{
+          height: '100%',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textAlign: 'center',
+          color: colors.text,
+        }}
+      >
+        <img
+          src={publicUrl('NO_Inventory.png')}
+          alt="Нет предметов"
+          style={{ width: '60%', maxWidth: 200, opacity: 0.7 }}
+        />
+        <p style={{ color: colors.textMuted, marginTop: 16 }}>
+          Нет NFT
+        </p>
       </div>
     );
   }
