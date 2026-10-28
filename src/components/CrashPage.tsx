@@ -65,6 +65,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const startTimeRef = useRef<number>();
   const lastPointTimeRef = useRef<number>(0);
   const crashedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gameStateRef = useRef<ServerRoundState>('waiting');
   const animMultiplierRef = useRef<number>(1.0);
 
   const serverCrashPointRef = useRef<number>(MIN_CRASH_POINT);
@@ -82,6 +83,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   // поэтому актуальные значения стейта читаем через refs, обновляемые на рендере.
   const autoCashoutRef = useRef<number | null>(null);
   const hasCashedOutRef = useRef(false);
+  const hasBetRef = useRef(false);
   const cashOutRef = useRef<(manualMultiplier?: number) => void>(() => {});
 
   // ── WebSocket-синхронизация глобального раунда ───────────────────────
@@ -143,33 +145,34 @@ console.log('[DEBUG] STARTED DATA:', data);
 
     // ── Раунд завершился (RUG PULL) ──
     socket.on('crash_ended', () => {
-console.log('[DEBUG] ENDED. Server crash point:', serverCrashPointRef.current);
-      // Сервер подтвердил краш — немедленно останавливаем график: перевод
-      // gameState в 'crashed' размонтирует RAF-цикл (cancelAnimationFrame),
-      // поэтому RUG PULL показывается сразу, без ожидания локального тика.
-      const finalPt = normalizeCrashPoint(serverCrashPointRef.current);
+      // Защита от дублей: если уже крашнулись, игнорируем
+      if (gameStateRef.current === 'crashed') return; 
+      
+      const finalPt = serverCrashPointRef.current;
       setMultiplier(finalPt);
       setGameState('crashed');
+      gameStateRef.current = 'crashed';
+      
       setHistory(prev => [finalPt, ...prev].slice(0, 30));
-      // Новый раунд должен начинаться без «фантомной» ставки
       setHasBet(false);
-      // Раунд завершился — цель авто-сбора больше неактуальна
+      hasBetRef.current = false;
       setAutoCashout(null);
       autoCashoutRef.current = null;
+
       if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
       crashedResetRef.current = setTimeout(() => {
         setGameState('waiting');
+        gameStateRef.current = 'waiting';
         setMultiplier(1.00);
         setPoints([{ x: 0, y: 100 }]);
         setHasCashedOut(false);
+        hasCashedOutRef.current = false;
         setCashedOutAt(0);
         setHasBet(false);
-        setAutoCashout(null);
-        autoCashoutRef.current = null;
-        // После окончания раунда очищаем данные игроков
+        hasBetRef.current = false;
         setPlayers([]);
         frozenCashoutsRef.current = {};
-      }, 1500);
+      }, 3000);
     });
 
     // ── Обновление пула ставок ──
@@ -200,33 +203,24 @@ console.log('[DEBUG] ENDED. Server crash point:', serverCrashPointRef.current);
 
   // ── Анимация графика ──
   useEffect(() => {
+    gameStateRef.current = gameState;
     if (gameState !== 'flying') return;
 
     const animate = () => {
-      if (!startTimeRef.current) startTimeRef.current = Date.now();
       const now = Date.now();
-      // Множитель рассчитываем ТОЛЬКО от времени старта раунда (start_time
-      // пришёл с сервера) и серверного rate: multiplier = 1.0 + elapsed * rate.
-      // Никакой локальной генерации по кадрам / Math.pow — клиент лишь рисует
-      // кривую, заданную сервером, поэтому число и график всегда синхронны и
-      // достигают crash_point ровно к моменту краша.
-console.log('[DEBUG] now:', now, 'startTime:', startTimeRef.current, 'elapsed:', (now - (startTimeRef.current || now)) / 1000, 'rate:', crashRateRef.current);
-      const elapsed = (now - startTimeRef.current) / 1000;
-      const newMultiplier = 1.0 + elapsed * crashRateRef.current;
-      animMultiplierRef.current = newMultiplier;
+      if (!startTimeRef.current) startTimeRef.current = now;
 
-      // Точку графика добавляем каждые 50 мс: координата Y отражает реальный
-      // множитель (y=100 при 1.00x → y=12 при достижении crash_point), а не шум.
-      if (now - lastPointTimeRef.current >= 50) {
+      // Фиксированная скорость: 1x за 4.5 сек = 0.2222 в секунду
+      const elapsed = Math.max(0, (now - startTimeRef.current) / 1000);
+      const newMultiplier = 1.0 + elapsed * 0.2222;
+
+      if (now - lastPointTimeRef.current >= 120) {
         setPoints(prev => {
           const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
           const span = Math.max(serverCrashPointRef.current - 1, 0.05);
           const newY = Math.min(Math.max(100 - ((newMultiplier - 1) / span) * 88, 12), 100);
-          let newPoints = [...prev, { x: Math.min(prevX + 0.5, 100), y: newY }];
-          if (newPoints.length > 10) {
-            newPoints = newPoints.map(p => ({ ...p, x: Math.max(p.x - 0.25, 0) }));
-          }
-          return newPoints;
+          const newX = Math.min(prevX + 0.5, 100);
+          return [...prev, { x: newX, y: newY }];
         });
         lastPointTimeRef.current = now;
       }
@@ -457,24 +451,16 @@ console.log('[DEBUG] now:', now, 'startTime:', startTimeRef.current, 'elapsed:',
 
   const renderGraph = () => {
     if (!points || points.length === 0) return null;
-    const circles = points.map((p, i) => {
-      const isLast = i === points.length - 1 && isCrashed;
-      return (
-        <circle key={i} cx={p.x} cy={p.y} r={isLast ? 3 : 1.5} fill={isLast ? "#ff3366" : "#00ff88"} stroke={isLast ? "#000" : "#000"} strokeWidth={isLast ? 1 : 0.5} />
-      );
-    });
+    const pointsAttr = points.map(p => `${p.x},${p.y}`).join(' ');
     return (
-      <g>
-        <path 
-          d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
-          fill="none" 
-          stroke={isCrashed ? "#ff3366" : "#00ff88"} 
-          strokeWidth="2" 
-          strokeLinejoin="round" 
-          strokeLinecap="round"
-        />
-        {circles}
-      </g>
+      <polyline
+        points={pointsAttr}
+        fill="none"
+        stroke={isCrashed ? "#ff3366" : "#00ff88"}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
     );
   };
   return (
