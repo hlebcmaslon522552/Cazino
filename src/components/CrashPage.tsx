@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Clock, Users } from 'lucide-react';
+import { Clock, Users, Zap } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
@@ -39,6 +39,10 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [points, setPoints] = useState<{ x: number; y: number }[]>([{ x: 0, y: 100 }]);
   const [countdown, setCountdown] = useState<number>(15);
   const [hasBet, setHasBet] = useState<boolean>(false);
+  // ── Авто-сбор ──
+  const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
+  const [autoCashoutInput, setAutoCashoutInput] = useState<string>('');
+  const [autoCashout, setAutoCashout] = useState<number | null>(null);
   const [players, setPlayers] = useState<CrashPlayer[]>([]);
   const socketRef = useRef<Socket | null>(null);
   const requestRef = useRef<number>();
@@ -54,6 +58,11 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   // Пока игрок играет — в таблице показываем живой multiplier, после забора —
   // замороженное значение, чтобы оно не продолжало расти с каждым тиком.
   const frozenCashoutsRef = useRef<Record<string, number>>({});
+  // ── Рефы авто-сбора: RAF-цикл создаёт замыкание один раз на старте раунда, ──
+  // поэтому актуальные значения стейта читаем через refs, обновляемые на рендере.
+  const autoCashoutRef = useRef<number | null>(null);
+  const hasCashedOutRef = useRef(false);
+  const cashOutRef = useRef<(manualMultiplier?: number) => void>(() => {});
 
   // ── WebSocket-синхронизация глобального раунда ───────────────────────
   useEffect(() => {
@@ -114,6 +123,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setHistory(prev => [finalPt, ...prev].slice(0, 30));
       // Новый раунд должен начинаться без «фантомной» ставки
       setHasBet(false);
+      // Раунд завершился — цель авто-сбора больше неактуальна
+      setAutoCashout(null);
+      autoCashoutRef.current = null;
       if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
       crashedResetRef.current = setTimeout(() => {
         setGameState('waiting');
@@ -122,6 +134,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         setHasCashedOut(false);
         setCashedOutAt(0);
         setHasBet(false);
+        setAutoCashout(null);
+        autoCashoutRef.current = null;
         // После окончания раунда очищаем данные игроков
         setPlayers([]);
         frozenCashoutsRef.current = {};
@@ -191,6 +205,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         setGameState('crashed');
         setHistory(prev => [finalPt, ...prev].slice(0, 30));
         setHasBet(false);
+        // Раунд завершился — цель авто-сбора больше неактуальна
+        setAutoCashout(null);
+        autoCashoutRef.current = null;
         if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
         crashedResetRef.current = setTimeout(() => {
           setGameState('waiting');
@@ -199,6 +216,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           setHasCashedOut(false);
           setCashedOutAt(0);
           setHasBet(false);
+          setAutoCashout(null);
+          autoCashoutRef.current = null;
           // После окончания раунда очищаем данные игроков
           setPlayers([]);
           frozenCashoutsRef.current = {};
@@ -208,6 +227,18 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         // зависания при слишком больших значениях Math.pow
         const clamped = Math.min(newMultiplier, 100);
         setMultiplier(clamped);
+
+        // ── Авто-сбор ──
+        // Срабатывает строго один раз: после cashOut() hasCashedOutRef сразу
+        // становится true, поэтому в следующих тиках проверка не пройдёт,
+        // а после достижения цели (setAutoCashout(null)) останется выключенным.
+        if (
+          autoCashoutRef.current !== null &&
+          !hasCashedOutRef.current &&
+          clamped >= autoCashoutRef.current
+        ) {
+          cashOutRef.current(clamped);
+        }
         requestRef.current = requestAnimationFrame(animate);
       }
     };
@@ -234,6 +265,19 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       } catch {}
       onToast?.(`Ставка NFT: ${selectedNft.model || selectedNft.name}`, 'success');
     }
+
+    // ── Авто-сбор: запоминаем целевой коэффициент при ставке, ──
+    // если переключатель включён и в поле введено корректное значение (> 1.00)
+    if (autoCashoutEnabled) {
+      const target = parseFloat(autoCashoutInput);
+      if (isFinite(target) && target > 1) {
+        setAutoCashout(target);
+      } else {
+        setAutoCashout(null);
+        onToast?.('Укажите корректный коэффициент авто-сбора (> 1.00)', 'error');
+      }
+    }
+
     setHasBet(true);
 
     // Отправляем ставку на сервер — он рассылает crash_players_update всем
@@ -274,25 +318,33 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     }).catch(() => {});
   };
 
-  const cashOut = () => {
+  const cashOut = (manualMultiplier?: number) => {
     // Защита от «фантомной» ставки: забирать можно только после реальной ставки
     if (!hasBet) return;
     if (gameState === 'flying' && !hasCashedOut) {
-      const winAmount = betType === 'ton' ? finalBet * multiplier : (selectedNft?.floor || 0) * multiplier;
+      // Авто-сбор передаёт точный множитель из RAF-цикла (момент достижения цели),
+      // ручной забор берёт актуальный multiplier из текущего рендера
+      const m = manualMultiplier ?? multiplier;
+      const winAmount = betType === 'ton' ? finalBet * m : (selectedNft?.floor || 0) * m;
       const currentUserId = String(user?.id ?? 'unknown');
 
       // Фиксируем коэффициент текущего игрока ровно на моменте забора (cashedOutAt).
       // В таблице этот игрок будет показывать замороженное значение, а не живой
       // растущий multiplier (серверные обновления не затирают frozenCashoutsRef).
-      setCashedOutAt(multiplier);
-      frozenCashoutsRef.current = { ...frozenCashoutsRef.current, [currentUserId]: multiplier };
+      setCashedOutAt(m);
+      frozenCashoutsRef.current = { ...frozenCashoutsRef.current, [currentUserId]: m };
       setPlayers(prev =>
         prev.map(p =>
-          p.user_id === currentUserId ? { ...p, cashed_out: true, multiplier } : p
+          p.user_id === currentUserId ? { ...p, cashed_out: true, multiplier: m } : p
         )
       );
 
       setHasCashedOut(true);
+      // Синхронная защита от повторного срабатывания авто-сбора: даже если RAF
+      // или клик по кнопке произойдёт до ближайшего ре-рендера — забора не будет
+      hasCashedOutRef.current = true;
+      // Цель авто-сбора достигнута — снимаем её
+      setAutoCashout(null);
       onUpdateBalance(winAmount);
 
       // Записываем выигрыш в историю (для статистики max_win)
@@ -309,11 +361,30 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         }),
       }).catch(() => {});
 
-      onToast?.('Вы забрали ' + winAmount.toFixed(2) + (betType === 'ton' ? ' TON' : ' TON (NFT)') + ' по ' + multiplier.toFixed(2) + 'x', 'success');
+      onToast?.('Вы забрали ' + winAmount.toFixed(2) + (betType === 'ton' ? ' TON' : ' TON (NFT)') + ' по ' + m.toFixed(2) + 'x', 'success');
     }
   };
 
+  // Держим refs авто-сбора актуальными на каждом рендере: RAF-цикл (замыкание,
+  // созданное на старте раунда) читает именно эти refs, а не устаревший стейт.
+  autoCashoutRef.current = autoCashout;
+  hasCashedOutRef.current = hasCashedOut;
+  cashOutRef.current = cashOut;
+
+  const toggleAutoCashout = () => {
+    // Выключение тумблера снимает запомненную цель; при повторном включении
+    // цель установится заново в момент нажатия «Сделать ставку».
+    setAutoCashoutEnabled(v => !v);
+    setAutoCashout(null);
+  };
+
   const isCrashed = gameState === 'crashed';
+  // Примерная координата y цели авто-сбора на графике (0..100): 1.00x — верх,
+  // чем выше коэффициент, тем ниже линия. Нужна и для линии, и для плашки.
+  const autoCashoutY =
+    autoCashout !== null && gameState === 'flying' && !hasCashedOut
+      ? Math.min(Math.max(100 - (autoCashout - 1) * 55, 12), 98)
+      : null;
 
   const renderGraph = () => {
     if (!points || points.length === 0) return null;
@@ -347,10 +418,20 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
           {renderGraph()}
           {isCrashed && points.length > 0 && <line x1={points[points.length - 1].x} y1={points[points.length - 1].y} x2={points[points.length - 1].x} y2="100" stroke="#ff3366" strokeWidth="2" strokeDasharray="3,3" style={{ filter: 'drop-shadow(0 0 8px #ff3366)' }} />}
+          {autoCashoutY !== null && (
+            <line x1="0" y1={autoCashoutY} x2="100" y2={autoCashoutY} stroke="#00ff88" strokeWidth="1.5" strokeDasharray="6,4" style={{ filter: 'drop-shadow(0 0 8px rgba(34,197,94,0.6))' }} />
+          )}
         </svg>
         <div className="absolute top-4 left-4 pointer-events-none">
           <span className={`text-5xl font-black tracking-tighter ${isCrashed ? 'text-red-500' : 'text-white'}`} style={{ textShadow: isCrashed ? '0 0 20px rgba(255,51,102,0.8)' : '0 0 20px rgba(255,255,255,0.5)' }}>{multiplier.toFixed(2)}x</span>
           {hasCashedOut && <div className="mt-2 text-green-400 font-bold text-sm bg-green-900/50 px-3 py-1 rounded-full border border-green-500/50 inline-block">Забрано: {((betType === 'ton' ? finalBet : (selectedNft?.floor || 0)) * cashedOutAt).toFixed(2)} TON</div>}
+          {autoCashoutY !== null && autoCashout !== null && (
+            <div className="absolute right-3 pointer-events-none" style={{ bottom: `${100 - autoCashoutY}%` }}>
+              <span className="text-green-400 font-bold text-xs bg-green-900/60 px-2.5 py-1 rounded-full border border-green-500/60 shadow-[0_0_10px_rgba(34,197,94,0.5)] whitespace-nowrap">
+                Авто-сбор: {autoCashout.toFixed(2)}x
+              </span>
+            </div>
+          )}
         </div>
         {isCrashed && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-red-600/90 backdrop-blur-md px-8 py-4 rounded-2xl shadow-lg border border-red-400/50 transform -rotate-6 animate-pulse"><span className="text-3xl font-black text-white tracking-widest">RUG PULL</span></div></div>}
         {gameState === 'waiting' && <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><Clock size={48} className="text-gray-600 mb-2"/><span className="text-4xl font-black text-white">{countdown}</span><span className="text-gray-400 text-sm mt-1">до начала</span></div>}
@@ -412,6 +493,54 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
               </button>
             )}
 
+            {/* ── Авто-сбор ── */}
+            <div className={`mt-3 rounded-xl border p-3 transition-colors ${autoCashoutEnabled ? 'border-green-500/40 bg-green-900/10' : 'border-gray-700 bg-[#0f0f13]'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={toggleAutoCashout}
+                  className="flex items-center gap-2 text-gray-300 font-bold text-sm select-none shrink-0"
+                >
+                  <Zap size={14} className="text-green-400" />
+                  Авто-сбор
+                </button>
+                {autoCashout !== null && (
+                  <span className="text-green-400 text-[10px] font-black uppercase tracking-wider bg-green-900/60 px-2 py-0.5 rounded-full border border-green-500/50 whitespace-nowrap">
+                    активен · {autoCashout.toFixed(2)}x
+                  </span>
+                )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoCashoutEnabled}
+                  onClick={toggleAutoCashout}
+                  className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${autoCashoutEnabled ? 'bg-green-500' : 'bg-gray-600'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoCashoutEnabled ? 'translate-x-5' : ''}`} />
+                </button>
+              </div>
+
+              {autoCashoutEnabled && (
+                <div className="mt-3">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="1.50"
+                      value={autoCashoutInput}
+                      onChange={(e) => { const val = e.target.value.replace(',', '.'); if (/^\d*\.?\d*$/.test(val)) setAutoCashoutInput(val); }}
+                      className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-3 pr-10 text-lg font-bold text-white focus:outline-none focus:border-green-500"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-green-400 font-black text-sm pointer-events-none">x</span>
+                  </div>
+                  <p className="text-gray-500 text-xs mt-2 flex items-center justify-between">
+                    <span>Авто-сбор на</span>
+                    <span className="text-green-400 font-bold">{(parseFloat(autoCashoutInput.replace(',', '.')) || 0).toFixed(2)}x</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
             <button onClick={placeBet} disabled={hasBet} className={`w-full mt-2 py-3 rounded-xl shadow-lg active:scale-[0.98] transition-all font-black ${hasBet ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white'}`}>
               {betType === 'ton' ? 'Сделать ставку' : 'Ставка NFT'}
             </button>
@@ -420,7 +549,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
         {gameState === 'flying' && (
           <button
-            onClick={cashOut}
+            onClick={() => cashOut()}
             disabled={!hasBet || hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)}
             className={`w-full font-black text-xl py-4 rounded-xl transition-all flex items-center justify-center gap-2 ${!hasBet || hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft) ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}
           >
