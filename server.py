@@ -107,9 +107,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             balance_ton REAL DEFAULT 15.0,
-            balance_stars REAL DEFAULT 0.0
+            balance_stars REAL DEFAULT 0.0,
+            referrer_id TEXT DEFAULT NULL
         )
     """)
+    # Добавляем колонку referrer_id, если её нет (для уже существующих БД)
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN referrer_id TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass  # колонка уже существует
 
     # 2. Таблица инвентаря
     c.execute("""
@@ -550,6 +556,86 @@ def get_balance():
     return jsonify({"balance_ton": 15.0, "balance_stars": 0.0})
 
 
+# ── Referral: установить реферера ─────────────────────────────────────
+@app.route("/api/set_referrer", methods=["POST"])
+def set_referrer():
+    """Устанавливает referrer_id для нового пользователя, пришедшего по реферальной ссылке."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+    user_id = str(data.get("user_id", "unknown"))
+    referrer_id = str(data.get("referrer_id", ""))
+    if not user_id or user_id == "unknown" or not referrer_id:
+        return jsonify({"error": "user_id and referrer_id are required"}), 400
+    if user_id == referrer_id:
+        return jsonify({"error": "Нельзя указывать самого себя"}), 400
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        # Проверяем, что referrer_id существует в БД
+        c.execute("SELECT id FROM users WHERE id = ?", (referrer_id,))
+        if not c.fetchone():
+            return jsonify({"error": "Реферер не найден"}), 404
+
+        # Создаём пользователя, если его нет, и устанавливаем referrer_id
+        c.execute(
+            "INSERT INTO users (id, balance_ton, referrer_id) VALUES (?, 15.0, ?) "
+            "ON CONFLICT(id) DO UPDATE SET referrer_id = COALESCE(referrer_id, ?)",
+            (user_id, referrer_id, referrer_id)
+        )
+        conn.commit()
+
+        # Проверяем, что referrer_id реально установился
+        c.execute("SELECT referrer_id FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if not row or row[0] != referrer_id:
+            return jsonify({"error": "Реферер уже установлен"}), 400
+
+        return jsonify({"success": True, "message": f"Реферер {referrer_id} привязан к {user_id}"})
+    except Exception as e:
+        print(f"[set_referrer] error: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Referral: статистика ──────────────────────────────────────────────
+@app.route("/api/referral_stats", methods=["GET"])
+def referral_stats():
+    """Возвращает количество приглашённых и заработанную сумму для user_id."""
+    user_id = request.args.get("user_id", "")
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+
+        # Количество приглашённых
+        c.execute("SELECT COUNT(*) FROM users WHERE referrer_id = ?", (user_id,))
+        invited = c.fetchone()[0]
+
+        # Сумма 5% от депозитов приглашённых пользователей
+        # Ищем всех, кого пригласил этот пользователь
+        c.execute("""
+            SELECT COALESCE(SUM(d.amount * 0.05), 0.0)
+            FROM deposits d
+            JOIN users u ON u.id = d.user_id
+            WHERE u.referrer_id = ?
+        """, (user_id,))
+        earned = round(c.fetchone()[0], 4)
+
+        return jsonify({"invited": invited, "earned": earned})
+    except Exception as e:
+        print(f"[referral_stats] error: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
 @app.route("/api/update_balance", methods=["POST"])
 def update_balance():
     data = request.get_json(force=True, silent=True)
@@ -563,9 +649,39 @@ def update_balance():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+
+        # Получаем старый баланс для вычисления дельты
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        old_balance = row[0] if row else 15.0
+
         # Upsert: создаём строку если нет, обновляем баланс
         c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
                   (user_id, balance, balance))
+
+        # Если баланс увеличился — это пополнение/депозит
+        deposit_amount = balance - old_balance
+        if deposit_amount > 0:
+            # Записываем депозит в таблицу deposits
+            c.execute(
+                "INSERT INTO deposits (user_id, amount) VALUES (?, ?)",
+                (user_id, deposit_amount)
+            )
+            # Проверяем, есть ли у пользователя реферер
+            c.execute("SELECT referrer_id FROM users WHERE id = ?", (user_id,))
+            user_row = c.fetchone()
+            if user_row and user_row[0]:
+                referrer_id = user_row[0]
+                referral_bonus = round(deposit_amount * 0.05, 4)
+                if referral_bonus > 0:
+                    # Начисляем 5% рефереру
+                    c.execute(
+                        "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+                        (referral_bonus, referrer_id)
+                    )
+                    print(f"[referral] user {user_id} deposited {deposit_amount}, "
+                          f"referrer {referrer_id} earned {referral_bonus} TON (5%)")
+
         conn.commit()
         return jsonify({"success": True})
     except Exception as e:

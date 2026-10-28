@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { useTelegram } from '../hooks/useTelegram';
 import { colors, radius, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { publicUrl } from '../helpers/publicUrl';
+import { CONFIG } from '../config';
 
 interface Props {
   onBack: () => void;
@@ -12,6 +14,20 @@ export function ReferralPage({ onBack, onToast }: Props) {
   const { user, haptic } = useTelegram();
   const botUsername = 'GAMERR_777_BOT';
   const refLink = `https://t.me/${botUsername}?startapp=ref_${user?.id || '6267608438'}`;
+
+  const [invited, setInvited] = useState<number | null>(null);
+  const [earned, setEarned] = useState<number | null>(null);
+
+  useEffect(() => {
+    const userId = user?.id ?? '6267608438';
+    fetch(`${CONFIG.API_URL}/api/referral_stats?user_id=${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.invited !== undefined) setInvited(data.invited);
+        if (data.earned !== undefined) setEarned(data.earned);
+      })
+      .catch(err => console.error('[ReferralPage] fetch stats error:', err));
+  }, [user?.id]);
 
   const handleCopy = async () => {
     haptic('light');
@@ -152,8 +168,8 @@ export function ReferralPage({ onBack, onToast }: Props) {
           }}
         >
           {[
-            { value: '0', label: 'Приглашено' },
-            { value: '0 TON', label: 'Заработано', gold: true },
+            { value: invited !== null ? String(invited) : '...', label: 'Приглашено' },
+            { value: earned !== null ? `${earned.toFixed(2)} TON` : '... TON', label: 'Заработано', gold: true },
             { value: '5%', label: 'Бонус' },
           ].map((s) => (
             <div
