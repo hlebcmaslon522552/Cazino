@@ -100,6 +100,7 @@ function NftGridCard({
    =================================================================== */
 
 const MAX_CHANCE = 75;    // потолок шанса (%)
+const MAX_START_NFTS = 4; // макс. количество начальных NFT для мультиставки
 const STROKE = 16;        // толщина чёрной обводки (строго 16px)
 
 /* Геометрия круга (viewBox 0 0 300 300, центр 150,150) */
@@ -232,8 +233,9 @@ function Wheel({ chance, angle, spinning }: WheelProps) {
 
 function NftSlot({ label, nft, onClick, disabled }: { label: string; nft: Nft | null; onClick: () => void; disabled?: boolean }) {
   return (
-    <Card padding="14px" onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 118, justifyContent: 'center', textAlign: 'center' }}>
+    <div onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
+      <Card padding="14px">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 118, justifyContent: 'center', textAlign: 'center' }}>
         <div style={{ fontSize: 10, color: colors.textMuted, marginBottom: 6 }}>{label}</div>
         {nft ? (
           <>
@@ -252,8 +254,9 @@ function NftSlot({ label, nft, onClick, disabled }: { label: string; nft: Nft | 
             <div style={{ fontSize: 10, color: colors.textMuted, marginTop: 4 }}>выбрать</div>
           </>
         )}
-      </div>
-    </Card>
+        </div>
+      </Card>
+    </div>
   );
 }
 
@@ -275,7 +278,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const [allNfts, setAllNfts] = useState<Nft[]>([]);
   const [loadingNfts, setLoadingNfts] = useState(true);
 
-  const [startNft, setStartNft] = useState<Nft | null>(null);
+  const [startNfts, setStartNfts] = useState<Nft[]>([]);
   const [targetNft, setTargetNft] = useState<Nft | null>(null);
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
@@ -342,14 +345,14 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     );
   }
 
-  const startPrice = startNft?.floor ?? 0;
+  const startPrice = startNfts.reduce((sum, n) => sum + n.floor, 0);
   const targetPrice = targetNft?.floor ?? 0;
 
   // Шанс: (цена начального NFT / цена конечного NFT) * 100, потолок 75%.
   const rawChance = targetPrice > 0 ? (startPrice / targetPrice) * 100 : 0;
   const chance = Math.min(rawChance, MAX_CHANCE);
 
-  const startOkay = !!startNft && !!targetNft && targetPrice >= startPrice;
+  const startOkay = startNfts.length > 0 && !!targetNft && targetPrice >= startPrice;
   const canUpgrade = startOkay && !spinning;
 
   /* ── Сброс ─────────────────────────────────────── */
@@ -365,8 +368,33 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     setResult(null);
     setResultDisplayName('');
     setResultDisplayImage('');
-    setStartNft(null);
+    setStartNfts([]);
     setTargetNft(null);
+  };
+
+  /* ── Управление мультиставкой (до 4 NFT) ─────────── */
+
+  const addStartNft = (nft: Nft) => {
+    if (startNfts.length >= MAX_START_NFTS) {
+      onToast(`Можно выбрать не больше ${MAX_START_NFTS} NFT`, 'info');
+      return;
+    }
+    // Запрет дублей: один и тот же NFT нельзя добавить дважды
+    if (startNfts.some((s) => s.id === nft.id)) {
+      onToast('Этот NFT уже добавлен', 'info');
+      return;
+    }
+    setStartNfts((prev) => [...prev, nft]);
+    setStartModalOpen(false);
+    resetGame();
+    setAngle(0);
+    haptic('medium');
+  };
+
+  const removeStartNft = (id: number | string) => {
+    setStartNfts((prev) => prev.filter((n) => n.id !== id));
+    resetGame();
+    haptic('light');
   };
 
   /* ── Основная механика спина ───────────────────── */
@@ -379,6 +407,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     setSpinning(true);
 
     const userId = String(user?.id ?? '6267608438');
+    // Копируем ID всех startNfts до setTimeout (массив может измениться)
+    const removedNftIds = startNfts.map((n) => n.id);
 
     // Единственный источник результата — СЕРВЕР (server-side random).
     // Сначала ждём решение /api/play_game, затем крутим рулетку на сектор,
@@ -397,6 +427,10 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         target_image: targetNft?.image || '',
         user_id: user?.id || '6267608438',
         initData: getInitData(),
+        // Дополнительная информация для мультиставки (игнорируется сервером)
+        start_ids: removedNftIds,
+        start_names: startNfts.map((n) => n.name),
+        start_images: startNfts.map((n) => n.image),
       }),
     })
       .then((res) => {
@@ -407,7 +441,6 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         // Читаем СЕРВЕРНЫЙ success (не полагаемся только на наличие item)
         const serverWin = data.success === true;
         const wonNft = data.item;
-        const removedNftId = startNft?.id; // копируем до setTimeout (startNft может измениться)
 
         // Анимация: угол остановки стрелки — по серверному результату
         const winArc = (chance / 100) * 360;
@@ -426,7 +459,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
           // 2. Очищаем выбранные NFT ДО показа результата,
           //    чтобы после закрытия модалки слоты уже были пустыми
-          setStartNft(null);
+          setStartNfts([]);
           setTargetNft(null);
           setResultDisplayName(savedName);
           setResultDisplayImage(savedImage);
@@ -438,26 +471,26 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           if (serverWin) {
             onToast('🎉 Апгрейд успешен!', 'success');
           } else {
-            onToast('💀 Неудача! Начальный NFT сгорел.', 'error');
+            onToast('💀 Неудача! Начальные NFT сгорели.', 'error');
           }
 
-          // 2. Удаляем начальный NFT с сервера (асинхронно, не ломает UI).
+          // 4. Удаляем ВСЕ начальные NFT с сервера (асинхронно, не ломает UI).
           //    Выполняется ПОСЛЕ показа результата, чтобы анимация не оборвалась.
-          if (removedNftId) {
+          for (const nftId of removedNftIds) {
             try {
               await fetch(`${CONFIG.API_URL}/api/inventory/remove`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, inventory_id: removedNftId }),
+                body: JSON.stringify({ user_id: userId, inventory_id: nftId }),
               });
             } catch (e) {
               console.error('Inventory sync error:', e);
             }
           }
 
-          // 3. Локальное состояние инвентаря — по серверному ответу
+          // 5. Локальное состояние инвентаря — по серверному ответу
           setInventoryNfts((prev) => {
-            let updated = prev.filter((n) => n.id !== removedNftId);
+            let updated = prev.filter((n) => !removedNftIds.includes(n.id));
             if (serverWin && wonNft && !updated.find((n) => n.id === wonNft.id)) {
               updated = [...updated, wonNft as Nft];
             }
@@ -501,17 +534,121 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         <div style={{ fontSize: 13, color: colors.textMuted }}>
           Шанс получения: <b style={{ color: colors.accent }}>{chance.toFixed(1)}%</b>
         </div>
-        {targetNft && startNft && targetPrice < startPrice && (
+        {targetNft && startNfts.length > 0 && targetPrice < startPrice && (
           <div style={{ fontSize: 12, color: colors.danger, marginTop: 4 }}>
-            Конечный NFT не может быть дешевле начального
+            Конечный NFT не может быть дешевле суммы начальных
           </div>
         )}
       </div>
 
-      {/* Выбор NFT (два блока с «+») */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: spacing.md }}>
-        <NftSlot label="Начальный NFT" nft={startNft} disabled={spinning} onClick={() => { if (!spinning) { haptic('light'); setStartModalOpen(true); } }} />
-        <NftSlot label="Конечный NFT" nft={targetNft} disabled={spinning} onClick={() => { if (!spinning) { haptic('light'); setTargetModalOpen(true); } }} />
+      {/* Выбор NFT: мультиставка (до 4 начальных) + конечный */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 10, color: colors.textMuted }}>
+          Начальный NFT{startNfts.length > 0 ? ` (${startNfts.length}/${MAX_START_NFTS})` : ''}
+        </div>
+        {startNfts.length > 0 && (
+          <div style={{ fontSize: 11, color: colors.accent, fontWeight: 'bold' }}>
+            Сумма ставки: {startPrice.toFixed(2)} TON
+          </div>
+        )}
+      </div>
+
+      {startNfts.length === 0 ? (
+        <NftSlot
+          label="Начальный NFT"
+          nft={null}
+          disabled={spinning}
+          onClick={() => { if (!spinning) { haptic('light'); setStartModalOpen(true); } }}
+        />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(startNfts.length + 1, MAX_START_NFTS)}, 1fr)`, gap: 8, marginBottom: spacing.md }}>
+          {startNfts.map((nft) => (
+            <div
+              key={nft.id}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                background: '#1c1c1e',
+                borderRadius: 12,
+                border: '1.5px solid rgba(255,255,255,0.1)',
+                padding: 8,
+                minHeight: 118,
+                justifyContent: 'center',
+                textAlign: 'center',
+              }}
+            >
+              <button
+                type="button"
+                disabled={spinning}
+                onClick={() => removeStartNft(nft.id)}
+                aria-label="Удалить NFT"
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  width: 22,
+                  height: 22,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.15)',
+                  color: '#ffffff',
+                  fontSize: 12,
+                  lineHeight: 1,
+                  cursor: spinning ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                  opacity: spinning ? 0.5 : 1,
+                }}
+              >
+                ✕
+              </button>
+              <img
+                src={publicUrl(nft.image.replace(/^\//, ''))}
+                alt={nft.name}
+                style={{ width: 46, height: 46, objectFit: 'contain', borderRadius: 8 }}
+                onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
+              />
+              <div style={{ fontSize: 10, fontWeight: 'bold', color: colors.text, marginTop: 4, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nft.name}</div>
+              <div style={{ fontSize: 10, color: colors.accent, marginTop: 2 }}>{nft.floor.toFixed(2)} TON</div>
+            </div>
+          ))}
+          {startNfts.length < MAX_START_NFTS && (
+            <div
+              onClick={spinning ? undefined : () => { haptic('light'); setStartModalOpen(true); }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 118,
+                border: '1.5px dashed rgba(255,255,255,0.2)',
+                borderRadius: 12,
+                color: colors.textMuted,
+                cursor: spinning ? 'not-allowed' : 'pointer',
+                opacity: spinning ? 0.5 : 1,
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: 36, fontWeight: 300, lineHeight: 1 }}>+</div>
+              <div style={{ fontSize: 10, marginTop: 4 }}>Добавить</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Конечный NFT */}
+      <div style={{ marginBottom: spacing.md }}>
+        <div style={{ fontSize: 10, color: colors.textMuted, marginBottom: 8 }}>Конечный NFT</div>
+        <NftSlot
+          label="Конечный NFT"
+          nft={targetNft}
+          disabled={spinning}
+          onClick={() => { if (!spinning) { haptic('light'); setTargetModalOpen(true); } }}
+        />
       </div>
 
       {/* Кнопка запуска */}
@@ -528,42 +665,46 @@ export function UpgraderPage({ onBack, onToast }: Props) {
       </div>
 </div>
 
-      {/* ── Модалка: выбор начального NFT ─────────────── */}
+      {/* ── Модалка: выбор начального NFT (мультиставка до 4) ── */}
       <Modal open={startModalOpen} onClose={() => setStartModalOpen(false)}>
         <div>
-          <h3 style={{ marginTop: 0, color: colors.text, fontSize: 17, marginBottom: 12 }}>Выберите начальный NFT</h3>
+          <h3 style={{ marginTop: 0, color: colors.text, fontSize: 17, marginBottom: 8 }}>Выберите начальный NFT</h3>
+          {startNfts.length > 0 && (
+            <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 10 }}>
+              Выбрано: <b style={{ color: colors.accent }}>{startNfts.length}/{MAX_START_NFTS}</b>
+            </div>
+          )}
           {inventoryNfts.length === 0 ? (
             <p style={{ color: colors.textMuted, textAlign: 'center', marginTop: 20 }}>
               У вас нет NFT. Купите в Маркете
             </p>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
-              {inventoryNfts.map((nft) => (
-                <NftGridCard
-                  key={nft.id}
-                  nft={nft}
-                  selected={startNft?.id === nft.id}
-                  onClick={() => {
-                    setStartNft(nft);
-                    setStartModalOpen(false);
-                    resetGame();
-                    setAngle(0);
-                    haptic('medium');
-                  }}
-                />
-              ))}
+              {inventoryNfts.map((nft) => {
+                const alreadyAdded = startNfts.some((s) => s.id === nft.id);
+                const limitReached = startNfts.length >= MAX_START_NFTS;
+                return (
+                  <NftGridCard
+                    key={nft.id}
+                    nft={nft}
+                    selected={alreadyAdded}
+                    disabled={alreadyAdded || (limitReached && !alreadyAdded)}
+                    onClick={() => addStartNft(nft)}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
       </Modal>
 
-      {/* ── Модалка: выбор конечного NFT (из всего пула, не дешевле начального) ── */}
+      {/* ── Модалка: выбор конечного NFT (из всего пула, не дешевле суммы начальных) ── */}
       <Modal open={targetModalOpen} onClose={() => setTargetModalOpen(false)}>
         <div>
           <h3 style={{ marginTop: 0, color: colors.text, fontSize: 17, marginBottom: 12 }}>Выберите конечный NFT</h3>
-          {startNft && (
+          {startNfts.length > 0 && (
             <div style={{ fontSize: 11, color: colors.textMuted, marginBottom: 10 }}>
-              Цель должна быть дороже или равна: <b style={{ color: colors.accent }}>{startNft.floor.toFixed(2)} TON</b>
+              Цель должна быть дороже или равна: <b style={{ color: colors.accent }}>{startPrice.toFixed(2)} TON</b>
             </div>
           )}
           {allNfts.length === 0 ? (
@@ -573,7 +714,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
               {allNfts
-                .filter((nft) => !startNft || nft.floor >= startNft.floor)
+                .filter((nft) => nft.floor >= startPrice && !startNfts.some((s) => s.id === nft.id))
                 .map((nft) => (
                   <NftGridCard
                     key={nft.id}
