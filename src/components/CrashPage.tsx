@@ -6,6 +6,22 @@ import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 import { fetchInventory, loadInventoryFromLocal } from '../api';
 
+// ── Минимальный коэффициент краша ───────────────────────────────────────
+// Сервер может прислать crash_point = 1.00 / 1.01 (или вообще не прислать
+// crash_point), из-за чего игра «крашится» через мгновение после старта и
+// график не успевает отрисоваться. Поднимаем минимум до 1.05, чтобы у линии
+// всегда было время от старта (1.00x) до краш-точки.
+const MIN_CRASH_POINT = 1.05;
+
+// Приводит crash_point из сервера к корректному значению: если точка не
+// пришла или меньше допустимого минимума — используем fallback (1.05 по
+// умолчанию), иначе — исходное значение.
+function normalizeCrashPoint(value: number | undefined | null, fallback: number = MIN_CRASH_POINT): number {
+  const num = Number(value);
+  if (!isFinite(num) || num < MIN_CRASH_POINT) return fallback;
+  return num;
+}
+
 interface CrashPageProps {
   balance: number;
   onUpdateBalance: (newBalance: number) => void;
@@ -32,7 +48,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [nftList, setNftList] = useState<any[]>([]);
   const [multiplier, setMultiplier] = useState<number>(1.00);
   const [gameState, setGameState] = useState<ServerRoundState>('waiting');
-  const [crashPoint, setCrashPoint] = useState<number>(1.01);
+  const [crashPoint, setCrashPoint] = useState<number>(MIN_CRASH_POINT);
   const [hasCashedOut, setHasCashedOut] = useState<boolean>(false);
   const [cashedOutAt, setCashedOutAt] = useState<number>(0);
   const [history, setHistory] = useState<number[]>([1.2, 5.4, 1.0, 14.2, 2.1, 1.8]);
@@ -51,7 +67,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const crashedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const animMultiplierRef = useRef<number>(1.0);
 
-  const serverCrashPointRef = useRef<number>(1.01);
+  const serverCrashPointRef = useRef<number>(MIN_CRASH_POINT);
 
   // ── Зафиксированные коэффициенты игроков, забравших выигрыш ─────────────
   // Сервер присылает в crash_players_update только {user_id, username, bet},
@@ -83,8 +99,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           if (data.state === 'waiting') {
             setCountdown(data.timer || 15);
           } else if (data.state === 'flying') {
-            serverCrashPointRef.current = data.crash_point || 1.01;
-            setCrashPoint(data.crash_point || 1.01);
+            serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
+            setCrashPoint(normalizeCrashPoint(data.crash_point));
             startTimeRef.current = (data.start_time || 0) * 1000;
             lastPointTimeRef.current = Date.now();
             animMultiplierRef.current = 1.0;
@@ -104,8 +120,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     // ── Раунд стартовал ──
     socket.on('crash_started', (data: { crash_point: number; start_time: number }) => {
-      serverCrashPointRef.current = data.crash_point;
-      setCrashPoint(data.crash_point);
+      serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
+      setCrashPoint(normalizeCrashPoint(data.crash_point));
       startTimeRef.current = data.start_time * 1000;
       lastPointTimeRef.current = Date.now();
       animMultiplierRef.current = 1.0;
@@ -120,7 +136,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     // ── Раунд завершился (RUG PULL) ──
     socket.on('crash_ended', () => {
-      const finalPt = serverCrashPointRef.current;
+      const finalPt = normalizeCrashPoint(serverCrashPointRef.current);
       setMultiplier(finalPt);
       setGameState('crashed');
       setHistory(prev => [finalPt, ...prev].slice(0, 30));
@@ -178,19 +194,26 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     const animate = () => {
       if (!startTimeRef.current) startTimeRef.current = Date.now();
       const now = Date.now();
-      animMultiplierRef.current += 0.0001;
+      // Множитель считаем от времени, а не от кадров (RATE = 0.06x/сек).
+      // Так число на экране всегда синхронизировано с графиком независимо
+      // от FPS, и линия успевает за множителем.
+      const RATE = 0.06;
+      const elapsed = (now - startTimeRef.current) / 1000;
+      animMultiplierRef.current = 1.0 + elapsed * RATE;
       const newMultiplier = animMultiplierRef.current;
 
-      if (now - lastPointTimeRef.current > 300 + Math.random() * 200) {
+      // Точку на графике добавляем каждые 50 мс (вместо 300–500 мс),
+      // чтобы линия рисовалась плотно и не отставала от множителя.
+      if (now - lastPointTimeRef.current >= 50) {
         setPoints(prev => {
           const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
           const prevY = prev.length > 0 ? prev[prev.length - 1].y : 100;
-          const newX = Math.min(prevX + 10, 100);
+          const newX = Math.min(prevX + 0.5, 100);
           const rawY = prevY - (Math.random() * 8 + 2);
           let newY = Math.min(Math.max(rawY, 10), 100);
           let newPoints = [...prev, { x: newX, y: newY }];
           if (newPoints.length > 10) {
-            newPoints = newPoints.map(p => ({ ...p, x: Math.max(p.x - 5, 0) }));
+            newPoints = newPoints.map(p => ({ ...p, x: Math.max(p.x - 0.25, 0) }));
           }
           const lastY = newPoints[newPoints.length - 1].y;
           if (lastY < 20) {
@@ -203,7 +226,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       }
 
       if (newMultiplier >= serverCrashPointRef.current) {
-        const finalPt = serverCrashPointRef.current;
+        const finalPt = normalizeCrashPoint(serverCrashPointRef.current);
         setMultiplier(finalPt);
         setGameState('crashed');
         setHistory(prev => [finalPt, ...prev].slice(0, 30));
@@ -248,6 +271,15 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     requestRef.current = requestAnimationFrame(animate);
     return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
+  }, [gameState]);
+
+  // ── Сброс множителя на старте нового раунда ────────────────────────────
+  // Срабатывает при переходе в 'waiting' (после краша перед новым раундом)
+  // и в 'flying' (старт раунда), чтобы анимация всегда начиналась с 1.00x.
+  useEffect(() => {
+    if (gameState === 'waiting' || gameState === 'flying') {
+      animMultiplierRef.current = 1.0;
+    }
   }, [gameState]);
 
   const placeBet = () => {
