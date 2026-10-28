@@ -1978,6 +1978,10 @@ def handle_hockey_bet(data):
     global HOCKEY_PLAYERS
     user_id = str(data.get('user_id', ''))
     username = str(data.get('username', 'Игрок'))
+    # Сохраняем реальный username игрока (клиент шлёт user?.username || first_name).
+    # Легаси-клиенты могли слать 'You' — заменяем на нейтральный ник.
+    if not username or username.strip().lower() == 'you':
+        username = 'Игрок'
     bet = float(data.get('bet', 0))
 
     if not user_id or bet <= 0:

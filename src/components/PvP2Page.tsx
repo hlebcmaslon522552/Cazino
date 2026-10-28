@@ -110,7 +110,7 @@ const findLargestFreeRect = (placed: Shape[]): { x: number; y: number; w: number
 // Главная функция: случайные фигуры для всех игроков.
 // 1. Игроки сортируются по возрастанию ставки (маленькие ставки сначала).
 // 2. Для каждого игрока (кроме последнего) — случайная форма и размер от ставки
-//    (base = 40 + bet * 2, максимум w <= 450, h <= 270) с проверкой AABB;
+//    (base = 40 + bet * 2, максимум w <= 300, h <= 200) с проверкой AABB;
 //    если не помещается — размер уменьшается.
 // 3. Последний (самый большой) игрок занимает всё оставшееся пространство (или всю арену).
 const generateShapesForPlayers = (players: Player[]): Shape[] => {
@@ -139,10 +139,10 @@ const generateShapesForPlayers = (players: Player[]): Shape[] => {
       return;
     }
 
-    // Размер зависит от ставки: base = 40 + bet * 2 (максимум w <= 450, h <= 270)
+    // Размер зависит от ставки: base = 40 + bet * 2 (максимум w <= 300, h <= 200)
     const base = 40 + p.bet * 2;
-    let w = Math.max(Math.min(base * randomRange(0.85, 1), 450), 20);
-    let h = Math.max(Math.min(base * 0.55 * randomRange(0.8, 1.15), 270), 14);
+    let w = Math.max(Math.min(base * randomRange(0.85, 1), 300), 20);
+    let h = Math.max(Math.min(base * 0.55 * randomRange(0.8, 1.15), 200), 14);
     // 0 — прямоугольник, 1 — треугольник, 2 — круг, 3 — многоугольник (5-6 сторон)
     const type = Math.floor(Math.random() * 4);
 
@@ -365,7 +365,7 @@ useEffect(() => {
       setShapes(generateShapesForPlayers([
         {
           user_id: userIdRef.current || 'local_player',
-          username: 'You',
+          username: user?.username || user?.first_name || 'Игрок',
           bet,
           color: '#a855f7',
         },
@@ -373,7 +373,7 @@ useEffect(() => {
       // Только реальный Telegram ID из useTelegram; socket.id не используем
       const uid = user?.id?.toString() || 'unknown';
       userIdRef.current = uid;
-      socket.emit('hockey_bet', { user_id: uid, username: 'You', bet });
+      socket.emit('hockey_bet', { user_id: uid, username: user?.username || user?.first_name || 'Игрок', bet });
       // Записываем ставку в историю
       const historyUserId = String(user?.id ?? uid);
       fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
@@ -471,10 +471,10 @@ const bet = parseFloat(betInput)||0;
         </div>}
         {phase==='result'&&<div style={{textAlign:'center'}}>
           <div style={{fontSize:18,fontWeight:'bold',color:winnerId===userIdRef.current?colors.success:colors.text,marginBottom:8}}>
-            {winnerId===userIdRef.current?'🎉 Вы победили!':(players.find(p=>p.user_id===winnerId)?.username||'Соперник')+' побеждает!'}
+            {winnerId===userIdRef.current?'🎉 Вы победили!':'Вы проиграли'}
           </div>
           <div style={{fontSize:14,color:colors.textMuted,marginBottom:12}}>
-            {winnerId===userIdRef.current?'Вы забираете банк!':((players.find((p)=>p.user_id===winnerId)?.username||'Соперник')+' забирает банк!')}
+            {winnerId===userIdRef.current?'Вы забираете банк!':('Победил '+(players.find((p)=>p.user_id===winnerId)?.username||'Соперник'))}
           </div>
           <div style={{fontSize:22,fontWeight:'bold',color:colors.success}}>+{displayPot.toFixed(2)} TON</div>
           <div style={{fontSize:12,color:colors.textMuted,marginTop:6}}>Комиссия казино: 2.5%</div>
@@ -486,8 +486,11 @@ const bet = parseFloat(betInput)||0;
           </div>
           {players.length>0&&<div style={{marginBottom:12,padding:'8px 12px',background:'rgba(168,85,247,0.08)',borderRadius:10,fontSize:12}}>
             <div style={{color:colors.primary,fontWeight:'bold',marginBottom:4}}>Players in pool ({players.length})</div>
-            {players.map((p,i)=><div key={i} style={{color:colors.textMuted,display:'flex',justifyContent:'space-between',padding:'2px 0'}}>
-              <span>{p.username}</span><span style={{color:colors.gold}}>{p.bet.toFixed(1)} TON</span>
+            {players.map((p,i)=><div key={i} style={{color:colors.textMuted,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'2px 0'}}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:6}}>
+                <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:18,height:18,borderRadius:'50%',background:'rgba(168,85,247,0.25)',fontSize:11,fontWeight:'bold',color:colors.primary}}>{p.username?.charAt(0)?.toUpperCase()||'?'}</span>
+                {p.username}
+              </span><span style={{color:colors.gold}}>{p.bet.toFixed(1)} TON</span>
             </div>)}
           </div>}
           <div style={{color:colors.textMuted,fontSize:13,marginBottom:8}}>Bet (TON)</div>
