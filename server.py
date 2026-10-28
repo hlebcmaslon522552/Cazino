@@ -299,7 +299,7 @@ def crash_game_loop():
             CRASH_TIMER = 15
             for i in range(15, 0, -1):
                 CRASH_TIMER = i
-                socketio.emit('crash_timer', {'timer': i}, broadcast=True)
+                socketio.emit('crash_timer', {'timer': i})
                 socketio.sleep(1)
 
             # ── 2. Старт раунда ──
@@ -315,7 +315,7 @@ def crash_game_loop():
                 'start_time': CRASH_START_TIME,
                 'rate': CRASH_RATE,
                 'time_to_crash': round((CRASH_POINT - 1.0) / CRASH_RATE, 2),
-            }, broadcast=True)
+            })
 
             # ── 3. Ожидание краша ──
             # Время до краша = (crash_point - 1.0) / rate (секунд)
@@ -335,7 +335,7 @@ def crash_game_loop():
                 CRASH_PLAYERS = []
 
             print(f"[CrashLoop] Раунд завершён. RUG PULL (краш-поинт: {final_crash_point}x).")
-            socketio.emit('crash_ended', {'crash_point': final_crash_point}, broadcast=True)
+            socketio.emit('crash_ended', {'crash_point': final_crash_point})
 
             # ── 5. Пауза для отображения RUG PULL ──
             socketio.sleep(3)
