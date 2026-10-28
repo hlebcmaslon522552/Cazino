@@ -1130,6 +1130,25 @@ def sell_nft():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+
+        # 1. Проверяем, что NFT реально существует в инвентаре пользователя
+        c.execute(
+            "SELECT id FROM inventory WHERE id = ? AND user_id = ?",
+            (inventory_id, user_id)
+        )
+        nft_row = c.fetchone()
+        if nft_row is None:
+            return jsonify({"error": "NFT не найден"}), 404
+
+        # 2. Удаляем NFT
+        c.execute("DELETE FROM inventory WHERE id = ? AND user_id = ?",
+                  (inventory_id, user_id))
+        if c.rowcount == 0:
+            # NFT уже удалён — не начисляем деньги
+            conn.rollback()
+            return jsonify({"error": "NFT не найден"}), 404
+
+        # 3. Только после успешного удаления начисляем деньги
         c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
         row = c.fetchone()
         balance = row[0] if row else 15.0
@@ -1138,15 +1157,11 @@ def sell_nft():
         c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
                   (user_id, new_balance, new_balance))
 
-        # Удаляем проданный предмет из инвентаря по уникальному ID записи,
-        # чтобы нельзя было продать один и тот же NFT несколько раз,
-        # и чтобы не снести два одинаковых предмета.
-        if inventory_id is not None:
-            c.execute("DELETE FROM inventory WHERE id = ?", (inventory_id,))
-
         conn.commit()
     except Exception as e:
         print(f"[sell_nft] error: {e}")
+        if conn:
+            conn.rollback()
         return jsonify({"error": "Database error"}), 500
     finally:
         if conn:

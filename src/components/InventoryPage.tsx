@@ -33,6 +33,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   const [selected, setSelected] = useState<Nft | null>(null);
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSelling, setIsSelling] = useState(false);
   const { haptic, vibrate, initData, user } = useTelegram();
 
   // Загружаем инвентарь с сервера
@@ -79,6 +80,8 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
 
   const handleSell = async () => {
     if (!selected) return;
+    if (isSelling) return;
+    setIsSelling(true);
     haptic('medium');
     
     try {
@@ -113,6 +116,8 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     } catch (err) {
       console.error('Ошибка продажи:', err);
       onToast('Ошибка при продаже', 'error');
+    } finally {
+      setIsSelling(false);
     }
   };
 
@@ -241,7 +246,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
             </div>
 
             <div style={{ marginTop: spacing.lg, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Button fullWidth variant="secondary" onClick={handleSell}>
+              <Button fullWidth variant="secondary" onClick={handleSell} disabled={isSelling}>
                 💎 Продать за {selected.floor > 0 ? selected.floor.toFixed(2) : '—'} TON
               </Button>
               <Button fullWidth variant="danger" onClick={handleWithdraw}>
