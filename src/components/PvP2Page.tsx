@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { Coins, Swords } from 'lucide-react';
 import { colors, spacing } from '../theme';
@@ -36,6 +36,8 @@ const FIELD_W = 500;
 const FIELD_H = 300;
 const PUCK_R = 8;
 const PUCK_DURATION_MS = 3000;
+// Множитель скорости шайбы (x2.5 — игра динамичнее, отскоки успевают сработать)
+const PUCK_SPEED = 2.5;
 
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
@@ -61,6 +63,8 @@ export const PvP2Page: React.FC<PvP2PageProps> = ({ balance, onUpdateBalance, on
   const puckXRef = useRef(FIELD_W / 2);
   const puckYRef = useRef(FIELD_H / 2);
   const totalPotRef = useRef(0);
+  // Ссылка на <g> шайбы — двигаем через transform, а не через setState каждый кадр
+  const puckRef = useRef<SVGGElement | null>(null);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 const reset = () => {
@@ -74,12 +78,28 @@ const reset = () => {
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
   };
 
+  // При монтировании шайбы сразу ставим её в puckPos — без «вспышки» в углу (0,0).
+  // useCallback со стабильной ссылкой: React НЕ перезапишет transform при обычных ре-рендерах.
+  const attachPuckRef = useCallback((el: SVGGElement | null) => {
+    puckRef.current = el;
+    if (el) {
+      el.setAttribute('transform', `translate(${puckPos.x}, ${puckPos.y})`);
+    }
+  }, [puckPos.x, puckPos.y]);
+
   const startPuckAnimation = () => {
     puckXRef.current = FIELD_W / 2;
     puckYRef.current = FIELD_H / 2;
-    puckVxRef.current = randomRange(-3, 3);
-    puckVyRef.current = randomRange(-3, 3);
+    // Стартовая скорость умножена на PUCK_SPEED — шайба летит в 2.5 раза быстрее
+    puckVxRef.current = randomRange(-3, 3) * PUCK_SPEED;
+    puckVyRef.current = randomRange(-3, 3) * PUCK_SPEED;
+    // Страховка от «застревания» на чисто вертикальной/горизонтальной траектории
+    if (puckVxRef.current === 0) puckVxRef.current = (Math.random() > 0.5 ? 1 : -1) * PUCK_SPEED;
+    if (puckVyRef.current === 0) puckVyRef.current = (Math.random() > 0.5 ? 1 : -1) * PUCK_SPEED;
     puckStartTimeRef.current = performance.now();
+    if (puckRef.current) {
+      puckRef.current.setAttribute('transform', `translate(${FIELD_W / 2}, ${FIELD_H / 2})`);
+    }
     const animate = (now: number) => {
       const elapsed = now - puckStartTimeRef.current;
       if (elapsed >= PUCK_DURATION_MS) {
@@ -90,19 +110,21 @@ const reset = () => {
         setPuckPos({ x: finalX, y: finalY });
         return;
       }
-      let vx = puckVxRef.current;
-      let vy = puckVyRef.current;
+      const vx = puckVxRef.current;
+      const vy = puckVyRef.current;
       let px = puckXRef.current + vx;
       let py = puckYRef.current + vy;
-      if (px < PUCK_R) { px = PUCK_R; vx = -vx; }
-      else if (px > FIELD_W - PUCK_R) { px = FIELD_W - PUCK_R; vx = -vx; }
-      if (py < PUCK_R) { py = PUCK_R; vy = -vy; }
-      else if (py > FIELD_H - PUCK_R) { py = FIELD_H - PUCK_R; vy = -vy; }
+      // Отскок от стенок: отражаем скорость (vx *= -1), не давая шайбе застрять
+      if (px < PUCK_R) { px = PUCK_R; puckVxRef.current = -vx; }
+      else if (px > FIELD_W - PUCK_R) { px = FIELD_W - PUCK_R; puckVxRef.current = -vx; }
+      if (py < PUCK_R) { py = PUCK_R; puckVyRef.current = -vy; }
+      else if (py > FIELD_H - PUCK_R) { py = FIELD_H - PUCK_R; puckVyRef.current = -vy; }
       puckXRef.current = px;
       puckYRef.current = py;
-      puckVxRef.current = vx;
-      puckVyRef.current = vy;
-      setPuckPos({ x: px, y: py });
+      // Двигаем шайбу через transform без setState — SVG не перерисовывается каждый кадр
+      if (puckRef.current) {
+        puckRef.current.setAttribute('transform', `translate(${px}, ${py})`);
+      }
       animFrameRef.current = requestAnimationFrame(animate);
     };
     animFrameRef.current = requestAnimationFrame(animate);
@@ -146,7 +168,7 @@ const reset = () => {
       setShapes((prev) => prev.map((s) => ({ ...s, winner: s.playerId === data.winner_id })));
       if (data.winner_id === userIdRef.current) {
         onUpdateBalance(data.total_pot);
-        onToast?.('🏆 You won! +' + data.total_pot.toFixed(2) + ' TON', 'success');
+        onToast?.('🏆 Вы победили! +' + data.total_pot.toFixed(2) + ' TON', 'success');
         // Записываем выигрыш в историю (для статистики max_win)
         const winHistoryUserId = String(user?.id ?? data.winner_id);
         fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
@@ -162,7 +184,7 @@ const reset = () => {
           }),
         }).catch(() => {});
       } else {
-        onToast?.('😔 ' + data.winner_name + ' wins!', 'error');
+        onToast?.('😔 ' + data.winner_name + ' побеждает!', 'error');
       }
       setPhase('result');
     });
@@ -177,6 +199,14 @@ useEffect(() => {
     if (phase === 'playing') {
       const timer = setTimeout(() => { startPuckAnimation(); }, 500);
       return () => clearTimeout(timer);
+    }
+  }, [phase]);
+
+  // После показа результата через 3 сек автоматически возвращаемся в setup
+  useEffect(() => {
+    if (phase === 'result') {
+      const t = setTimeout(() => { reset(); }, 3000);
+      return () => clearTimeout(t);
     }
   }, [phase]);
 
@@ -246,9 +276,9 @@ useEffect(() => {
             {(shape.w<10||shape.h<10)&&<rect x={shape.x-1} y={shape.y-1} width={shape.w+2} height={shape.h+2} rx="4" ry="4" fill="none" stroke="#fff" strokeWidth={2} pointerEvents="none" />}
           </g>
         ))}
-        {(phase==='playing'||phase==='result')&&<g>
-          <circle cx={puckPos.x} cy={puckPos.y} r={16} fill="url(#puck-glow)" />
-          <circle cx={puckPos.x} cy={puckPos.y} r={PUCK_R} fill="#fff" stroke="#000" strokeWidth={1.5} />
+        {(phase==='playing'||phase==='result')&&<g ref={attachPuckRef} style={{willChange:'transform'}}>
+          <circle cx={0} cy={0} r={16} fill="url(#puck-glow)" />
+          <circle cx={0} cy={0} r={PUCK_R} fill="#fff" stroke="#000" strokeWidth={1.5} />
         </g>}
       </svg>
     );
@@ -275,10 +305,10 @@ const bet = parseFloat(betInput)||0;
         </div>}
         {phase==='result'&&<div style={{textAlign:'center'}}>
           <div style={{fontSize:18,fontWeight:'bold',color:winnerId===userIdRef.current?colors.success:colors.text,marginBottom:8}}>
-            {winnerId===userIdRef.current?'🎉 You win!':(players.find(p=>p.user_id===winnerId)?.username||'Opponent')+' wins!'}
+            {winnerId===userIdRef.current?'🎉 Вы победили!':(players.find(p=>p.user_id===winnerId)?.username||'Соперник')+' побеждает!'}
           </div>
           <div style={{fontSize:14,color:colors.textMuted,marginBottom:12}}>
-            {winnerId&&players.find((p)=>p.user_id===winnerId)?.username} takes the pot!
+            {winnerId===userIdRef.current?'Вы забираете банк!':((players.find((p)=>p.user_id===winnerId)?.username||'Соперник')+' забирает банк!')}
           </div>
           <div style={{fontSize:22,fontWeight:'bold',color:colors.success}}>+{displayPot.toFixed(2)} TON</div>
         </div>}
@@ -313,7 +343,7 @@ const bet = parseFloat(betInput)||0;
           </div>
           <Button fullWidth onClick={createGame} size="lg" disabled={isJoining}><Swords size={20} /> {isJoining ? 'Поиск соперника...' : 'Сделать ставку'}</Button>
         </>}
-        {phase==='result'&&<div style={{marginTop:12}}><Button fullWidth variant="ghost" onClick={reset}>Play Again</Button></div>}
+        {phase==='result'&&<div style={{marginTop:12}}><Button fullWidth variant="ghost" onClick={reset}>Играть заново</Button></div>}
       </div>
     </div>
   );
