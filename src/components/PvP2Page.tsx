@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
+import React, { useState, useEffect, useRef } from 'react';
+import { io, type Socket } from 'socket.io-client';
 import { Coins, Swords } from 'lucide-react';
 import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
@@ -39,7 +39,7 @@ const PUCK_DURATION_MS = 3000;
 
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-export const PvP2Page = ({ balance, onUpdateBalance, onToast }: PvP2PageProps) => {
+export const PvP2Page: React.FC<PvP2PageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user } = useTelegram();
   const [betInput, setBetInput] = useState('1.0');
   const [phase, setPhase] = useState<Phase>('setup');
@@ -49,6 +49,7 @@ export const PvP2Page = ({ balance, onUpdateBalance, onToast }: PvP2PageProps) =
   const [waitSeconds, setWaitSeconds] = useState(15);
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [puckPos, setPuckPos] = useState({ x: FIELD_W / 2, y: FIELD_H / 2 });
+  const [isJoining, setIsJoining] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const userIdRef = useRef<string>('');
@@ -130,6 +131,7 @@ const reset = () => {
       setTotalPot(data.total_pot);
       totalPotRef.current = data.total_pot;
       setPhase('playing');
+      setIsJoining(false);
     });
     // ── Результат раунда (победитель от сервера) ──
     socket.on('hockey_result', (data: { winner_id: string; winner_name: string; total_pot: number }) => {
@@ -176,26 +178,33 @@ useEffect(() => {
     const bet = parseFloat(betInput);
     if (isNaN(bet) || bet <= 0) { onToast?.('Enter a valid bet amount', 'error'); return; }
     if (bet > balance) { onToast?.('Insufficient balance', 'error'); return; }
-    const socket = socketRef.current;
-    const uid = socket?.id || 'local_' + Date.now();
-    userIdRef.current = uid;
-    if (socket) {
-      socket.emit('hockey_bet', { user_id: uid, username: 'You', bet });
+    if (isJoining) return;
+    setIsJoining(true);
+    try {
+      onUpdateBalance(-bet);
+      const socket = socketRef.current;
+      const uid = user?.id?.toString() || socket?.id || 'unknown';
+      userIdRef.current = uid;
+      if (socket) {
+        socket.emit('hockey_bet', { user_id: uid, username: 'You', bet });
+      }
+      // Записываем ставку в историю
+      const historyUserId = String(user?.id ?? uid);
+      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: historyUserId,
+          game_type: 'hockey',
+          bet_type: 'ton',
+          amount: bet,
+          item_name: '',
+        }),
+      }).catch(() => {});
+      onToast?.('Bet placed! Waiting for the round...', 'info');
+    } finally {
+      setIsJoining(false);
     }
-    // Записываем ставку в историю
-    const historyUserId = String(user?.id ?? uid);
-    fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({
-        user_id: historyUserId,
-        game_type: 'hockey',
-        bet_type: 'ton',
-        amount: bet,
-        item_name: '',
-      }),
-    }).catch(() => {});
-    onToast?.('Bet placed! Waiting for the round...', 'info');
   };
 
   const renderArena = () => {
@@ -290,7 +299,7 @@ const bet = parseFloat(betInput)||0;
             <span style={{color:colors.textMuted}}>Balance</span>
             <span style={{color:colors.gold,fontWeight:'bold'}}>{balance.toFixed(2)} TON</span>
           </div>
-          <Button fullWidth onClick={createGame} size="lg"><Swords size={20} /> Сделать ставку</Button>
+          <Button fullWidth onClick={createGame} size="lg" disabled={isJoining}><Swords size={20} /> {isJoining ? 'Поиск соперника...' : 'Сделать ставку'}</Button>
         </>}
         {phase==='result'&&<div style={{marginTop:12}}><Button fullWidth variant="ghost" onClick={reset}>Play Again</Button></div>}
       </div>
