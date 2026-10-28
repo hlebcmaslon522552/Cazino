@@ -49,6 +49,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const startTimeRef = useRef<number>();
   const lastPointTimeRef = useRef<number>(0);
   const crashedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animMultiplierRef = useRef<number>(1.0);
 
   const serverCrashPointRef = useRef<number>(1.01);
 
@@ -86,6 +87,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
             setCrashPoint(data.crash_point || 1.01);
             startTimeRef.current = (data.start_time || 0) * 1000;
             lastPointTimeRef.current = Date.now();
+            animMultiplierRef.current = 1.0;
             setGameState('flying');
             setMultiplier(1.00);
             setPoints([{ x: 0, y: 100 }]);
@@ -106,6 +108,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setCrashPoint(data.crash_point);
       startTimeRef.current = data.start_time * 1000;
       lastPointTimeRef.current = Date.now();
+      animMultiplierRef.current = 1.0;
       setGameState('flying');
       setMultiplier(1.00);
       setPoints([{ x: 0, y: 100 }]);
@@ -175,8 +178,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     const animate = () => {
       if (!startTimeRef.current) startTimeRef.current = Date.now();
       const now = Date.now();
-      const elapsed = now - startTimeRef.current;
-      const newMultiplier = Math.pow(1.0000362, elapsed);
+      animMultiplierRef.current += 0.001;
+      const newMultiplier = animMultiplierRef.current;
 
       if (now - lastPointTimeRef.current > 300 + Math.random() * 200) {
         setPoints(prev => {
