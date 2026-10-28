@@ -230,9 +230,9 @@ function Wheel({ chance, angle, spinning }: WheelProps) {
    Поле выбора / отображения NFT (блок с «+»)
    =================================================================== */
 
-function NftSlot({ label, nft, onClick }: { label: string; nft: Nft | null; onClick: () => void }) {
+function NftSlot({ label, nft, onClick, disabled }: { label: string; nft: Nft | null; onClick: () => void; disabled?: boolean }) {
   return (
-    <Card padding="14px" onClick={onClick}>
+    <Card padding="14px" onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 118, justifyContent: 'center', textAlign: 'center' }}>
         <div style={{ fontSize: 10, color: colors.textMuted, marginBottom: 6 }}>{label}</div>
         {nft ? (
@@ -282,6 +282,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<'win' | 'lose' | null>(null);
+  const [resultDisplayName, setResultDisplayName] = useState('');
+  const [resultDisplayImage, setResultDisplayImage] = useState('');
   const [angle, setAngle] = useState(0);
 
   // Загружаем «начальные» NFT из инвентаря через API
@@ -354,10 +356,18 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
   const resetGame = () => {
     setResult(null);
+    setResultDisplayName('');
+    setResultDisplayImage('');
     setAngle(0);
   };
 
-  const closeResult = () => setResult(null);
+  const closeResult = () => {
+    setResult(null);
+    setResultDisplayName('');
+    setResultDisplayImage('');
+    setStartNft(null);
+    setTargetNft(null);
+  };
 
   /* ── Основная механика спина ───────────────────── */
 
@@ -410,12 +420,21 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         // Через 3 секунды останавливаем анимацию, показываем результат
         // и только потом удаляем NFT с сервера (не прерывая анимацию).
         setTimeout(async () => {
-          // 1. Останавливаем спин, показываем результат (модалка/тост)
+          // 1. Сохраняем имя и картинку для модалки результата (пока стейты ещё валидны)
+          const savedName = targetNft?.name ?? '';
+          const savedImage = targetNft?.image ?? '';
+
+          // 2. Очищаем выбранные NFT ДО показа результата,
+          //    чтобы после закрытия модалки слоты уже были пустыми
+          setStartNft(null);
+          setTargetNft(null);
+          setResultDisplayName(savedName);
+          setResultDisplayImage(savedImage);
+
+          // 3. Останавливаем спин, показываем результат (модалка/тост)
           setSpinning(false);
           setResult(serverWin ? 'win' : 'lose');
           vibrate(serverWin ? 'success' : 'error');
-          setStartNft(null);
-          setTargetNft(null);
           if (serverWin) {
             onToast('🎉 Апгрейд успешен!', 'success');
           } else {
@@ -491,8 +510,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
       {/* Выбор NFT (два блока с «+») */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: spacing.md }}>
-        <NftSlot label="Начальный NFT" nft={startNft} onClick={() => { if (!spinning) { haptic('light'); setStartModalOpen(true); } }} />
-        <NftSlot label="Конечный NFT" nft={targetNft} onClick={() => { if (!spinning) { haptic('light'); setTargetModalOpen(true); } }} />
+        <NftSlot label="Начальный NFT" nft={startNft} disabled={spinning} onClick={() => { if (!spinning) { haptic('light'); setStartModalOpen(true); } }} />
+        <NftSlot label="Конечный NFT" nft={targetNft} disabled={spinning} onClick={() => { if (!spinning) { haptic('light'); setTargetModalOpen(true); } }} />
       </div>
 
       {/* Кнопка запуска */}
@@ -598,11 +617,11 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             />
           </div>
           <div style={{ fontSize: 26, fontWeight: 'bold', color: '#fff', textAlign: 'center', marginTop: 8 }}>
-            {result === 'win' ? `Вы выиграли ${targetNft?.name ?? ''}` : 'Неудача'}
+            {result === 'win' ? `Вы выиграли ${resultDisplayName}` : 'Неудача'}
           </div>
-          {result === 'win' && targetNft && (
+          {result === 'win' && resultDisplayImage && (
             <img
-              src={publicUrl(targetNft.image.replace(/^\//, ''))}
+              src={publicUrl(resultDisplayImage.replace(/^\//, ''))}
               alt=""
               style={{ width: 90, height: 90, objectFit: 'contain', borderRadius: 12, border: '3px solid rgba(255,255,255,0.25)', marginTop: 14 }}
               onError={(e) => { e.currentTarget.src = publicUrl('NO_Inventory.png'); }}
