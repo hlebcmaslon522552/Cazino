@@ -1846,9 +1846,8 @@ def hockey_game_loop():
                             })
                             print(f"[Hockey] Раунд стартовал! Игроков: {len(HOCKEY_PLAYERS)}, банк: {total_bet}")
                         else:
-                            # Недостаточно игроков — отменяем раунд
-                            HOCKEY_PLAYERS = []
-                            print("[Hockey] Недостаточно игроков, раунд отменён")
+                            # Недостаточно игроков — ждём следующего цикла, ставки в пуле сохраняем
+                            print(f"[Hockey] Игроков меньше двух ({len(HOCKEY_PLAYERS)}), ждём следующий цикл")
 
                 elif HOCKEY_STATE == "playing":
                     elapsed = time.time() - HOCKEY_START_TIME
