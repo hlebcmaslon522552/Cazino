@@ -232,14 +232,23 @@ CASE_POOLS = {
 }
 
 def generate_crash_point():
+    # 3% шанс на мгновенный краш (1.00x)
+    if random.random() < 0.03:
+        return 1.00
+
+    # Основная формула (экспоненциальное распределение)
+    # Чем выше множитель, тем меньше шанс
     e = pow(2, 32)
     h = random.randint(0, e - 1)
-    house_edge = 0.03
+    house_edge = 0.03  # 3% в пользу казино
     point = (100 * e - h) / (e - h) / 100 * (1 - house_edge)
-    if point < 1.01:
-        return 1.01
-    if point > 111.0:
-        return 111.0
+
+    # Ограничиваем максимум (например, 100x)
+    if point > 100.0:
+        return 100.0
+    if point < 1.0:
+        return 1.00
+
     return round(point, 2)
 
 
