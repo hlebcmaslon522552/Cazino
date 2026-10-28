@@ -138,7 +138,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       if (!startTimeRef.current) startTimeRef.current = Date.now();
       const now = Date.now();
       const elapsed = now - startTimeRef.current;
-      const newMultiplier = Math.pow(1.00015, elapsed);
+      const newMultiplier = Math.pow(1.0000833, elapsed);
 
       if (now - lastPointTimeRef.current > 300 + Math.random() * 200) {
         setPoints(prev => {
