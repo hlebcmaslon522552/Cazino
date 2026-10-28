@@ -162,9 +162,25 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       }
 
       if (newMultiplier >= serverCrashPointRef.current) {
-        setMultiplier(serverCrashPointRef.current);
+        const finalPt = serverCrashPointRef.current;
+        setMultiplier(finalPt);
+        setGameState('crashed');
+        setHistory(prev => [finalPt, ...prev].slice(0, 15));
+        setHasBet(false);
+        if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
+        crashedResetRef.current = setTimeout(() => {
+          setGameState('waiting');
+          setMultiplier(1.00);
+          setPoints([{ x: 0, y: 100 }]);
+          setHasCashedOut(false);
+          setHasBet(false);
+          setPlayers([]);
+        }, 5000);
       } else {
-        setMultiplier(newMultiplier);
+        // Ограничиваем отображение множителя до 100x, чтобы избежать
+        // зависания при слишком больших значениях Math.pow
+        const clamped = Math.min(newMultiplier, 100);
+        setMultiplier(clamped);
         requestRef.current = requestAnimationFrame(animate);
       }
     };
@@ -253,9 +269,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       
       <div className="flex items-center justify-between mb-4">
         <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">История раундов</span>
-        <div className="flex gap-1.5 overflow-x-auto justify-end">
-          {history.slice(0, 4).map((h, i) => (
-            <span key={i} className={`px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap ${h >= 2 ? 'bg-green-500 text-[#0f0f13] shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}>{h.toFixed(2)}x</span>
+        <div className="flex gap-2 overflow-x-auto flex-nowrap justify-start scrollbar-thin" style={{ scrollbarWidth: 'thin', msOverflowStyle: 'auto' }}>
+          {history.map((h, i) => (
+            <span key={i} className={`px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap shrink-0 ${h >= 2 ? 'bg-green-500 text-[#0f0f13] shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}>{h.toFixed(2)}x</span>
           ))}
         </div>
       </div>
