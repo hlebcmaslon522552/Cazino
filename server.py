@@ -40,7 +40,7 @@ CRASH_STATE = "waiting"       # 'waiting' | 'flying'
 CRASH_TIMER = 15              # секунд до старта
 CRASH_POINT = 1.00
 CRASH_START_TIME = 0.0
-CRASH_RATE = 1.0              # рост множителя (x/сек): multiplier = 1.0 + elapsed * CRASH_RATE
+CRASH_RATE = 0.2222           # 1x за 4.5 сек: multiplier = 1.0 + elapsed * CRASH_RATE
 CRASH_PLAYERS = []            # ставки текущего раунда: [{ user_id, username, bet, sid }]
 CRASH_LOCK = threading.Lock()
 
