@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import { Coins, Swords } from 'lucide-react';
+import { Swords } from 'lucide-react';
 import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { CONFIG } from '../config';
@@ -495,7 +495,7 @@ const bet = parseFloat(betInput)||0;
           </div>}
           <div style={{color:colors.textMuted,fontSize:13,marginBottom:8}}>Bet (TON)</div>
           <div style={{position:'relative',marginBottom:12}}>
-            <Coins size={18} color={colors.gold} style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}} />
+            <img src="/TON.png" alt="TON" style={{ width: 16, height: 16, objectFit: 'contain', position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
             <input type="number" min="0" step="0.1" value={betInput} onChange={(e)=>setBetInput(e.target.value)}
               style={{width:'100%',padding:'12px 12px 12px 40px',background:'rgba(0,0,0,0.4)',border:'1px solid '+colors.border,borderRadius:12,color:colors.text,fontSize:16,fontWeight:'bold',outline:'none',boxSizing:'border-box'}} />
           </div>

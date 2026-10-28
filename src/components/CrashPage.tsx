@@ -4,7 +4,7 @@ import { CheckCircle, Clock, Users, XCircle, Zap } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { loadInventoryFromLocal } from '../api';
+import { fetchInventory, loadInventoryFromLocal } from '../api';
 
 interface CrashPageProps {
   balance: number;
@@ -291,6 +291,17 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       bet: betAmount,
     });
 
+    // Для NFT-ставок дополнительно отправляем bet_nft с данными NFT
+    if (betType === 'nft' && selectedNft) {
+      socketRef.current?.emit('bet_nft', {
+        user_id: String(user?.id ?? 'unknown'),
+        username: user?.first_name || 'Игрок',
+        bet: betAmount,
+        nft_id: selectedNft.id,
+        nft_name: selectedNft.model || selectedNft.name || '',
+      });
+    }
+
     if (betType === 'ton') onToast?.('Ставка принята!', 'success');
 
     // Отправляем оборот
@@ -379,6 +390,22 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     // цель установится заново в момент нажатия «Сделать ставку».
     setAutoCashoutEnabled(v => !v);
     setAutoCashout(null);
+  };
+
+  // ── Загрузка NFT из инвентаря: сначала сервер (fetchInventory), ──
+  // при неудаче — fallback на localStorage (loadInventoryFromLocal).
+  const loadNftList = async () => {
+    try {
+      const userId = String(user?.id ?? '6267608438');
+      const serverItems = await fetchInventory(initData || '', userId);
+      if (serverItems && serverItems.length > 0) {
+        setNftList(serverItems);
+        return;
+      }
+    } catch {
+      // сервер недоступен — используем localStorage
+    }
+    setNftList(loadInventoryFromLocal());
   };
 
   const isCrashed = gameState === 'crashed';
@@ -642,7 +669,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           >
             <h3 className="text-white font-bold text-lg mb-3">Выберите NFT</h3>
             {nftList.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">У вас нет NFT в инвентаре</p>
+              <p className="text-gray-400 text-center py-8">В инвентаре нет NFT. Купите в Маркете</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {nftList.map((nft: any) => (
