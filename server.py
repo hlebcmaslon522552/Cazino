@@ -2070,9 +2070,9 @@ def hockey_game_loop():
 
                     if HOCKEY_TIMER <= 0:
                         HOCKEY_TIMER = 15  # сброс для следующего раунда
-                        # TODO(тест): >= 1 запускает раунд даже с одним игроком.
-                        # В продакшене вернуть >= 2 (PvP, нужны два игрока).
-                        if len(HOCKEY_PLAYERS) >= 1:
+                        # Раунд стартует только при двух и более игроках (PvP).
+                        # Меньше двух — раунд НЕ стартует, ставки остаются в пуле на следующий цикл.
+                        if len(HOCKEY_PLAYERS) >= 2:
                             # ── Стартуем раунд ──
                             HOCKEY_STATE = "playing"
                             HOCKEY_START_TIME = time.time()

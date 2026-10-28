@@ -36,8 +36,8 @@ const FIELD_W = 500;
 const FIELD_H = 300;
 const PUCK_R = 8;
 const PUCK_DURATION_MS = 3000;
-// Множитель скорости шайбы (x2.5 — игра динамичнее, отскоки успевают сработать)
-const PUCK_SPEED = 2.5;
+// Множитель скорости шайбы: на каждом шаге x += vx * PUCK_SPEED (x3 — в 3 раза быстрее)
+const PUCK_SPEED = 3;
 
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
@@ -90,12 +90,12 @@ const reset = () => {
   const startPuckAnimation = () => {
     puckXRef.current = FIELD_W / 2;
     puckYRef.current = FIELD_H / 2;
-    // Стартовая скорость умножена на PUCK_SPEED — шайба летит в 2.5 раза быстрее
-    puckVxRef.current = randomRange(-3, 3) * PUCK_SPEED;
-    puckVyRef.current = randomRange(-3, 3) * PUCK_SPEED;
+    // Базовая скорость (множитель PUCK_SPEED применяется в шаге движения)
+    puckVxRef.current = randomRange(-3, 3);
+    puckVyRef.current = randomRange(-3, 3);
     // Страховка от «застревания» на чисто вертикальной/горизонтальной траектории
-    if (puckVxRef.current === 0) puckVxRef.current = (Math.random() > 0.5 ? 1 : -1) * PUCK_SPEED;
-    if (puckVyRef.current === 0) puckVyRef.current = (Math.random() > 0.5 ? 1 : -1) * PUCK_SPEED;
+    if (puckVxRef.current === 0) puckVxRef.current = Math.random() > 0.5 ? 1 : -1;
+    if (puckVyRef.current === 0) puckVyRef.current = Math.random() > 0.5 ? 1 : -1;
     puckStartTimeRef.current = performance.now();
     if (puckRef.current) {
       puckRef.current.setAttribute('transform', `translate(${FIELD_W / 2}, ${FIELD_H / 2})`);
@@ -112,8 +112,9 @@ const reset = () => {
       }
       const vx = puckVxRef.current;
       const vy = puckVyRef.current;
-      let px = puckXRef.current + vx;
-      let py = puckYRef.current + vy;
+      // Скорость: x += vx * PUCK_SPEED, y += vy * PUCK_SPEED (в 3 раза быстрее)
+      let px = puckXRef.current + vx * PUCK_SPEED;
+      let py = puckYRef.current + vy * PUCK_SPEED;
       // Отскок от стенок: отражаем скорость (vx *= -1), не давая шайбе застрять
       if (px < PUCK_R) { px = PUCK_R; puckVxRef.current = -vx; }
       else if (px > FIELD_W - PUCK_R) { px = FIELD_W - PUCK_R; puckVxRef.current = -vx; }
@@ -210,6 +211,23 @@ useEffect(() => {
     }
   }, [phase]);
 
+  // Мгновенная «территория» игрока: рисуется сразу после ставки, пока сервер
+  // не пришлёт официальные фигуры в hockey_started (соло-игра — вся арена).
+  const generateShape = (existing: Shape[], bet: number, isPlayer: boolean): Shape => {
+    const totalBet = bet + existing.reduce((sum, sh) => sum + sh.bet, 0);
+    const w = Math.max(FIELD_W * (bet / totalBet), 1);
+    return {
+      x: existing.reduce((sum, sh) => sum + sh.w, 0),
+      y: 0,
+      w,
+      h: FIELD_H,
+      hue: isPlayer ? 270 : 35,
+      bet,
+      playerId: isPlayer ? (userIdRef.current || 'local_player') : 'opponent',
+      winner: false,
+    };
+  };
+
   const createGame = () => {
     const bet = parseFloat(betInput);
     if (isNaN(bet) || bet <= 0) { onToast?.('Enter a valid bet amount', 'error'); return; }
@@ -221,6 +239,9 @@ useEffect(() => {
     try {
       // Списание — ровно один раз за нажатие (вызывается только здесь, вне эффектов)
       onUpdateBalance(-bet);
+      // Мгновенно показываем территорию игрока (соло-игра занимает 100% арены)
+      const newShape = generateShape([], bet, true);
+      setShapes([newShape]);
       // Только реальный Telegram ID из useTelegram; socket.id не используем
       const uid = user?.id?.toString() || 'unknown';
       userIdRef.current = uid;
