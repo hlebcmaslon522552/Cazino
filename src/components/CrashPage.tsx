@@ -48,6 +48,13 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
   const serverCrashPointRef = useRef<number>(1.01);
 
+  // ── Зафиксированные коэффициенты игроков, забравших выигрыш ─────────────
+  // Сервер присылает в crash_players_update только {user_id, username, bet},
+  // поэтому момент забора храним локально: user_id -> multiplier (cashedOutAt).
+  // Пока игрок играет — в таблице показываем живой multiplier, после забора —
+  // замороженное значение, чтобы оно не продолжало расти с каждым тиком.
+  const frozenCashoutsRef = useRef<Record<string, number>>({});
+
   // ── WebSocket-синхронизация глобального раунда ───────────────────────
   useEffect(() => {
     const socket = io(CONFIG.API_URL, {
@@ -94,6 +101,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setMultiplier(1.00);
       setPoints([{ x: 0, y: 100 }]);
       setHasCashedOut(false);
+      setCashedOutAt(0);
+      // Новый раунд: стираем заморозки коэффициентов предыдущего раунда
+      frozenCashoutsRef.current = {};
     });
 
     // ── Раунд завершился (RUG PULL) ──
@@ -110,14 +120,28 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         setMultiplier(1.00);
         setPoints([{ x: 0, y: 100 }]);
         setHasCashedOut(false);
+        setCashedOutAt(0);
         setHasBet(false);
+        // После окончания раунда очищаем данные игроков
         setPlayers([]);
+        frozenCashoutsRef.current = {};
       }, 5000);
     });
 
     // ── Обновление пула ставок ──
     socket.on('crash_players_update', (data: { players: CrashPlayer[] }) => {
-      setPlayers(data.players || []);
+      // Сервер присылает только {user_id, username, bet}: при перезаписи списка
+      // сохраняем локальную заморозку коэффициента игроков, уже забравших выигрыш,
+      // чтобы их коэффициент в таблице не начинал расти снова.
+      setPlayers(prev => {
+        const prevById = new Map(prev.map(p => [p.user_id, p]));
+        return (data.players || []).map(snp => {
+          const prevEntry = prevById.get(snp.user_id);
+          return prevEntry?.cashed_out
+            ? { ...snp, cashed_out: true, multiplier: prevEntry.multiplier }
+            : snp;
+        });
+      });
     });
 
     socket.on('disconnect', () => {
@@ -173,8 +197,11 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           setMultiplier(1.00);
           setPoints([{ x: 0, y: 100 }]);
           setHasCashedOut(false);
+          setCashedOutAt(0);
           setHasBet(false);
+          // После окончания раунда очищаем данные игроков
           setPlayers([]);
+          frozenCashoutsRef.current = {};
         }, 5000);
       } else {
         // Ограничиваем отображение множителя до 100x, чтобы избежать
@@ -239,8 +266,20 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     if (!hasBet) return;
     if (gameState === 'flying' && !hasCashedOut) {
       const winAmount = betType === 'ton' ? finalBet * multiplier : (selectedNft?.floor || 0) * multiplier;
-      setHasCashedOut(true);
+      const currentUserId = String(user?.id ?? 'unknown');
+
+      // Фиксируем коэффициент текущего игрока ровно на моменте забора (cashedOutAt).
+      // В таблице этот игрок будет показывать замороженное значение, а не живой
+      // растущий multiplier (серверные обновления не затирают frozenCashoutsRef).
       setCashedOutAt(multiplier);
+      frozenCashoutsRef.current = { ...frozenCashoutsRef.current, [currentUserId]: multiplier };
+      setPlayers(prev =>
+        prev.map(p =>
+          p.user_id === currentUserId ? { ...p, cashed_out: true, multiplier } : p
+        )
+      );
+
+      setHasCashedOut(true);
       onUpdateBalance(winAmount);
       onToast?.('Вы забрали ' + winAmount.toFixed(2) + (betType === 'ton' ? ' TON' : ' TON (NFT)') + ' по ' + multiplier.toFixed(2) + 'x', 'success');
     }
@@ -381,8 +420,23 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           <p className="text-gray-500 text-center text-sm py-6">Ожидание игроков...</p>
         ) : (
           <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
-            {players.map((p) => (
-              <div key={p.user_id} className="flex items-center justify-between gap-3 bg-[#0f0f13] rounded-xl px-3 py-2 border border-gray-800">
+            {players.map((p) => {
+              const isCurrentUser = p.user_id === String(user?.id ?? 'unknown');
+              // Игрок забрал выигрыш: статус от сервера, локальный кашаут текущего
+              // игрока или запись в карте замороженных коэффициентов
+              const isCashedOut =
+                p.cashed_out === true ||
+                (isCurrentUser && hasCashedOut) ||
+                typeof frozenCashoutsRef.current[p.user_id] === 'number';
+              // Коэффициент зафиксирован в момент забора (cashedOutAt) и НЕ растёт,
+              // даже когда живой multiplier продолжает увеличиваться
+              const frozenAt =
+                p.multiplier ??
+                (isCurrentUser ? cashedOutAt : frozenCashoutsRef.current[p.user_id]) ??
+                multiplier;
+
+              return (
+                <div key={p.user_id} className="flex items-center justify-between gap-3 bg-[#0f0f13] rounded-xl px-3 py-2 border border-gray-800">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
                     {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
@@ -396,16 +450,15 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  {p.cashed_out ? (
-                    <span className="text-green-400 font-black text-sm">{(p.multiplier ?? multiplier).toFixed(2)}x</span>
-                  ) : p.multiplier != null ? (
-                    <span className="text-white/80 font-bold text-sm">{p.multiplier.toFixed(2)}x</span>
+                  {isCashedOut ? (
+                    <span className="text-green-400 font-black text-sm">{frozenAt.toFixed(2)}x</span>
                   ) : (
                     <span className="text-green-300/90 font-bold text-sm">{multiplier.toFixed(2)}x</span>
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
