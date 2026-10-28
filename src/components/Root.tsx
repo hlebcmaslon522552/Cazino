@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AppRoot } from '@telegram-apps/telegram-ui';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import { useToast } from './ui/Toast';
@@ -39,6 +39,11 @@ export function Root() {
   const { user } = useTelegram();
   const userId = String(user?.id ?? '6267608438');
   const [balance, setBalance] = useState(0);
+  const balanceRef = useRef(0);
+
+  // Держим зеркало баланса в ref, чтобы handleUpdateBalance мог вычислить новый баланс
+  // вне updater (fetch внутри updater в StrictMode дублировался бы).
+  useEffect(() => { balanceRef.current = balance; }, [balance]);
 
   // Загружаем баланс с сервера при старте
   useEffect(() => {
@@ -56,18 +61,17 @@ export function Root() {
   }, [userId]);
 
   const handleUpdateBalance = (amount: number) => {
-    setBalance(prev => {
-      const newBalance = prev + amount;
+    // Вычисляем новый баланс ВНЕ updater: updater 'setBalance' в dev StrictMode
+    // вызывается дважды, и fetch внутри него уходил бы на сервер 2 раза.
+    balanceRef.current = balanceRef.current + amount;
+    setBalance(balanceRef.current);
 
-      // Отправляем новый баланс на сервер
-      fetch(`${CONFIG.API_URL}/api/update_balance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({ user_id: userId, balance: newBalance }),
-      }).catch(console.error);
-
-      return newBalance;
-    });
+    // Отправляем новый баланс на сервер (ровно один раз за вызов)
+    fetch(`${CONFIG.API_URL}/api/update_balance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({ user_id: userId, balance: balanceRef.current }),
+    }).catch(console.error);
   };
 
   /**

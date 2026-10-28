@@ -1972,6 +1972,7 @@ def handle_crash_bet(data):
 @socketio.on('hockey_bet')
 def handle_hockey_bet(data):
     """Принимает { user_id, username, bet }. Добавляет игрока в HOCKEY_PLAYERS."""
+    global HOCKEY_PLAYERS
     user_id = str(data.get('user_id', ''))
     username = str(data.get('username', 'Игрок'))
     bet = float(data.get('bet', 0))
@@ -2066,7 +2067,9 @@ def hockey_game_loop():
 
                     if HOCKEY_TIMER <= 0:
                         HOCKEY_TIMER = 15  # сброс для следующего раунда
-                        if len(HOCKEY_PLAYERS) >= 2:
+                        # TODO(тест): >= 1 запускает раунд даже с одним игроком.
+                        # В продакшене вернуть >= 2 (PvP, нужны два игрока).
+                        if len(HOCKEY_PLAYERS) >= 1:
                             # ── Стартуем раунд ──
                             HOCKEY_STATE = "playing"
                             HOCKEY_START_TIME = time.time()
@@ -2152,4 +2155,4 @@ print("[Server] Фоновый поток Hockey запущен.")
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     debug = os.environ.get("DEBUG", "false").lower() == "true"
-    socketio.run(app, host="0.0.0.0", port=port, debug=debug)
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug, allow_unsafe_werkzeug=True)

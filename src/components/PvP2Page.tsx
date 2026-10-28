@@ -111,7 +111,8 @@ const reset = () => {
     const socket = io(CONFIG.API_URL, { transports: ['websocket', 'polling'] });
     socket.on('connect', () => {
       console.log('[PvP2] Socket connected');
-      userIdRef.current = socket.id || userIdRef.current;
+      // userIdRef хранит ТОЛЬКО реальный Telegram ID (заполняется в createGame из useTelegram).
+      // Не перезаписываем его socket.id, иначе в hockey_result не совпадёт победитель.
     });
     socket.on('connect_error', (err: any) => {
       console.error('[PvP2] Socket connection error:', err.message);
@@ -119,6 +120,10 @@ const reset = () => {
     // ── Глобальный таймер раунда (как Crash) ──
     socket.on('hockey_timer', (data: { timer: number }) => {
       setWaitSeconds(data.timer);
+      // Окно раунда истекло, а hockey_started не пришёл (мало игроков) — разблокируем кнопку.
+      if (data.timer <= 0) {
+        setIsJoining(false);
+      }
     });
     // ── Обновление списка игроков в пуле ──
     socket.on('hockey_players_update', (data: { players: Player[] }) => {
@@ -136,6 +141,7 @@ const reset = () => {
     // ── Результат раунда (победитель от сервера) ──
     socket.on('hockey_result', (data: { winner_id: string; winner_name: string; total_pot: number }) => {
       setWinnerId(data.winner_id);
+      setIsJoining(false);
       setTotalPot(data.total_pot);
       setShapes((prev) => prev.map((s) => ({ ...s, winner: s.playerId === data.winner_id })));
       if (data.winner_id === userIdRef.current) {
@@ -179,15 +185,16 @@ useEffect(() => {
     if (isNaN(bet) || bet <= 0) { onToast?.('Enter a valid bet amount', 'error'); return; }
     if (bet > balance) { onToast?.('Insufficient balance', 'error'); return; }
     if (isJoining) return;
+    const socket = socketRef.current;
+    if (!socket) { onToast?.('Connection not ready, try again', 'error'); return; }
     setIsJoining(true);
     try {
+      // Списание — ровно один раз за нажатие (вызывается только здесь, вне эффектов)
       onUpdateBalance(-bet);
-      const socket = socketRef.current;
-      const uid = user?.id?.toString() || socket?.id || 'unknown';
+      // Только реальный Telegram ID из useTelegram; socket.id не используем
+      const uid = user?.id?.toString() || 'unknown';
       userIdRef.current = uid;
-      if (socket) {
-        socket.emit('hockey_bet', { user_id: uid, username: 'You', bet });
-      }
+      socket.emit('hockey_bet', { user_id: uid, username: 'You', bet });
       // Записываем ставку в историю
       const historyUserId = String(user?.id ?? uid);
       fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
@@ -202,9 +209,14 @@ useEffect(() => {
         }),
       }).catch(() => {});
       onToast?.('Bet placed! Waiting for the round...', 'info');
-    } finally {
+    } catch (err) {
+      console.error('[PvP2] Bet error:', err);
+      onToast?.('Failed to place bet, try again', 'error');
+      // Разблокируем кнопку ТОЛЬКО при ошибке (в finally — не сбрасываем!)
       setIsJoining(false);
     }
+    // Намеренно НЕ сбрасываем isJoining здесь: кнопка остаётся заблокированной,
+    // пока не придёт hockey_started или не истечёт таймер (hockey_timer <= 0).
   };
 
   const renderArena = () => {
