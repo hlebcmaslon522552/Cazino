@@ -477,6 +477,10 @@ useEffect(() => {
     const socket = socketRef.current;
     const uid = userIdRef.current || String(user?.id ?? 'unknown');
 
+    socket.emit('pvp_leave', { user_id: String(user?.id ?? 'unknown') });
+    setPlayers([]);
+    setHasJoined(false);
+
     // 1. Сервер убирает игрока из HOCKEY_PLAYERS и рассылает всем hockey_players_update
     socket?.emit('pvp_leave', { user_id: uid });
 
@@ -594,7 +598,9 @@ const bet = parseFloat(betInput)||0;
             <div style={{color:colors.primary,fontWeight:'bold',marginBottom:4}}>Players in pool ({players.length})</div>
             {players.map((p,i)=><div key={i} style={{color:colors.textMuted,display:'flex',justifyContent:'space-between',alignItems:'center',padding:'2px 0'}}>
               <span style={{display:'inline-flex',alignItems:'center',gap:6}}>
-                <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:18,height:18,borderRadius:'50%',background:'rgba(168,85,247,0.25)',fontSize:11,fontWeight:'bold',color:colors.primary}}>{p.username?.charAt(0)?.toUpperCase()||'?'}</span>
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                  {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
+                </div>
                 {p.username}
               </span><span style={{color:colors.gold}}>{p.bet.toFixed(1)} TON</span>
             </div>)}

@@ -125,6 +125,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     // ── Раунд стартовал ──
     socket.on('crash_started', (data: { crash_point: number; start_time: number; rate?: number; time_to_crash?: number }) => {
+console.log('[DEBUG] STARTED DATA:', data);
       serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
       setCrashPoint(normalizeCrashPoint(data.crash_point));
       crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 1.0;
@@ -142,6 +143,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     // ── Раунд завершился (RUG PULL) ──
     socket.on('crash_ended', () => {
+console.log('[DEBUG] ENDED. Server crash point:', serverCrashPointRef.current);
       // Сервер подтвердил краш — немедленно останавливаем график: перевод
       // gameState в 'crashed' размонтирует RAF-цикл (cancelAnimationFrame),
       // поэтому RUG PULL показывается сразу, без ожидания локального тика.
@@ -208,6 +210,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       // Никакой локальной генерации по кадрам / Math.pow — клиент лишь рисует
       // кривую, заданную сервером, поэтому число и график всегда синхронны и
       // достигают crash_point ровно к моменту краша.
+console.log('[DEBUG] now:', now, 'startTime:', startTimeRef.current, 'elapsed:', (now - (startTimeRef.current || now)) / 1000, 'rate:', crashRateRef.current);
       const elapsed = (now - startTimeRef.current) / 1000;
       const newMultiplier = 1.0 + elapsed * crashRateRef.current;
       animMultiplierRef.current = newMultiplier;
@@ -454,7 +457,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
   const renderGraph = () => {
     if (!points || points.length === 0) return null;
-    const polylinePoints = points.map(p => `${p.x},${p.y}`).join(' ');
     const circles = points.map((p, i) => {
       const isLast = i === points.length - 1 && isCrashed;
       return (
@@ -463,7 +465,14 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     });
     return (
       <g>
-        <polyline points={polylinePoints} fill="none" stroke="#00ff88" strokeWidth="1.5" strokeLinejoin="round" />
+        <path 
+          d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
+          fill="none" 
+          stroke={isCrashed ? "#ff3366" : "#00ff88"} 
+          strokeWidth="2" 
+          strokeLinejoin="round" 
+          strokeLinecap="round"
+        />
         {circles}
       </g>
     );
