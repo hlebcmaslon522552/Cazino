@@ -4,6 +4,7 @@ import { Coins, Swords } from 'lucide-react';
 import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { CONFIG } from '../config';
+import { useTelegram } from '../hooks/useTelegram';
 
 interface PvP2PageProps {
   balance: number;
@@ -39,6 +40,7 @@ const PUCK_DURATION_MS = 3000;
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
 export const PvP2Page = ({ balance, onUpdateBalance, onToast }: PvP2PageProps) => {
+  const { user } = useTelegram();
   const [betInput, setBetInput] = useState('1.0');
   const [phase, setPhase] = useState<Phase>('setup');
   const [players, setPlayers] = useState<Player[]>([]);
@@ -137,6 +139,20 @@ const reset = () => {
       if (data.winner_id === userIdRef.current) {
         onUpdateBalance(data.total_pot);
         onToast?.('🏆 You won! +' + data.total_pot.toFixed(2) + ' TON', 'success');
+        // Записываем выигрыш в историю (для статистики max_win)
+        const winHistoryUserId = String(user?.id ?? data.winner_id);
+        fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+          body: JSON.stringify({
+            user_id: winHistoryUserId,
+            game_type: 'hockey',
+            bet_type: 'ton',
+            amount: data.total_pot,
+            item_name: '',
+            kind: 'win',
+          }),
+        }).catch(() => {});
       } else {
         onToast?.('😔 ' + data.winner_name + ' wins!', 'error');
       }
@@ -166,6 +182,19 @@ useEffect(() => {
     if (socket) {
       socket.emit('hockey_bet', { user_id: uid, username: 'You', bet });
     }
+    // Записываем ставку в историю
+    const historyUserId = String(user?.id ?? uid);
+    fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({
+        user_id: historyUserId,
+        game_type: 'hockey',
+        bet_type: 'ton',
+        amount: bet,
+        item_name: '',
+      }),
+    }).catch(() => {});
     onToast?.('Bet placed! Waiting for the round...', 'info');
   };
 

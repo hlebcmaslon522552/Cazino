@@ -78,6 +78,18 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
           amount: stakePrice,
         }),
       }).catch(() => {});
+      // Записываем ставку в историю
+      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          game_type: 'mines',
+          bet_type: 'ton',
+          amount: stakePrice,
+          item_name: '',
+        }),
+      }).catch(() => {});
     }
 
     setOpenSafe([]);
@@ -143,6 +155,20 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
         if (updated.length >= safeTotal) {
           setPhase('won');
           onToast('🎉 Вы открыли все клетки!', 'success');
+          // Записываем выигрыш в историю (для статистики max_win)
+          const autoWin = stakePrice * (data.new_multiplier ?? currentMultiplier);
+          fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+            body: JSON.stringify({
+              user_id: user?.id ?? 'unknown',
+              game_type: 'mines',
+              bet_type: 'ton',
+              amount: autoWin,
+              item_name: '',
+              kind: 'win',
+            }),
+          }).catch(() => {});
         }
       }
     } catch (e) {
@@ -157,6 +183,19 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
     onUpdateBalance(potentialWin);
     setPhase('won');
     onToast(`💰 Вы забрали ${potentialWin.toFixed(2)} TON!`, 'success');
+    // Записываем выигрыш в историю (для статистики max_win)
+    fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({
+        user_id: user?.id ?? 'unknown',
+        game_type: 'mines',
+        bet_type: 'ton',
+        amount: potentialWin,
+        item_name: '',
+        kind: 'win',
+      }),
+    }).catch(() => {});
   };
 
   /* ── Возврат в настройки с чистой сеткой ── */

@@ -259,6 +259,19 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         }),
       }).catch(() => {});
     }
+
+    // Записываем ставку в историю (TON и NFT)
+    fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({
+        user_id: user?.id ?? 'unknown',
+        game_type: 'crash',
+        bet_type: betType,
+        amount: turnoverAmount,
+        item_name: betType === 'nft' ? (selectedNft?.model || selectedNft?.name || '') : '',
+      }),
+    }).catch(() => {});
   };
 
   const cashOut = () => {
@@ -281,6 +294,21 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
       setHasCashedOut(true);
       onUpdateBalance(winAmount);
+
+      // Записываем выигрыш в историю (для статистики max_win)
+      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          game_type: 'crash',
+          bet_type: betType,
+          amount: winAmount,
+          item_name: betType === 'nft' ? (selectedNft?.model || selectedNft?.name || '') : '',
+          kind: 'win',
+        }),
+      }).catch(() => {});
+
       onToast?.('Вы забрали ' + winAmount.toFixed(2) + (betType === 'ton' ? ' TON' : ' TON (NFT)') + ' по ' + multiplier.toFixed(2) + 'x', 'success');
     }
   };

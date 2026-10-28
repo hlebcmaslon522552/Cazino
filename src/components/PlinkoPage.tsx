@@ -291,6 +291,19 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             haptic('medium');
             setLastWin({ id: b.id, multiplier: b.multiplier, win, won: true });
             onToast(`🎉 Выигрыш +${win.toFixed(2)} TON (${b.multiplier.toFixed(2)}x)`, 'success');
+            // Записываем выигрыш в историю (для статистики max_win)
+            fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+              body: JSON.stringify({
+                user_id: user?.id ?? 'unknown',
+                game_type: 'plinko',
+                bet_type: 'ton',
+                amount: win,
+                item_name: '',
+                kind: 'win',
+              }),
+            }).catch(() => {});
           } else {
             haptic('light');
           }
@@ -386,6 +399,21 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
           user_id: user?.id ?? 'unknown',
           username: user?.first_name || 'Игрок',
           amount: totalStake,
+        }),
+      }).catch(() => {});
+    }
+
+    // Записываем ставку в историю
+    if (totalStake > 0) {
+      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          game_type: 'plinko',
+          bet_type: 'ton',
+          amount: totalStake,
+          item_name: '',
         }),
       }).catch(() => {});
     }

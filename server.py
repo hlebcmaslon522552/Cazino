@@ -135,6 +135,24 @@ def init_db():
         )
     """)
 
+    # 3.1. Таблица истории ставок (беты и выигрыши пользователя)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS bet_history (
+            id INTEGER PRIMARY KEY,
+            user_id TEXT,
+            game_type TEXT,
+            bet_type TEXT,
+            amount REAL,
+            item_name TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # Доп. поле kind ('bet' | 'win') — расширение схемы для статистики max_win
+    try:
+        c.execute("ALTER TABLE bet_history ADD COLUMN kind TEXT DEFAULT 'bet'")
+    except sqlite3.OperationalError:
+        pass  # колонка уже существует
+
     # 4. Таблица депозитов (для лидерборда deposits)
     c.execute("""
         CREATE TABLE IF NOT EXISTS deposits (
@@ -1478,6 +1496,127 @@ def leaderboard_turnover():
     except Exception as e:
         print(f"[leaderboard_turnover] error: {e}")
         return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── Bet History & User Stats ───────────────────────────────────────────
+@app.route("/api/add_bet_history", methods=["POST"])
+def add_bet_history():
+    """Записывает запись в историю ставок пользователя.
+
+    kind: 'bet' (ставка по умолчанию) или 'win' (выигрыш для статистики).
+    """
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    user_id = str(data.get("user_id", "unknown"))
+    game_type = str(data.get("game_type", "unknown"))
+    bet_type = str(data.get("bet_type", "ton"))
+    amount = float(data.get("amount", 0))
+    item_name = str(data.get("item_name", "") or "")
+    kind = str(data.get("kind", "bet"))
+
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO bet_history (user_id, game_type, bet_type, amount, item_name, kind) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, game_type, bet_type, amount, item_name, kind),
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[add_bet_history] error: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/bet_history", methods=["GET"])
+def bet_history():
+    """Возвращает последние 20 ставок пользователя."""
+    user_id = str(request.args.get("user_id", ""))
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT id, user_id, game_type, bet_type, amount, item_name, timestamp
+            FROM bet_history
+            WHERE user_id = ? AND kind = 'bet'
+            ORDER BY id DESC
+            LIMIT 20
+            """,
+            (user_id,),
+        )
+        rows = c.fetchall()
+        history = [
+            {
+                "id": r[0],
+                "user_id": r[1],
+                "game_type": r[2],
+                "bet_type": r[3],
+                "amount": r[4],
+                "item_name": r[5] or "",
+                "timestamp": r[6],
+            }
+            for r in rows
+        ]
+        return jsonify(history)
+    except Exception as e:
+        print(f"[bet_history] error: {e}")
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/api/user_stats", methods=["GET"])
+def user_stats():
+    """Возвращает статистику пользователя:
+      - max_win — самый большой выигрыш (из записей kind='win');
+      - rarest_item — самый дорогой предмет из инвентаря (редкий дроп).
+    """
+    user_id = str(request.args.get("user_id", ""))
+    if not user_id or user_id == "unknown":
+        return jsonify({"error": "user_id is required"}), 400
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+
+        c.execute(
+            "SELECT COALESCE(MAX(amount), 0) FROM bet_history WHERE user_id = ? AND kind = 'win'",
+            (user_id,),
+        )
+        max_win = float(c.fetchone()[0] or 0)
+
+        c.execute(
+            "SELECT name, image, floor FROM inventory WHERE user_id = ? ORDER BY floor DESC LIMIT 1",
+            (user_id,),
+        )
+        row = c.fetchone()
+        rarest_item = None
+        if row:
+            rarest_item = {"name": row[0], "image": row[1] or "", "price": row[2]}
+
+        return jsonify({"max_win": round(max_win, 2), "rarest_item": rarest_item})
+    except Exception as e:
+        print(f"[user_stats] error: {e}")
+        return jsonify({"error": "Database error"}), 500
     finally:
         if conn:
             conn.close()

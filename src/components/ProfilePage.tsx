@@ -88,6 +88,13 @@ export function ProfilePage({ onNavigate, balance }: Props) {
         </div>
       </div>
 
+      {/* ── История ставок ─────────────────────── */}
+      <div style={{ marginBottom: spacing.lg }}>
+        <Button variant="secondary" fullWidth onClick={() => onNavigate('bet_history')}>
+          📜 История ставок
+        </Button>
+      </div>
+
       {/* ── Блок Инвентаря ─────────────────────────── */}
       <div style={{ marginTop: spacing.lg, marginBottom: spacing.lg }}>
         <div style={{ color: colors.textMuted, fontSize: 13, marginBottom: 10, fontWeight: 'bold', letterSpacing: 1 }}>ИНВЕНТАРЬ</div>
