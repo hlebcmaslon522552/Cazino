@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Clock, Users, Zap } from 'lucide-react';
+import { CheckCircle, Clock, Users, XCircle, Zap } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
@@ -142,7 +142,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         // После окончания раунда очищаем данные игроков
         setPlayers([]);
         frozenCashoutsRef.current = {};
-      }, 5000);
+      }, 1500);
     });
 
     // ── Обновление пула ставок ──
@@ -178,7 +178,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     const animate = () => {
       if (!startTimeRef.current) startTimeRef.current = Date.now();
       const now = Date.now();
-      animMultiplierRef.current += 0.001;
+      animMultiplierRef.current += 0.0001;
       const newMultiplier = animMultiplierRef.current;
 
       if (now - lastPointTimeRef.current > 300 + Math.random() * 200) {
@@ -224,7 +224,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           // После окончания раунда очищаем данные игроков
           setPlayers([]);
           frozenCashoutsRef.current = {};
-        }, 5000);
+        }, 1500);
       } else {
         // Ограничиваем отображение множителя до 100x, чтобы избежать
         // зависания при слишком больших значениях Math.pow
@@ -602,7 +602,14 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
                     {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-white font-bold text-sm truncate">{p.username || 'Игрок'}</div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-white font-bold text-sm truncate">{p.username || 'Игрок'}</span>
+                      {isCashedOut ? (
+                        <CheckCircle size={16} className="text-green-500 shrink-0" />
+                      ) : gameState === 'crashed' ? (
+                        <XCircle size={16} className="text-red-500 shrink-0" />
+                      ) : null}
+                    </div>
                     <div className="flex items-center gap-1 mt-0.5">
                       <img src={publicUrl('TON.png')} alt="TON" className="w-3.5 h-3.5 object-contain shrink-0" />
                       <span className="text-gray-300 font-semibold text-xs">{p.bet.toFixed(2)}</span>
