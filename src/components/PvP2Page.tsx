@@ -28,6 +28,7 @@ interface Shape {
   bet: number;
   playerId: string;
   winner: boolean;
+  type: number; // 0 — прямоугольник, 1 — треугольник, 2 — круг, 3 — многоугольник (5-6 сторон)
 }
 
 type Phase = 'setup' | 'playing' | 'result';
@@ -42,6 +43,138 @@ const PUCK_SPEED = 3;
 const PUCK_FRICTION = 0.98;
 
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+// ── Генерация случайных фигур с упаковкой (AABB) ──────────────────────────
+const SHAPE_PAD = 6;
+
+// Проверка пересечения двух прямоугольников (AABB) с отступом
+const aabbIntersects = (
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+  pad: number = SHAPE_PAD,
+): boolean =>
+  a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
+
+// SVG-точки треугольника внутри bounding box фигуры (вершина сверху)
+const trianglePoints = (s: Shape): string =>
+  s.x + ',' + (s.y + s.h) + ' ' + (s.x + s.w / 2) + ',' + s.y + ' ' + (s.x + s.w) + ',' + (s.y + s.h);
+
+// SVG-точки правильного многоугольника (5-6 сторон) с центром в bbox фигуры
+const polygonPoints = (s: Shape, sides: number): string => {
+  const cx = s.x + s.w / 2;
+  const cy = s.y + s.h / 2;
+  const r = Math.min(s.w, s.h) / 2;
+  const pts: string[] = [];
+  const offset = -Math.PI / 2; // начинаем сверху
+  for (let i = 0; i < sides; i++) {
+    const ang = offset + (i * 2 * Math.PI) / sides;
+    pts.push((cx + r * Math.cos(ang)).toFixed(1) + ',' + (cy + r * Math.sin(ang)).toFixed(1));
+  }
+  return pts.join(' ');
+};
+
+// Самый большой свободный прямоугольник арены (алгоритм «полос» между рёбрами фигур)
+const findLargestFreeRect = (placed: Shape[]): { x: number; y: number; w: number; h: number } => {
+  let best = { x: 0, y: 0, w: FIELD_W, h: FIELD_H, area: FIELD_W * FIELD_H };
+  const edgesY = new Set<number>([0, FIELD_H]);
+  for (const s of placed) {
+    edgesY.add(s.y);
+    edgesY.add(s.y + s.h);
+  }
+  const ys = [...edgesY].filter((y) => y >= 0 && y <= FIELD_H).sort((a, b) => a - b);
+  for (let i = 0; i < ys.length - 1; i++) {
+    const y0 = ys[i];
+    const y1 = ys[i + 1];
+    if (y1 - y0 < 1) continue;
+    const blockers = placed.filter((s) => s.y < y1 - 0.01 && s.y + s.h > y0 + 0.01);
+    const occ = blockers.map((s) => ({ x0: s.x, x1: s.x + s.w })).sort((a, b) => a.x0 - b.x0);
+    let cursor = 0;
+    for (const o of occ) {
+      const o0 = Math.max(o.x0, 0);
+      const o1 = Math.min(o.x1, FIELD_W);
+      if (o1 <= 0 || o0 >= FIELD_W) continue;
+      if (o0 > cursor) {
+        const area = (o0 - cursor) * (y1 - y0);
+        if (area > best.area) best = { x: cursor, y: y0, w: o0 - cursor, h: y1 - y0, area };
+      }
+      cursor = Math.max(cursor, o1);
+    }
+    if (cursor < FIELD_W) {
+      const area = (FIELD_W - cursor) * (y1 - y0);
+      if (area > best.area) best = { x: cursor, y: y0, w: FIELD_W - cursor, h: y1 - y0, area };
+    }
+  }
+  return { x: best.x, y: best.y, w: best.w, h: best.h };
+};
+
+// Главная функция: случайные фигуры для всех игроков.
+// 1. Игроки сортируются по возрастанию ставки (маленькие ставки сначала).
+// 2. Для каждого игрока (кроме последнего) — случайная форма и размер от ставки
+//    (base = 40 + bet * 2, максимум w <= 450, h <= 270) с проверкой AABB;
+//    если не помещается — размер уменьшается.
+// 3. Последний (самый большой) игрок занимает всё оставшееся пространство (или всю арену).
+const generateShapesForPlayers = (players: Player[]): Shape[] => {
+  const sorted = [...players].sort((a, b) => a.bet - b.bet);
+  const placed: Shape[] = [];
+  const n = Math.max(sorted.length, 1);
+
+  sorted.forEach((p, i) => {
+    const hue = Math.round((i * 360) / n) % 360; // уникальный HSL-оттенок на игрока
+    const isLast = i === n - 1;
+
+    if (isLast) {
+      // Самый большой игрок — всё оставшееся пространство (или вся арена)
+      const free = findLargestFreeRect(placed);
+      placed.push({
+        type: 0,
+        x: free.x,
+        y: free.y,
+        w: free.w,
+        h: free.h,
+        hue,
+        bet: p.bet,
+        playerId: p.user_id,
+        winner: false,
+      });
+      return;
+    }
+
+    // Размер зависит от ставки: base = 40 + bet * 2 (максимум w <= 450, h <= 270)
+    const base = 40 + p.bet * 2;
+    let w = Math.max(Math.min(base * randomRange(0.85, 1), 450), 20);
+    let h = Math.max(Math.min(base * 0.55 * randomRange(0.8, 1.15), 270), 14);
+    // 0 — прямоугольник, 1 — треугольник, 2 — круг, 3 — многоугольник (5-6 сторон)
+    const type = Math.floor(Math.random() * 4);
+
+    let placedShape: Shape | null = null;
+    for (let shrink = 0; shrink < 14 && !placedShape; shrink++) {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const x = randomRange(0, Math.max(FIELD_W - w, 0));
+        const y = randomRange(0, Math.max(FIELD_H - h, 0));
+        if (!placed.some((s) => aabbIntersects(s, { x, y, w, h }))) {
+          placedShape = { type, x, y, w, h, hue, bet: p.bet, playerId: p.user_id, winner: false };
+          break;
+        }
+      }
+      w *= 0.85;
+      h *= 0.85;
+    }
+
+    placed.push(placedShape || {
+      type,
+      x: 0,
+      y: 0,
+      w: Math.max(Math.min(w, 140), 10),
+      h: Math.max(Math.min(h, 80), 8),
+      hue,
+      bet: p.bet,
+      playerId: p.user_id,
+      winner: false,
+    });
+  });
+
+  return placed;
+};
 
 export const PvP2Page: React.FC<PvP2PageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user } = useTelegram();
@@ -160,7 +293,8 @@ const reset = () => {
     // ── Старт раунда (сервер шлёт игроков и фигуры) ──
     socket.on('hockey_started', (data: { players: Player[]; shapes: Shape[]; total_pot: number }) => {
       setPlayers(data.players);
-      setShapes(data.shapes);
+      // Серверные «полосы» заменяем на случайные фигуры с упаковкой (см. generateShapesForPlayers)
+      setShapes(generateShapesForPlayers(data.players));
       setTotalPot(data.total_pot);
       totalPotRef.current = data.total_pot;
       setPhase('playing');
@@ -216,23 +350,6 @@ useEffect(() => {
     }
   }, [phase]);
 
-  // Мгновенная «территория» игрока: рисуется сразу после ставки, пока сервер
-  // не пришлёт официальные фигуры в hockey_started (соло-игра — вся арена).
-  const generateShape = (existing: Shape[], bet: number, isPlayer: boolean): Shape => {
-    const totalBet = bet + existing.reduce((sum, sh) => sum + sh.bet, 0);
-    const w = Math.max(FIELD_W * (bet / totalBet), 1);
-    return {
-      x: existing.reduce((sum, sh) => sum + sh.w, 0),
-      y: 0,
-      w,
-      h: FIELD_H,
-      hue: isPlayer ? 270 : 35,
-      bet,
-      playerId: isPlayer ? (userIdRef.current || 'local_player') : 'opponent',
-      winner: false,
-    };
-  };
-
   const createGame = () => {
     const bet = parseFloat(betInput);
     if (isNaN(bet) || bet <= 0) { onToast?.('Enter a valid bet amount', 'error'); return; }
@@ -245,8 +362,14 @@ useEffect(() => {
       // Списание — ровно один раз за нажатие (вызывается только здесь, вне эффектов)
       onUpdateBalance(-bet);
       // Мгновенно показываем территорию игрока (соло-игра занимает 100% арены)
-      const newShape = generateShape([], bet, true);
-      setShapes([newShape]);
+      setShapes(generateShapesForPlayers([
+        {
+          user_id: userIdRef.current || 'local_player',
+          username: 'You',
+          bet,
+          color: '#a855f7',
+        },
+      ]));
       // Только реальный Telegram ID из useTelegram; socket.id не используем
       const uid = user?.id?.toString() || 'unknown';
       userIdRef.current = uid;
@@ -292,16 +415,33 @@ useEffect(() => {
         <rect x="0" y="0" width={FIELD_W} height={FIELD_H} fill="#1a1a2e" rx="8" ry="8" />
         <line x1={FIELD_W/2} y1="0" x2={FIELD_W/2} y2={FIELD_H} stroke="rgba(255,255,255,0.15)" strokeWidth="2" strokeDasharray="6,4" />
         <circle cx={FIELD_W/2} cy={FIELD_H/2} r={40} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" />
-        {shapes.map((shape) => (
-          <g key={shape.playerId}>
-            <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx="4" ry="4"
-              fill={'hsl('+shape.hue+',70%,'+(shape.winner?'55%':'45%')+')'} fillOpacity="0.85"
-              stroke={shape.winner?'#22c55e':'#000'} strokeWidth={shape.winner?3:1.5}
-              style={{transition:'stroke 0.3s,fill 0.3s',filter:shape.winner?'drop-shadow(0 0 8px rgba(34,197,94,0.7))':'none'}} />
-            <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx="4" ry="4" fill={`url(#${pid})`} pointerEvents="none" />
-            {(shape.w<10||shape.h<10)&&<rect x={shape.x-1} y={shape.y-1} width={shape.w+2} height={shape.h+2} rx="4" ry="4" fill="none" stroke="#fff" strokeWidth={2} pointerEvents="none" />}
-          </g>
-        ))}
+        {shapes.map((shape) => {
+          const fill = 'hsl(' + shape.hue + ',70%,' + (shape.winner ? '55%' : '45%') + ')';
+          const stroke = shape.winner ? '#22c55e' : '#000';
+          const strokeWidth = shape.winner ? 3 : 1.5;
+          const svgStyle = {
+            transition: 'stroke 0.3s,fill 0.3s',
+            filter: shape.winner ? 'drop-shadow(0 0 8px rgba(34,197,94,0.7))' : 'none',
+          };
+          // Рендер по типу: 0 — прямоугольник, 1 — треугольник, 2 — круг, 3 — многоугольник (5-6 сторон)
+          let body: React.ReactNode;
+          if (shape.type === 2) {
+            body = <circle cx={shape.x + shape.w / 2} cy={shape.y + shape.h / 2} r={Math.min(shape.w, shape.h) / 2} fill={fill} fillOpacity={0.85} stroke={stroke} strokeWidth={strokeWidth} style={svgStyle} />;
+          } else if (shape.type === 1) {
+            body = <polygon points={trianglePoints(shape)} fill={fill} fillOpacity={0.85} stroke={stroke} strokeWidth={strokeWidth} style={svgStyle} />;
+          } else if (shape.type === 3) {
+            body = <polygon points={polygonPoints(shape, 5 + (Math.round(shape.hue) % 2))} fill={fill} fillOpacity={0.85} stroke={stroke} strokeWidth={strokeWidth} style={svgStyle} />;
+          } else {
+            body = <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx="4" ry="4" fill={fill} fillOpacity={0.85} stroke={stroke} strokeWidth={strokeWidth} style={svgStyle} />;
+          }
+          return (
+            <g key={shape.playerId}>
+              {body}
+              {shape.type === 0 && <rect x={shape.x} y={shape.y} width={shape.w} height={shape.h} rx="4" ry="4" fill={`url(#${pid})`} pointerEvents="none" />}
+              {shape.type === 0 && (shape.w < 12 || shape.h < 12) && <rect x={shape.x - 1} y={shape.y - 1} width={shape.w + 2} height={shape.h + 2} rx="4" ry="4" fill="none" stroke="#fff" strokeWidth={2} pointerEvents="none" />}
+            </g>
+          );
+        })}
         {(phase==='playing'||phase==='result')&&<g ref={attachPuckRef} style={{willChange:'transform'}}>
           <circle cx={0} cy={0} r={16} fill="url(#puck-glow)" />
           <circle cx={0} cy={0} r={PUCK_R} fill="#fff" stroke="#000" strokeWidth={1.5} />

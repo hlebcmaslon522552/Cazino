@@ -2118,7 +2118,8 @@ def hockey_game_loop():
                         total_pot = sum(p['bet'] for p in HOCKEY_PLAYERS)
                         # Комиссия казино 2.5%: победитель получает банк за вычетом комиссии
                         commission = round(total_pot * CASINO_COMMISSION_RATE, 2)
-                        prize = round(total_pot - commission, 2)
+                        # Победитель получает банк за вычетом комиссии: total_pot * 0.975 (2.5%)
+                        prize = round(total_pot * (1 - CASINO_COMMISSION_RATE), 2)
                         socketio.emit('hockey_result', {
                             'winner_id': winner['user_id'],
                             'winner_name': winner['username'],

@@ -81,7 +81,7 @@ export function ProfilePage({ onNavigate, balance }: Props) {
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', borderRadius: 16 }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ fontSize: 28, fontWeight: 'bold', letterSpacing: 2, marginBottom: 4 }}>ПОЛУЧАЙ</div>
-          <div style={{ fontSize: 22, fontWeight: 'bold', color: '#ffd700', marginBottom: spacing.md }}>5% С ИХ ТРАТ</div>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#ffd700', marginBottom: spacing.md, letterSpacing: 1 }}>5% С ИХ ДЕПОЗИТОВ</div>
           <div className="invite-btn-wrap">
             <Button variant="primary" fullWidth onClick={() => onNavigate('referral')}>📋 Пригласить</Button>
           </div>
