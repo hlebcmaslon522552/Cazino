@@ -108,7 +108,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
             setCrashPoint(normalizeCrashPoint(data.crash_point));
             // Множитель считаем по серверному rate: multiplier = 1.0 + elapsed * rate
             crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 1.0;
-            startTimeRef.current = (data.start_time || 0) * 1000;
+            startTimeRef.current = (data.start_time || 0);
             lastPointTimeRef.current = Date.now();
             animMultiplierRef.current = 1.0;
             setGameState('flying');
@@ -130,25 +130,26 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 console.log('[DEBUG] STARTED DATA:', data);
       serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
       setCrashPoint(normalizeCrashPoint(data.crash_point));
-      crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 1.0;
-      startTimeRef.current = data.start_time * 1000;
+      crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 0.2222;
+      startTimeRef.current = data.start_time;  // сервер шлёт миллисекунды (time.time()*1000)
       lastPointTimeRef.current = Date.now();
-      animMultiplierRef.current = 1.0;
       setGameState('flying');
       setMultiplier(1.00);
       setPoints([{ x: 0, y: 100 }]);
       setHasCashedOut(false);
+      hasCashedOutRef.current = false;
       setCashedOutAt(0);
-      // Новый раунд: стираем заморозки коэффициентов предыдущего раунда
+      setAutoCashout(null);
+      autoCashoutRef.current = null;
       frozenCashoutsRef.current = {};
     });
 
     // ── Раунд завершился (RUG PULL) ──
-    socket.on('crash_ended', () => {
+    socket.on('crash_ended', (data: { crash_point?: number }) => {
       // Защита от дублей: если уже крашнулись, игнорируем
       if (gameStateRef.current === 'crashed') return; 
       
-      const finalPt = serverCrashPointRef.current;
+      const finalPt = data?.crash_point || serverCrashPointRef.current;
       setMultiplier(finalPt);
       setGameState('crashed');
       gameStateRef.current = 'crashed';
@@ -210,9 +211,9 @@ console.log('[DEBUG] STARTED DATA:', data);
       const now = Date.now();
       if (!startTimeRef.current) startTimeRef.current = now;
 
-      // Фиксированная скорость: 1x за 4.5 сек = 0.2222 в секунду
+      // Множитель от сервера: multiplier = 1.0 + elapsed * rate
       const elapsed = Math.max(0, (now - startTimeRef.current) / 1000);
-      const newMultiplier = 1.0 + elapsed * 0.2222;
+      const newMultiplier = 1.0 + elapsed * crashRateRef.current;
 
       if (now - lastPointTimeRef.current >= 120) {
         setPoints(prev => {
@@ -225,47 +226,19 @@ console.log('[DEBUG] STARTED DATA:', data);
         lastPointTimeRef.current = now;
       }
 
-      if (newMultiplier >= serverCrashPointRef.current) {
-        const finalPt = normalizeCrashPoint(serverCrashPointRef.current);
-        setMultiplier(finalPt);
-        setGameState('crashed');
-        setHistory(prev => [finalPt, ...prev].slice(0, 30));
-        setHasBet(false);
-        // Раунд завершился — цель авто-сбора больше неактуальна
-        setAutoCashout(null);
-        autoCashoutRef.current = null;
-        if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
-        crashedResetRef.current = setTimeout(() => {
-          setGameState('waiting');
-          setMultiplier(1.00);
-          setPoints([{ x: 0, y: 100 }]);
-          setHasCashedOut(false);
-          setCashedOutAt(0);
-          setHasBet(false);
-          setAutoCashout(null);
-          autoCashoutRef.current = null;
-          // После окончания раунда очищаем данные игроков
-          setPlayers([]);
-          frozenCashoutsRef.current = {};
-        }, 1500);
-      } else {
-        // Страховка: ограничиваем отображение множителя до 100x
-        const clamped = Math.min(newMultiplier, 100);
-        setMultiplier(clamped);
+      // Просто отображаем множитель (сервер сам остановит RAF через crash_ended)
+      const clamped = Math.min(newMultiplier, 100);
+      setMultiplier(clamped);
 
-        // ── Авто-сбор ──
-        // Срабатывает строго один раз: после cashOut() hasCashedOutRef сразу
-        // становится true, поэтому в следующих тиках проверка не пройдёт,
-        // а после достижения цели (setAutoCashout(null)) останется выключенным.
-        if (
-          autoCashoutRef.current !== null &&
-          !hasCashedOutRef.current &&
-          clamped >= autoCashoutRef.current
-        ) {
-          cashOutRef.current(clamped);
-        }
-        requestRef.current = requestAnimationFrame(animate);
+      // ── Авто-сбор ──
+      if (
+        autoCashoutRef.current !== null &&
+        !hasCashedOutRef.current &&
+        clamped >= autoCashoutRef.current
+      ) {
+        cashOutRef.current(clamped);
       }
+      requestRef.current = requestAnimationFrame(animate);
     };
 
     requestRef.current = requestAnimationFrame(animate);

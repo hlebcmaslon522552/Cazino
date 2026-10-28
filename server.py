@@ -287,51 +287,62 @@ def generate_crash_point():
 
 # ── Crash Game Loop (фоновый поток) ───────────────────────────────────────
 def crash_game_loop():
-    """Фоновый поток: обновляет CRASH_STATE, CRASH_TIMER, CRASH_POINT каждую секунду
-    и рассылает всем подключённым клиентам события через WebSocket."""
+    """Фоновый поток: синхронный цикл раунда Crash.
+    Вся логика таймера полностью на сервере — клиент только рисует анимацию.
+    Раунд длится до достижения crash_point при фиксированной скорости 0.2222 x/с."""
     global CRASH_STATE, CRASH_TIMER, CRASH_POINT, CRASH_START_TIME, CRASH_RATE, CRASH_PLAYERS
     print("[CrashLoop] Поток запущен.")
     while True:
         try:
+            # ── 1. Состояние ожидания (15 секунд) ──
+            CRASH_STATE = "waiting"
+            CRASH_TIMER = 15
+            for i in range(15, 0, -1):
+                CRASH_TIMER = i
+                socketio.emit('crash_timer', {'timer': i}, broadcast=True)
+                socketio.sleep(1)
+
+            # ── 2. Старт раунда ──
             with CRASH_LOCK:
-                if CRASH_STATE == "waiting":
-                    CRASH_TIMER -= 1
-                    # Глобальный обратный отсчёт для всех игроков
-                    socketio.emit('crash_timer', {'timer': max(CRASH_TIMER, 0)})
+                CRASH_POINT = generate_crash_point()
+                CRASH_START_TIME = time.time() * 1000   # миллисекунды для JS-клиента
+                CRASH_RATE = 0.2222                     # 1x за 4.5 сек
+                CRASH_STATE = "flying"
 
-                    if CRASH_TIMER <= 0:
-                        # Генерируем точку краша и стартуем раунд
-                        CRASH_POINT = generate_crash_point()
-                        CRASH_START_TIME = time.time()
-                        # Множитель растёт линейно: multiplier = 1.0 + elapsed * RATE.
-                        # Раунд завершается при elapsed = CRASH_POINT - 1.0 (условие ниже),
-                        # поэтому RATE = (CRASH_POINT - 1.0) / (CRASH_POINT - 1.0) = 1.0:
-                        # кривая достигает crash_point ровно к моменту краша.
-                        CRASH_RATE = 1.0
-                        CRASH_STATE = "flying"
-                        print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x, rate: {CRASH_RATE}")
-                        socketio.emit('crash_started', {
-                            'crash_point': CRASH_POINT,
-                            'start_time': CRASH_START_TIME,
-                            'rate': CRASH_RATE,
-                            'time_to_crash': round(CRASH_POINT - 1.0, 2),
-                        })
+            print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x, rate: {CRASH_RATE}")
+            socketio.emit('crash_started', {
+                'crash_point': CRASH_POINT,
+                'start_time': CRASH_START_TIME,
+                'rate': CRASH_RATE,
+                'time_to_crash': round((CRASH_POINT - 1.0) / CRASH_RATE, 2),
+            }, broadcast=True)
 
-                elif CRASH_STATE == "flying":
-                    elapsed = time.time() - CRASH_START_TIME
-                    if elapsed >= CRASH_POINT - 1.0:
-                        # Раунд завершён (краш)
-                        CRASH_STATE = "waiting"
-                        CRASH_TIMER = 15
-                        CRASH_POINT = 1.00
-                        CRASH_PLAYERS = []
-                        print("[CrashLoop] Раунд завершён. Ожидание следующего...")
-                        socketio.emit('crash_ended')
+            # ── 3. Ожидание краша ──
+            # Время до краша = (crash_point - 1.0) / rate (секунд)
+            crash_duration_ms = (CRASH_POINT - 1.0) / CRASH_RATE * 1000
+            elapsed = 0.0
+            while elapsed < crash_duration_ms:
+                socketio.sleep(0.1)
+                with CRASH_LOCK:
+                    elapsed = (time.time() * 1000) - CRASH_START_TIME
+
+            # ── 4. Краш ──
+            with CRASH_LOCK:
+                CRASH_STATE = "waiting"
+                CRASH_TIMER = 15
+                final_crash_point = CRASH_POINT
+                CRASH_POINT = 1.00
+                CRASH_PLAYERS = []
+
+            print(f"[CrashLoop] Раунд завершён. RUG PULL (краш-поинт: {final_crash_point}x).")
+            socketio.emit('crash_ended', {'crash_point': final_crash_point}, broadcast=True)
+
+            # ── 5. Пауза для отображения RUG PULL ──
+            socketio.sleep(3)
 
         except Exception as e:
             print(f"[CrashLoop] Ошибка: {e}")
-
-        time.sleep(1)
+            socketio.sleep(1)
 
 
 
@@ -1531,7 +1542,7 @@ def crash_state():
             "crash_point": CRASH_POINT,
             "start_time": CRASH_START_TIME,
             "rate": CRASH_RATE,
-            "time_to_crash": round(CRASH_POINT - 1.0, 2),
+            "time_to_crash": round((CRASH_POINT - 1.0) / CRASH_RATE, 2) if CRASH_RATE > 0 else 0,
         })
 
 
