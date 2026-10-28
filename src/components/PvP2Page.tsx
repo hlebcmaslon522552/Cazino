@@ -355,6 +355,19 @@ const reset = () => {
     };
   }, []);
 
+  // ── Вкладка скрылась/вернулась: принудительно переподключаем сокет ─────
+  // Браузер может приостановить WS в фоновой вкладке. При возврате на вкладку
+  // гарантированно вызываем connect(), чтобы лобби снова получало события.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && socketRef.current && !socketRef.current.connected) {
+        socketRef.current.connect();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
   // ── Таймер лобби: идёт только когда в пуле 2+ игрока ──────────────────
   // Когда игроков меньше двух — интервал очищается, отсчёт сбрасывается и
   // в UI показывается «Ожидание игроков...». Как только набирается 2+ игрока —
@@ -464,8 +477,7 @@ useEffect(() => {
     const socket = socketRef.current;
     const uid = userIdRef.current || String(user?.id ?? 'unknown');
 
-    // 1. Сообщаем серверу о выходе. События pvp_leave на текущем бэкенде нет —
-    //    оно безопасно игнорируется, поэтому игрока из пула убирает шаг 4.
+    // 1. Сервер убирает игрока из HOCKEY_PLAYERS и рассылает всем hockey_players_update
     socket?.emit('pvp_leave', { user_id: uid });
 
     // 2. Возвращаем ставку на баланс
@@ -480,15 +492,8 @@ useEffect(() => {
     hasJoinedRef.current = false;
     setIsJoining(false);
 
-    // 4. Разрываем соединение, чтобы сервер убрал игрока из HOCKEY_PLAYERS
-    //    (disconnect-хендлер бэкенда), и сразу переподключаемся — сокет
-    //    остаётся живым для новых ставок после выхода.
-    if (socket) {
-      socket.disconnect();
-      setTimeout(() => {
-        try { socket.connect(); } catch (e) { console.warn('[PvP2] reconnect after leave failed', e); }
-      }, 250);
-    }
+    // 4. Сокет НЕ разрываем: соединение остаётся живым для новых ставок.
+    //    Вышедшего игрока из пула убирает серверный обработчик pvp_leave.
 
     onToast?.('Вы вышли из лобби', 'success');
   };

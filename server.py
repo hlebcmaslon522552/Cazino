@@ -2019,6 +2019,30 @@ def handle_hockey_bet(data):
     print(f"[Hockey] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(HOCKEY_PLAYERS)}")
 
 
+@socketio.on('pvp_leave')
+def handle_pvp_leave(data):
+    """Выход из лобби Hockey: удаляет игрока из HOCKEY_PLAYERS и рассылает всем свежий список."""
+    global HOCKEY_PLAYERS
+    data = data or {}
+    user_id = str(data.get('user_id', ''))
+    if not user_id:
+        return
+
+    with HOCKEY_LOCK:
+        before = len(HOCKEY_PLAYERS)
+        HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p.get('user_id') != user_id]
+        removed = len(HOCKEY_PLAYERS) != before
+        players_snapshot = [
+            {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
+            for p in HOCKEY_PLAYERS
+        ]
+
+    # Рассылаем актуальный список ВСЕМ клиентам, чтобы лобби обновлялось мгновенно
+    socketio.emit('hockey_players_update', {'players': players_snapshot})
+    if removed:
+        print(f"[Hockey] Игрок {user_id} вышел из лобби. Осталось в пуле: {len(HOCKEY_PLAYERS)}")
+
+
 @socketio.on('disconnect')
 def handle_disconnect():
     """При отключении удаляем игрока из комнат."""
