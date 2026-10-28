@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Coins, ShoppingBag, Loader } from 'lucide-react';
+import { ShoppingBag, Loader } from 'lucide-react';
 import { CONFIG } from '../config';
 import { useTelegram } from '../hooks/useTelegram';
 
@@ -21,6 +21,8 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
   const [items, setItems] = useState<NftItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'none' | 'asc' | 'desc'>('none');
   const { user } = useTelegram();
 
   useEffect(() => {
@@ -83,6 +85,16 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
     }
   };
 
+  // Фильтр по поиску и сортировка по цене
+  const filteredItems = items.filter(item =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    if (sortOrder === 'asc') return a.floor - b.floor;
+    if (sortOrder === 'desc') return b.floor - a.floor;
+    return 0;
+  });
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-white p-4 mt-20">
@@ -100,13 +112,32 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
       </div>
 
       <div className="flex items-center gap-2 mb-4 bg-[#1a1a2e] rounded-xl px-4 py-3 border border-gray-800">
-        <Coins size={18} className="text-yellow-500" />
+        <img src="/TON.png" alt="TON" style={{ width: 16, height: 16, objectFit: 'contain' }} />
         <span className="text-sm text-gray-400">Баланс:</span>
         <span className="text-lg font-bold">{balance.toFixed(2)} TON</span>
       </div>
 
+      <div className="flex items-center gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="Поиск NFT..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 min-w-0 bg-[#1a1a2e] rounded-xl px-4 py-2.5 border border-gray-800 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+        />
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as 'none' | 'asc' | 'desc')}
+          className="bg-[#1a1a2e] rounded-xl px-3 py-2.5 border border-gray-800 text-sm text-white focus:outline-none focus:border-purple-500"
+        >
+          <option value="none">По умолчанию</option>
+          <option value="asc">От дешевых к дорогим</option>
+          <option value="desc">От дорогих к дешевым</option>
+        </select>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
-        {items.map((item) => (
+        {sortedItems.map((item) => (
           <div
             key={item.id}
             className="bg-[#1a1a2e] rounded-2xl border border-white/10 overflow-hidden flex flex-col"
@@ -123,7 +154,7 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
               <div>
                 <p className="text-sm font-bold text-white truncate">{item.name}</p>
                 <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                  <Coins size={12} className="text-yellow-500" />
+                  <img src="/TON.png" alt="TON" style={{ width: 12, height: 12, objectFit: 'contain' }} />
                   {item.floor.toFixed(2)} TON
                 </p>
               </div>
@@ -151,10 +182,10 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
         ))}
       </div>
 
-      {items.length === 0 && (
+      {sortedItems.length === 0 && (
         <div className="flex flex-col items-center justify-center mt-20 text-gray-500">
           <ShoppingBag size={48} className="mb-4 opacity-50" />
-          <p>Товары временно недоступны</p>
+          <p>{searchQuery ? 'Ничего не найдено' : 'Товары временно недоступны'}</p>
         </div>
       )}
     </div>
