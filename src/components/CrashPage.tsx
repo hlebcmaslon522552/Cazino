@@ -289,47 +289,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         {gameState === 'waiting' && <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><Clock size={48} className="text-gray-600 mb-2"/><span className="text-4xl font-black text-white">{countdown}</span><span className="text-gray-400 text-sm mt-1">до начала</span></div>}
       </div>
 
-      {/* ── Таблица игроков ── */}
-      <div className="mt-4 bg-[#1a1a2e] rounded-3xl border border-gray-800 shadow-xl p-4">
-        <div className="flex justify-between items-center pb-3 border-b border-gray-700/60 mb-3">
-          <span className="text-gray-400 text-sm font-bold uppercase tracking-wider flex items-center gap-1.5"><Users size={14}/> Пользователь</span>
-          <span className="text-gray-400 text-sm font-bold uppercase tracking-wider">Коэффициент</span>
-        </div>
+      
 
-        {players.length === 0 ? (
-          <p className="text-gray-500 text-center text-sm py-6">Ожидание игроков...</p>
-        ) : (
-          <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
-            {players.map((p) => (
-              <div key={p.user_id} className="flex items-center justify-between gap-3 bg-[#0f0f13] rounded-xl px-3 py-2 border border-gray-800">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
-                    {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-white font-bold text-sm truncate">{p.username || 'Игрок'}</div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <img src={publicUrl('TON.png')} alt="TON" className="w-3.5 h-3.5 object-contain shrink-0" />
-                      <span className="text-gray-300 font-semibold text-xs">{p.bet.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  {p.cashed_out ? (
-                    <span className="text-green-400 font-black text-sm">{(p.multiplier ?? multiplier).toFixed(2)}x</span>
-                  ) : p.multiplier != null ? (
-                    <span className="text-white/80 font-bold text-sm">{p.multiplier.toFixed(2)}x</span>
-                  ) : (
-                    <span className="text-green-300/90 font-bold text-sm">{multiplier.toFixed(2)}x</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-4 bg-[#1a1a2e] rounded-3xl p-4 border border-gray-800 shadow-xl flex-1 flex flex-col justify-end">
+      <div className="mt-4 bg-[#1a1a2e] rounded-3xl p-4 border border-gray-800 shadow-xl">
         <div className="flex justify-between items-center mb-4">
           <div className="flex flex-col"><span className="text-gray-400 text-sm">Баланс</span><span className="text-xl font-bold text-white flex items-center gap-1"><Coins size={18} className="text-yellow-500" /> {balance.toFixed(2)}</span></div>
           <div className="flex flex-col text-right"><span className="text-gray-400 text-sm">Потенциал</span><span className="text-xl font-bold text-green-400">{gameState === 'flying' ? ((betType === 'ton' ? finalBet : (selectedNft?.floor || 0)) * multiplier).toFixed(2) : '0.00'}</span></div>
@@ -405,6 +367,46 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
                     ? `Забрать ${(finalBet * multiplier).toFixed(2)} TON`
                     : `Забрать ${((selectedNft?.floor || 0) * multiplier).toFixed(2)} TON`}
           </button>
+        )}
+      </div>
+
+      {/* ── Таблица игроков ── */}
+      <div className="mt-4 bg-[#1a1a2e] rounded-3xl border border-gray-800 shadow-xl p-4">
+        <div className="flex justify-between items-center pb-3 border-b border-gray-700/60 mb-3">
+          <span className="text-gray-400 text-sm font-bold uppercase tracking-wider flex items-center gap-1.5"><Users size={14}/> Пользователь</span>
+          <span className="text-gray-400 text-sm font-bold uppercase tracking-wider">Коэффициент</span>
+        </div>
+
+        {players.length === 0 ? (
+          <p className="text-gray-500 text-center text-sm py-6">Ожидание игроков...</p>
+        ) : (
+          <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+            {players.map((p) => (
+              <div key={p.user_id} className="flex items-center justify-between gap-3 bg-[#0f0f13] rounded-xl px-3 py-2 border border-gray-800">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                    {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-white font-bold text-sm truncate">{p.username || 'Игрок'}</div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <img src={publicUrl('TON.png')} alt="TON" className="w-3.5 h-3.5 object-contain shrink-0" />
+                      <span className="text-gray-300 font-semibold text-xs">{p.bet.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  {p.cashed_out ? (
+                    <span className="text-green-400 font-black text-sm">{(p.multiplier ?? multiplier).toFixed(2)}x</span>
+                  ) : p.multiplier != null ? (
+                    <span className="text-white/80 font-bold text-sm">{p.multiplier.toFixed(2)}x</span>
+                  ) : (
+                    <span className="text-green-300/90 font-bold text-sm">{multiplier.toFixed(2)}x</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
