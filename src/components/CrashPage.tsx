@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Coins, Clock, Users } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
+import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 import { loadInventoryFromLocal } from '../api';
 
@@ -17,6 +18,8 @@ interface CrashPlayer {
   user_id: string;
   username: string;
   bet: number;
+  multiplier?: number;
+  cashed_out?: boolean;
 }
 
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
@@ -99,6 +102,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setMultiplier(finalPt);
       setGameState('crashed');
       setHistory(prev => [finalPt, ...prev].slice(0, 15));
+      // Новый раунд должен начинаться без «фантомной» ставки
+      setHasBet(false);
       if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
       crashedResetRef.current = setTimeout(() => {
         setGameState('waiting');
@@ -214,6 +219,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   };
 
   const cashOut = () => {
+    // Защита от «фантомной» ставки: забирать можно только после реальной ставки
+    if (!hasBet) return;
     if (gameState === 'flying' && !hasCashedOut) {
       const winAmount = betType === 'ton' ? finalBet * multiplier : (selectedNft?.floor || 0) * multiplier;
       setHasCashedOut(true);
@@ -244,19 +251,11 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   return (
     <div className="flex flex-col h-full bg-[#0f0f13] text-white p-4 overflow-hidden font-sans">
       
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex flex-col gap-1 w-1/2">
-          <div className="flex items-center gap-1 text-gray-400 text-xs mb-1"><Users size={12}/> Игроки:</div>
-          <div className="flex flex-wrap gap-1">
-            {players.map((p) => (
-              <span key={p.user_id} className="bg-gray-800 text-xs px-2 py-1 rounded-full">{p.username}: {p.bet.toFixed(2)}</span>
-            ))}
-            {players.length === 0 && <span className="text-xs text-gray-600">Пока никого...</span>}
-          </div>
-        </div>
-        <div className="flex gap-1 overflow-x-auto w-1/2 justify-end">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">История раундов</span>
+        <div className="flex gap-1.5 overflow-x-auto justify-end">
           {history.slice(0, 4).map((h, i) => (
-            <span key={i} className={`px-2 py-1 rounded-full text-xs font-bold ${h >= 2 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{h.toFixed(2)}x</span>
+            <span key={i} className={`px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap ${h >= 2 ? 'bg-green-500 text-[#0f0f13] shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}>{h.toFixed(2)}x</span>
           ))}
         </div>
       </div>
@@ -272,6 +271,46 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         </div>
         {isCrashed && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-red-600/90 backdrop-blur-md px-8 py-4 rounded-2xl shadow-lg border border-red-400/50 transform -rotate-6 animate-pulse"><span className="text-3xl font-black text-white tracking-widest">RUG PULL</span></div></div>}
         {gameState === 'waiting' && <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><Clock size={48} className="text-gray-600 mb-2"/><span className="text-4xl font-black text-white">{countdown}</span><span className="text-gray-400 text-sm mt-1">до начала</span></div>}
+      </div>
+
+      {/* ── Таблица игроков ── */}
+      <div className="mt-4 bg-[#1a1a2e] rounded-3xl border border-gray-800 shadow-xl p-4">
+        <div className="flex justify-between items-center pb-3 border-b border-gray-700/60 mb-3">
+          <span className="text-gray-400 text-sm font-bold uppercase tracking-wider flex items-center gap-1.5"><Users size={14}/> Пользователь</span>
+          <span className="text-gray-400 text-sm font-bold uppercase tracking-wider">Коэффициент</span>
+        </div>
+
+        {players.length === 0 ? (
+          <p className="text-gray-500 text-center text-sm py-6">Ожидание игроков...</p>
+        ) : (
+          <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+            {players.map((p) => (
+              <div key={p.user_id} className="flex items-center justify-between gap-3 bg-[#0f0f13] rounded-xl px-3 py-2 border border-gray-800">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                    {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-white font-bold text-sm truncate">{p.username || 'Игрок'}</div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <img src={publicUrl('TON.png')} alt="TON" className="w-3.5 h-3.5 object-contain shrink-0" />
+                      <span className="text-gray-300 font-semibold text-xs">{p.bet.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  {p.cashed_out ? (
+                    <span className="text-green-400 font-black text-sm">{(p.multiplier ?? multiplier).toFixed(2)}x</span>
+                  ) : p.multiplier != null ? (
+                    <span className="text-white/80 font-bold text-sm">{p.multiplier.toFixed(2)}x</span>
+                  ) : (
+                    <span className="text-green-300/90 font-bold text-sm">{multiplier.toFixed(2)}x</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-4 bg-[#1a1a2e] rounded-3xl p-4 border border-gray-800 shadow-xl flex-1 flex flex-col justify-end">
@@ -335,14 +374,20 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         )}
 
         {gameState === 'flying' && (
-          <button onClick={cashOut} disabled={hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)} className={`w-full font-black text-xl py-4 rounded-xl transition-all flex items-center justify-center gap-2 ${hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft) ? 'bg-gray-700 text-gray-400' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}>
-            {hasCashedOut
-              ? 'Вы забрали'
-              : (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)
-                ? 'Вы не делали ставку'
-                : betType === 'ton'
-                  ? `Забрать ${(finalBet * multiplier).toFixed(2)} TON`
-                  : `Забрать ${((selectedNft?.floor || 0) * multiplier).toFixed(2)} TON`}
+          <button
+            onClick={cashOut}
+            disabled={!hasBet || hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)}
+            className={`w-full font-black text-xl py-4 rounded-xl transition-all flex items-center justify-center gap-2 ${!hasBet || hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft) ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}
+          >
+            {!hasBet
+              ? 'Вы не делали ставку'
+              : hasCashedOut
+                ? 'Вы забрали'
+                : (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)
+                  ? 'Вы не делали ставку'
+                  : betType === 'ton'
+                    ? `Забрать ${(finalBet * multiplier).toFixed(2)} TON`
+                    : `Забрать ${((selectedNft?.floor || 0) * multiplier).toFixed(2)} TON`}
           </button>
         )}
       </div>
