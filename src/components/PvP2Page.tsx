@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import { Swords } from 'lucide-react';
+import { LogOut, Swords } from 'lucide-react';
 import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
 import { CONFIG } from '../config';
@@ -187,10 +187,19 @@ export const PvP2Page: React.FC<PvP2PageProps> = ({ balance, onUpdateBalance, on
   const [shapes, setShapes] = useState<Shape[]>([]);
   const [puckPos, setPuckPos] = useState({ x: FIELD_W / 2, y: FIELD_H / 2 });
   const [isJoining, setIsJoining] = useState(false);
+  // Флаг «игрок уже в лобби» — показывает красную кнопку «Выйти» (только в setup).
+  // Дублируется в реф, чтобы socket-хендлеры читали актуальное значение.
+  const [hasJoined, setHasJoined] = useState(false);
+  const hasJoinedRef = useRef(false);
 
   const socketRef = useRef<Socket | null>(null);
   const userIdRef = useRef<string>('');
   const phaseRef = useRef<Phase>('setup');
+  // Таймер лобби (клиентский): интервал + синхронное значение секунд
+  const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const waitSecondsRef = useRef(15);
+  // Размер ставки, уже отправленной в пул (нужен для возврата на баланс при выходе)
+  const placedBetRef = useRef(0);
   const animFrameRef = useRef<number>(0);
   const puckStartTimeRef = useRef<number>(0);
   const puckVxRef = useRef(0);
@@ -208,6 +217,11 @@ const reset = () => {
     setWinnerId(null);
     setTotalPot(0);
     setWaitSeconds(15);
+    waitSecondsRef.current = 15;
+    // Игрок больше не в лобби (раунд завершён/пропущен)
+    setHasJoined(false);
+    hasJoinedRef.current = false;
+    placedBetRef.current = 0;
     setShapes([]);
     setPuckPos({ x: FIELD_W / 2, y: FIELD_H / 2 });
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
@@ -278,11 +292,13 @@ const reset = () => {
     socket.on('connect_error', (err: any) => {
       console.error('[PvP2] Socket connection error:', err.message);
     });
-    // ── Глобальный таймер раунда (как Crash) ──
+    // ── Таймер лобби теперь держит клиент (см. эффект ниже): он запускается
+    // только при двух+ игроках и ставится на паузу, если игроков меньше двух.
+    // Серверный hockey_timer оставляем только как страховку: если окно раунда
+    // истекло, а hockey_started не пришёл (мало игроков) — разблокируем кнопку,
+    // но только если текущий игрок ещё НЕ в лобби (иначе возможна двойная ставка).
     socket.on('hockey_timer', (data: { timer: number }) => {
-      setWaitSeconds(data.timer);
-      // Окно раунда истекло, а hockey_started не пришёл (мало игроков) — разблокируем кнопку.
-      if (data.timer <= 0) {
+      if (data.timer <= 0 && !hasJoinedRef.current) {
         setIsJoining(false);
       }
     });
@@ -299,6 +315,9 @@ const reset = () => {
       totalPotRef.current = data.total_pot;
       setPhase('playing');
       setIsJoining(false);
+      // Раунд начался — кнопка «Выйти» больше не нужна (ставка уже в игре)
+      setHasJoined(false);
+      hasJoinedRef.current = false;
     });
     // ── Результат раунда (победитель от сервера) ──
     socket.on('hockey_result', (data: { winner_id: string; winner_name: string; total_pot: number }) => {
@@ -335,6 +354,41 @@ const reset = () => {
       socket.disconnect();
     };
   }, []);
+
+  // ── Таймер лобби: идёт только когда в пуле 2+ игрока ──────────────────
+  // Когда игроков меньше двух — интервал очищается, отсчёт сбрасывается и
+  // в UI показывается «Ожидание игроков...». Как только набирается 2+ игрока —
+  // таймер запускается заново с 15 секунд. Если один выходит и остаётся 1 —
+  // таймер снова ставится на паузу и сбрасывается.
+  useEffect(() => {
+    // Таймер нужен только в лобби (setup)
+    if (phase !== 'setup') {
+      if (waitTimerRef.current) { clearInterval(waitTimerRef.current); waitTimerRef.current = null; }
+      return;
+    }
+    // Игроков меньше двух — таймер на паузе
+    if (players.length < 2) {
+      if (waitTimerRef.current) { clearInterval(waitTimerRef.current); waitTimerRef.current = null; }
+      waitSecondsRef.current = 15;
+      setWaitSeconds(15);
+      return;
+    }
+    // 2+ игрока — запускаем отсчёт заново с 15 секунд
+    waitSecondsRef.current = 15;
+    setWaitSeconds(15);
+    waitTimerRef.current = setInterval(() => {
+      waitSecondsRef.current = Math.max(waitSecondsRef.current - 1, 0);
+      setWaitSeconds(waitSecondsRef.current);
+      // Отсчёт дошёл до нуля, а hockey_started не пришёл — разблокируем кнопку
+      if (waitSecondsRef.current <= 0) {
+        if (!hasJoinedRef.current) setIsJoining(false);
+        if (waitTimerRef.current) { clearInterval(waitTimerRef.current); waitTimerRef.current = null; }
+      }
+    }, 1000);
+    return () => {
+      if (waitTimerRef.current) { clearInterval(waitTimerRef.current); waitTimerRef.current = null; }
+    };
+  }, [phase, players.length]);
 useEffect(() => {
     if (phase === 'playing') {
       const timer = setTimeout(() => { startPuckAnimation(); }, 500);
@@ -374,6 +428,10 @@ useEffect(() => {
       const uid = user?.id?.toString() || 'unknown';
       userIdRef.current = uid;
       socket.emit('hockey_bet', { user_id: uid, username: user?.username || user?.first_name || 'Игрок', bet });
+      // Игрок теперь в лобби: показываем кнопку «Выйти», запоминаем ставку для возврата
+      setHasJoined(true);
+      hasJoinedRef.current = true;
+      placedBetRef.current = bet;
       // Записываем ставку в историю
       const historyUserId = String(user?.id ?? uid);
       fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
@@ -393,9 +451,46 @@ useEffect(() => {
       onToast?.('Failed to place bet, try again', 'error');
       // Разблокируем кнопку ТОЛЬКО при ошибке (в finally — не сбрасываем!)
       setIsJoining(false);
+      setHasJoined(false);
+      hasJoinedRef.current = false;
+      placedBetRef.current = 0;
     }
     // Намеренно НЕ сбрасываем isJoining здесь: кнопка остаётся заблокированной,
     // пока не придёт hockey_started или не истечёт таймер (hockey_timer <= 0).
+  };
+
+  // ── Выход из лобби: возврат ставки и снятие игрока из пула ────────────
+  const leaveLobby = () => {
+    const socket = socketRef.current;
+    const uid = userIdRef.current || String(user?.id ?? 'unknown');
+
+    // 1. Сообщаем серверу о выходе. События pvp_leave на текущем бэкенде нет —
+    //    оно безопасно игнорируется, поэтому игрока из пула убирает шаг 4.
+    socket?.emit('pvp_leave', { user_id: uid });
+
+    // 2. Возвращаем ставку на баланс
+    const refund = placedBetRef.current;
+    if (refund > 0) {
+      onUpdateBalance(refund);
+      placedBetRef.current = 0;
+    }
+
+    // 3. Сбрасываем локальный стейт игрока в лобби
+    setHasJoined(false);
+    hasJoinedRef.current = false;
+    setIsJoining(false);
+
+    // 4. Разрываем соединение, чтобы сервер убрал игрока из HOCKEY_PLAYERS
+    //    (disconnect-хендлер бэкенда), и сразу переподключаемся — сокет
+    //    остаётся живым для новых ставок после выхода.
+    if (socket) {
+      socket.disconnect();
+      setTimeout(() => {
+        try { socket.connect(); } catch (e) { console.warn('[PvP2] reconnect after leave failed', e); }
+      }, 250);
+    }
+
+    onToast?.('Вы вышли из лобби', 'success');
   };
 
   const renderArena = () => {
@@ -481,8 +576,14 @@ const bet = parseFloat(betInput)||0;
         </div>}
         {phase==='setup'&&<>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:12,fontSize:13}}>
-            <span style={{color:colors.textMuted}}>⏳ Round starts in</span>
-            <span style={{color:colors.primary,fontWeight:'bold',fontSize:16}}>{waitSeconds}s</span>
+            {players.length < 2 ? (
+              <span style={{color:colors.textMuted}}>⏳ Ожидание игроков...</span>
+            ) : (
+              <>
+                <span style={{color:colors.textMuted}}>⏳ Round starts in</span>
+                <span style={{color:colors.primary,fontWeight:'bold',fontSize:16}}>{waitSeconds}s</span>
+              </>
+            )}
           </div>
           {players.length>0&&<div style={{marginBottom:12,padding:'8px 12px',background:'rgba(168,85,247,0.08)',borderRadius:10,fontSize:12}}>
             <div style={{color:colors.primary,fontWeight:'bold',marginBottom:4}}>Players in pool ({players.length})</div>
@@ -512,6 +613,13 @@ const bet = parseFloat(betInput)||0;
             <span style={{color:colors.gold,fontWeight:'bold'}}>{balance.toFixed(2)} TON</span>
           </div>
           <Button fullWidth onClick={createGame} size="lg" disabled={isJoining}><Swords size={20} /> {isJoining ? 'Поиск соперника...' : 'Сделать ставку'}</Button>
+          {hasJoined && (
+            <div style={{ marginTop: 8 }}>
+              <Button fullWidth size="lg" variant="danger" onClick={leaveLobby}>
+                <LogOut size={20} /> Выйти
+              </Button>
+            </div>
+          )}
         </>}
         {phase==='result'&&<div style={{marginTop:12}}><Button fullWidth variant="ghost" onClick={reset}>Играть заново</Button></div>}
       </div>
