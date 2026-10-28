@@ -68,6 +68,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const animMultiplierRef = useRef<number>(1.0);
 
   const serverCrashPointRef = useRef<number>(MIN_CRASH_POINT);
+  // Скорость роста множителя (x/сек), приходит с сервера в crash_started и
+  // /api/crash_state: multiplier = 1.0 + elapsed * rate (клиент только рисует).
+  const crashRateRef = useRef<number>(1.0);
 
   // ── Зафиксированные коэффициенты игроков, забравших выигрыш ─────────────
   // Сервер присылает в crash_players_update только {user_id, username, bet},
@@ -101,6 +104,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           } else if (data.state === 'flying') {
             serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
             setCrashPoint(normalizeCrashPoint(data.crash_point));
+            // Множитель считаем по серверному rate: multiplier = 1.0 + elapsed * rate
+            crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 1.0;
             startTimeRef.current = (data.start_time || 0) * 1000;
             lastPointTimeRef.current = Date.now();
             animMultiplierRef.current = 1.0;
@@ -119,9 +124,10 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     });
 
     // ── Раунд стартовал ──
-    socket.on('crash_started', (data: { crash_point: number; start_time: number }) => {
+    socket.on('crash_started', (data: { crash_point: number; start_time: number; rate?: number; time_to_crash?: number }) => {
       serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
       setCrashPoint(normalizeCrashPoint(data.crash_point));
+      crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 1.0;
       startTimeRef.current = data.start_time * 1000;
       lastPointTimeRef.current = Date.now();
       animMultiplierRef.current = 1.0;
@@ -136,6 +142,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     // ── Раунд завершился (RUG PULL) ──
     socket.on('crash_ended', () => {
+      // Сервер подтвердил краш — немедленно останавливаем график: перевод
+      // gameState в 'crashed' размонтирует RAF-цикл (cancelAnimationFrame),
+      // поэтому RUG PULL показывается сразу, без ожидания локального тика.
       const finalPt = normalizeCrashPoint(serverCrashPointRef.current);
       setMultiplier(finalPt);
       setGameState('crashed');
@@ -194,32 +203,26 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     const animate = () => {
       if (!startTimeRef.current) startTimeRef.current = Date.now();
       const now = Date.now();
-      // Множитель считаем от времени, а не от кадров (RATE = 0.06x/сек).
-      // Так число на экране всегда синхронизировано с графиком независимо
-      // от FPS, и линия успевает за множителем.
-      const RATE = 0.06;
+      // Множитель рассчитываем ТОЛЬКО от времени старта раунда (start_time
+      // пришёл с сервера) и серверного rate: multiplier = 1.0 + elapsed * rate.
+      // Никакой локальной генерации по кадрам / Math.pow — клиент лишь рисует
+      // кривую, заданную сервером, поэтому число и график всегда синхронны и
+      // достигают crash_point ровно к моменту краша.
       const elapsed = (now - startTimeRef.current) / 1000;
-      animMultiplierRef.current = 1.0 + elapsed * RATE;
-      const newMultiplier = animMultiplierRef.current;
+      const newMultiplier = 1.0 + elapsed * crashRateRef.current;
+      animMultiplierRef.current = newMultiplier;
 
-      // Точку на графике добавляем каждые 50 мс (вместо 300–500 мс),
-      // чтобы линия рисовалась плотно и не отставала от множителя.
+      // Точку графика добавляем каждые 50 мс: координата Y отражает реальный
+      // множитель (y=100 при 1.00x → y=12 при достижении crash_point), а не шум.
       if (now - lastPointTimeRef.current >= 50) {
         setPoints(prev => {
           const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
-          const prevY = prev.length > 0 ? prev[prev.length - 1].y : 100;
-          const newX = Math.min(prevX + 0.5, 100);
-          const rawY = prevY - (Math.random() * 8 + 2);
-          let newY = Math.min(Math.max(rawY, 10), 100);
-          let newPoints = [...prev, { x: newX, y: newY }];
+          const span = Math.max(serverCrashPointRef.current - 1, 0.05);
+          const newY = Math.min(Math.max(100 - ((newMultiplier - 1) / span) * 88, 12), 100);
+          let newPoints = [...prev, { x: Math.min(prevX + 0.5, 100), y: newY }];
           if (newPoints.length > 10) {
             newPoints = newPoints.map(p => ({ ...p, x: Math.max(p.x - 0.25, 0) }));
           }
-          const lastY = newPoints[newPoints.length - 1].y;
-          if (lastY < 20) {
-            newPoints = newPoints.map(p => ({ ...p, y: Math.min(p.y + 10, 100) }));
-          }
-          newPoints = newPoints.map(p => ({ ...p, y: Math.min(Math.max(p.y, 0), 100) }));
           return newPoints;
         });
         lastPointTimeRef.current = now;
@@ -249,8 +252,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           frozenCashoutsRef.current = {};
         }, 1500);
       } else {
-        // Ограничиваем отображение множителя до 100x, чтобы избежать
-        // зависания при слишком больших значениях Math.pow
+        // Страховка: ограничиваем отображение множителя до 100x
         const clamped = Math.min(newMultiplier, 100);
         setMultiplier(clamped);
 
@@ -442,10 +444,12 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
   const isCrashed = gameState === 'crashed';
   // Примерная координата y цели авто-сбора на графике (0..100): 1.00x — верх,
-  // чем выше коэффициент, тем ниже линия. Нужна и для линии, и для плашки.
+  // чем выше коэффициент, тем ниже линия. Используем ту же шкалу, что и для
+  // точек графика (y=100 при 1.00x → y=12 при crash_point), чтобы линия
+  // авто-сбора пересекала кривую ровно в точке целевого множителя.
   const autoCashoutY =
     autoCashout !== null && gameState === 'flying' && !hasCashedOut
-      ? Math.min(Math.max(100 - (autoCashout - 1) * 55, 12), 98)
+      ? Math.min(Math.max(100 - ((autoCashout - 1) / Math.max(serverCrashPointRef.current - 1, 0.05)) * 88, 12), 98)
       : null;
 
   const renderGraph = () => {

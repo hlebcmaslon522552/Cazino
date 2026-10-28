@@ -40,6 +40,7 @@ CRASH_STATE = "waiting"       # 'waiting' | 'flying'
 CRASH_TIMER = 15              # секунд до старта
 CRASH_POINT = 1.00
 CRASH_START_TIME = 0.0
+CRASH_RATE = 1.0              # рост множителя (x/сек): multiplier = 1.0 + elapsed * CRASH_RATE
 CRASH_PLAYERS = []            # ставки текущего раунда: [{ user_id, username, bet, sid }]
 CRASH_LOCK = threading.Lock()
 
@@ -258,10 +259,14 @@ CASE_POOLS = {
     "case_free": FREE_CASE_POOL,
 }
 
+# Минимальная точка краша: сервер гарантирует, что раунд не крашится
+# мгновенно (1.00/1.01x) — график всегда успевает отрисоваться.
+MIN_CRASH_POINT = 1.05
+
 def generate_crash_point():
-    # 7% шанс на мгновенный краш (1.00x) - "сбор дани"
+    # 7% шанс на быстрый краш (минимум 1.05x) - "сбор дани"
     if random.random() < 0.07:
-        return 1.00
+        return MIN_CRASH_POINT
 
     e = 2**32
     h = random.randint(0, e - 1)
@@ -274,8 +279,8 @@ def generate_crash_point():
     # Кап множителя на 30x
     if point > 30.0:
         return 30.0
-    if point < 1.00:
-        return 1.00
+    if point < MIN_CRASH_POINT:
+        return MIN_CRASH_POINT
 
     return round(point, 2)
 
@@ -284,7 +289,7 @@ def generate_crash_point():
 def crash_game_loop():
     """Фоновый поток: обновляет CRASH_STATE, CRASH_TIMER, CRASH_POINT каждую секунду
     и рассылает всем подключённым клиентам события через WebSocket."""
-    global CRASH_STATE, CRASH_TIMER, CRASH_POINT, CRASH_START_TIME, CRASH_PLAYERS
+    global CRASH_STATE, CRASH_TIMER, CRASH_POINT, CRASH_START_TIME, CRASH_RATE, CRASH_PLAYERS
     print("[CrashLoop] Поток запущен.")
     while True:
         try:
@@ -298,11 +303,18 @@ def crash_game_loop():
                         # Генерируем точку краша и стартуем раунд
                         CRASH_POINT = generate_crash_point()
                         CRASH_START_TIME = time.time()
+                        # Множитель растёт линейно: multiplier = 1.0 + elapsed * RATE.
+                        # Раунд завершается при elapsed = CRASH_POINT - 1.0 (условие ниже),
+                        # поэтому RATE = (CRASH_POINT - 1.0) / (CRASH_POINT - 1.0) = 1.0:
+                        # кривая достигает crash_point ровно к моменту краша.
+                        CRASH_RATE = 1.0
                         CRASH_STATE = "flying"
-                        print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x")
+                        print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x, rate: {CRASH_RATE}")
                         socketio.emit('crash_started', {
                             'crash_point': CRASH_POINT,
                             'start_time': CRASH_START_TIME,
+                            'rate': CRASH_RATE,
+                            'time_to_crash': round(CRASH_POINT - 1.0, 2),
                         })
 
                 elif CRASH_STATE == "flying":
@@ -1511,13 +1523,15 @@ def health():
 # ── Crash State ──────────────────────────────────────────────────────────
 @app.route("/api/crash_state", methods=["GET"])
 def crash_state():
-    """Возвращает текущее состояние Crash-раунда."""
+    """Возвращает текущее состояние Crash-раунда (для джойна в середине раунда)."""
     with CRASH_LOCK:
         return jsonify({
             "state": CRASH_STATE,
             "timer": CRASH_TIMER,
             "crash_point": CRASH_POINT,
-            "start_time": CRASH_START_TIME
+            "start_time": CRASH_START_TIME,
+            "rate": CRASH_RATE,
+            "time_to_crash": round(CRASH_POINT - 1.0, 2),
         })
 
 
