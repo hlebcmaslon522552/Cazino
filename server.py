@@ -50,8 +50,8 @@ HOCKEY_PLAYERS = []            # ставки текущего раунда: [{ 
 HOCKEY_LOCK = threading.Lock()
 HOCKEY_START_TIME = 0.0
 
-# Комиссия казино: победитель получает 95% банка, 5% уходит казино
-CASINO_COMMISSION_RATE = 0.05
+# Комиссия казино: победитель получает 97.5% банка, 2.5% уходит казино
+CASINO_COMMISSION_RATE = 0.025
 
 FIELD_W = 500
 FIELD_H = 300
@@ -2116,14 +2116,14 @@ def hockey_game_loop():
                         # ── Раунд завершён ──
                         winner = random.choice(HOCKEY_PLAYERS)
                         total_pot = sum(p['bet'] for p in HOCKEY_PLAYERS)
-                        # Комиссия казино 5%: победитель получает банк за вычетом комиссии
+                        # Комиссия казино 2.5%: победитель получает банк за вычетом комиссии
                         commission = round(total_pot * CASINO_COMMISSION_RATE, 2)
                         prize = round(total_pot - commission, 2)
                         socketio.emit('hockey_result', {
                             'winner_id': winner['user_id'],
                             'winner_name': winner['username'],
                             'total_pot': prize,             # выплата победителю (с учётом комиссии)
-                            'commission': commission,       # 5% уходит казино
+                            'commission': commission,       # 2.5% уходит казино
                         })
                         HOCKEY_STATE = "waiting"
                         HOCKEY_PLAYERS = []

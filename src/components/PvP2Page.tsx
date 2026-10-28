@@ -38,6 +38,8 @@ const PUCK_R = 8;
 const PUCK_DURATION_MS = 3000;
 // Множитель скорости шайбы: на каждом шаге x += vx * PUCK_SPEED (x3 — в 3 раза быстрее)
 const PUCK_SPEED = 3;
+// Затухание скорости каждый кадр — плавная остановка шайбы без рывка
+const PUCK_FRICTION = 0.98;
 
 const randomRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
@@ -122,6 +124,9 @@ const reset = () => {
       else if (py > FIELD_H - PUCK_R) { py = FIELD_H - PUCK_R; puckVyRef.current = -vy; }
       puckXRef.current = px;
       puckYRef.current = py;
+      // Плавная остановка: скорость затухает каждый кадр (vx *= 0.98, vy *= 0.98)
+      puckVxRef.current *= PUCK_FRICTION;
+      puckVyRef.current *= PUCK_FRICTION;
       // Двигаем шайбу через transform без setState — SVG не перерисовывается каждый кадр
       if (puckRef.current) {
         puckRef.current.setAttribute('transform', `translate(${px}, ${py})`);
@@ -332,6 +337,7 @@ const bet = parseFloat(betInput)||0;
             {winnerId===userIdRef.current?'Вы забираете банк!':((players.find((p)=>p.user_id===winnerId)?.username||'Соперник')+' забирает банк!')}
           </div>
           <div style={{fontSize:22,fontWeight:'bold',color:colors.success}}>+{displayPot.toFixed(2)} TON</div>
+          <div style={{fontSize:12,color:colors.textMuted,marginTop:6}}>Комиссия казино: 2.5%</div>
         </div>}
         {phase==='setup'&&<>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:12,fontSize:13}}>
