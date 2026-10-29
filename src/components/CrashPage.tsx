@@ -57,17 +57,12 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [autoCashout, setAutoCashout] = useState<number | null>(null);
   const [players, setPlayers] = useState<CrashPlayer[]>([]);
   const socketRef = useRef<Socket | null>(null);
-  const requestRef = useRef<number>();
-  const startTimeRef = useRef<number>();
-  const lastPointTimeRef = useRef<number>(0);
   const crashedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gameStateRef = useRef<ServerRoundState>('waiting');
-  const animMultiplierRef = useRef<number>(1.0);
 
   const serverCrashPointRef = useRef<number>(MIN_CRASH_POINT);
-  // Скорость роста множителя (x/сек), приходит с сервера в crash_started и
-  // /api/crash_state: multiplier = 1.0 + elapsed * rate (клиент только рисует).
-  const crashRateRef = useRef<number>(1.0);
+  // Счётчик тиков для добавления точек на график (~каждые 300мс)
+  const tickCounterRef = useRef<number>(0);
 
   // ── Зафиксированные коэффициенты игроков, забравших выигрыш ─────────────
   // Сервер присылает в crash_players_update только {user_id, username, bet},
@@ -75,8 +70,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   // Пока игрок играет — в таблице показываем живой multiplier, после забора —
   // замороженное значение, чтобы оно не продолжало расти с каждым тиком.
   const frozenCashoutsRef = useRef<Record<string, number>>({});
-  // ── Рефы авто-сбора: RAF-цикл создаёт замыкание один раз на старте раунда, ──
-  // поэтому актуальные значения стейта читаем через refs, обновляемые на рендере.
+  // ── Рефы авто-сбора: crash_tick читает актуальные значения через refs, ──
+  // обновляемые на рендере.
   const autoCashoutRef = useRef<number | null>(null);
   const hasCashedOutRef = useRef(false);
   const hasBetRef = useRef(false);
@@ -90,7 +85,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('[Crash] Socket connected');
       // ── Первичная синхронизация: игрок может войти в середине раунда ──
       fetch(`${CONFIG.API_URL}/api/crash_state`, {
         headers: { 'ngrok-skip-browser-warning': 'true' }
@@ -100,13 +94,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           if (data.state === 'flying') {
             serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
             setCrashPoint(normalizeCrashPoint(data.crash_point));
-            // Множитель считаем по серверному rate: multiplier = 1.0 + elapsed * rate
-            crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 1.0;
-            startTimeRef.current = Date.now();
-            lastPointTimeRef.current = Date.now();
-            animMultiplierRef.current = 1.0;
             setGameState('flying');
-            setMultiplier(1.00);
+            setMultiplier(data.multiplier ?? 1.0);
             setPoints([{ x: 0, y: 100 }]);
             setHasCashedOut(false);
           }
@@ -116,7 +105,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     // ── Раунд стартовал ──
     socket.on('crash_started', (data: { crash_point: number; start_time: number; rate?: number; time_to_crash?: number }) => {
-      console.log('[CLIENT] STARTED. data:', data);
       // Если уже летим — дубль, игнорируем
       if (gameStateRef.current === 'flying') return;
       // Отменяем любой pending-таймер сброса с предыдущего раунда
@@ -124,14 +112,11 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         clearTimeout(crashedResetRef.current);
         crashedResetRef.current = null;
       }
-console.log('[DEBUG] STARTED DATA:', data);
       serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
       setCrashPoint(normalizeCrashPoint(data.crash_point));
-      crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 0.2222;
-      startTimeRef.current = Date.now();  // локальный отсчёт: начало = момент получения события клиентом
-      lastPointTimeRef.current = Date.now();
+      tickCounterRef.current = 0;
       setGameState('flying');
-      setCountdown(15); // Локальный таймер: сбрасываем отсчёт при старте раунда
+      setCountdown(15);
       setMultiplier(1.00);
       setPoints([{ x: 0, y: 100 }]);
       setHasCashedOut(false);
@@ -144,16 +129,9 @@ console.log('[DEBUG] STARTED DATA:', data);
 
     // ── Раунд завершился (RUG PULL) ──
     socket.on('crash_ended', (data: { crash_point?: number }) => {
-      console.log('[CLIENT] ENDED. data:', data);
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-
-      // ── Таймер сброса в waiting СТАВИМ ВСЕГДА (даже на дубль-событие),
-      //     иначе если RAF hard stop успел отработать раньше и React уже
-      //     обновил gameStateRef → guard ниже сработает и таймер не будет
-      //     поставлен → экран зависнет навсегда!
+      // ── Таймер сброса в waiting СТАВИМ ВСЕГДА (даже на дубль-событие)
       if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
       crashedResetRef.current = setTimeout(() => {
-        console.log('[CLIENT] RESETTING TO WAITING');
         setGameState('waiting');
         gameStateRef.current = 'waiting';
         setMultiplier(1.00);
@@ -199,8 +177,35 @@ console.log('[DEBUG] STARTED DATA:', data);
       });
     });
 
-    socket.on('disconnect', () => {
-      console.log('[Crash] Socket disconnected');
+    // ── Серверный тик (каждые 100мс в полёте) ──
+    socket.on('crash_tick', (data: { multiplier: number; crash_point: number }) => {
+      setMultiplier(data.multiplier);
+
+      // Добавляем точку на график каждые ~3 тика (300мс)
+      tickCounterRef.current += 1;
+      if (tickCounterRef.current % 3 === 0) {
+        setPoints(prev => {
+          const lastP = prev[prev.length - 1] || { x: 5, y: 90 };
+          const stepX = 10 + Math.random() * 5;
+          const stepY = 0.5 + Math.random() * 1.5;
+          const newX = lastP.x + stepX;
+          const newY = lastP.y - stepY;
+          let newPoints = [...prev, { x: newX, y: newY }];
+          if (newX > 70) {
+            newPoints = newPoints.map(p => ({ ...p, x: p.x - stepX }));
+          }
+          return newPoints.filter(p => p.x > -5);
+        });
+      }
+
+      // ── Авто-сбор (проверяем каждый тик) ──
+      if (
+        autoCashoutRef.current !== null &&
+        !hasCashedOutRef.current &&
+        data.multiplier >= autoCashoutRef.current
+      ) {
+        cashOutRef.current(data.multiplier);
+      }
     });
 
     return () => {
@@ -209,79 +214,9 @@ console.log('[DEBUG] STARTED DATA:', data);
     };
   }, []);
 
-  // ── Анимация графика ──
+  // ── Синхронизация gameStateRef ──
   useEffect(() => {
     gameStateRef.current = gameState;
-    if (gameState !== 'flying') return;
-
-    const animate = () => {
-      const now = Date.now();
-      if (!startTimeRef.current) startTimeRef.current = now;
-
-      // Множитель от сервера: multiplier = 1.0 + elapsed * rate
-      const elapsed = Math.max(0, (now - startTimeRef.current) / 1000);
-      const newMultiplier = 1.0 + elapsed * crashRateRef.current;
-
-      // ── Жёсткая остановка: множитель достиг серверной краш-точки ──
-      if (newMultiplier >= serverCrashPointRef.current) {
-        setMultiplier(serverCrashPointRef.current);
-        setGameState('crashed');
-        if (requestRef.current) cancelAnimationFrame(requestRef.current);
-        return;
-      }
-
-      if (now - lastPointTimeRef.current >= 300) {
-        setPoints(prev => {
-          const lastP = prev[prev.length - 1] || { x: 5, y: 90 };
-
-          // ДЛИННЫЙ шаг вправо, чтобы график уходил вбок
-          const stepX = 10 + Math.random() * 5; // от 10 до 15
-
-          // КОРОТКИЙ шаг вверх, чтобы линия была пологой
-          const stepY = 0.5 + Math.random() * 1.5; // от 0.5 до 2.0
-
-          const newX = lastP.x + stepX;
-          const newY = lastP.y - stepY;
-
-          let newPoints = [...prev, { x: newX, y: newY }];
-
-          // Скроллинг, если ушли далеко вправо
-          if (newX > 70) {
-            newPoints = newPoints.map(p => ({ ...p, x: p.x - stepX }));
-          }
-
-          return newPoints.filter(p => p.x > -5);
-        });
-        lastPointTimeRef.current = now;
-      }
-
-      // Просто отображаем множитель (сервер сам остановит RAF через crash_ended)
-      const clamped = Math.min(newMultiplier, 100);
-      setMultiplier(clamped);
-
-      // ── Авто-сбор ──
-      if (
-        autoCashoutRef.current !== null &&
-        !hasCashedOutRef.current &&
-        clamped >= autoCashoutRef.current
-      ) {
-        cashOutRef.current(clamped);
-      }
-      requestRef.current = requestAnimationFrame(animate);
-      if (Math.floor(now / 1000) !== Math.floor(lastPointTimeRef.current / 1000)) { console.log('[CLIENT] ANIMATE. multiplier:', newMultiplier.toFixed(2), 'serverCrash:', serverCrashPointRef.current); }
-    };
-
-    requestRef.current = requestAnimationFrame(animate);
-    return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-  }, [gameState]);
-
-  // ── Сброс множителя на старте нового раунда ────────────────────────────
-  // Срабатывает при переходе в 'waiting' (после краша перед новым раундом)
-  // и в 'flying' (старт раунда), чтобы анимация всегда начиналась с 1.00x.
-  useEffect(() => {
-    if (gameState === 'waiting' || gameState === 'flying') {
-      animMultiplierRef.current = 1.0;
-    }
   }, [gameState]);
 
   // ── Локальный таймер обратного отсчёта (не зависит от сервера) ──────────

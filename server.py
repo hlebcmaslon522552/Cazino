@@ -360,6 +360,8 @@ def crash_game_loop():
                 socketio.sleep(0.1)
                 with CRASH_LOCK:
                     elapsed = (time.time() * 1000) - CRASH_START_TIME
+                    current_multiplier = 1.0 + (elapsed / 1000) * CRASH_RATE
+                socketio.emit('crash_tick', {'multiplier': round(current_multiplier, 4), 'crash_point': CRASH_POINT})
 
             # ── 4. Краш ──
             with CRASH_LOCK:
@@ -1576,14 +1578,18 @@ def health():
 def crash_state():
     """Возвращает текущее состояние Crash-раунда (для джойна в середине раунда)."""
     with CRASH_LOCK:
-        return jsonify({
+        result = {
             "state": CRASH_STATE,
             "timer": CRASH_TIMER,
             "crash_point": CRASH_POINT,
             "start_time": CRASH_START_TIME,
             "rate": CRASH_RATE,
             "time_to_crash": round((CRASH_POINT - 1.0) / CRASH_RATE, 2) if CRASH_RATE > 0 else 0,
-        })
+        }
+        if CRASH_STATE == "flying":
+            elapsed = (time.time() * 1000) - CRASH_START_TIME
+            result["multiplier"] = round(1.0 + (elapsed / 1000) * CRASH_RATE, 4)
+        return jsonify(result)
 
 
 
