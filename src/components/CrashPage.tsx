@@ -102,7 +102,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
             setCrashPoint(normalizeCrashPoint(data.crash_point));
             // Множитель считаем по серверному rate: multiplier = 1.0 + elapsed * rate
             crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 1.0;
-            startTimeRef.current = (data.start_time || 0);
+            startTimeRef.current = Date.now();
             lastPointTimeRef.current = Date.now();
             animMultiplierRef.current = 1.0;
             setGameState('flying');
@@ -121,7 +121,7 @@ console.log('[DEBUG] STARTED DATA:', data);
       serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
       setCrashPoint(normalizeCrashPoint(data.crash_point));
       crashRateRef.current = Number(data.rate) > 0 ? Number(data.rate) : 0.2222;
-      startTimeRef.current = data.start_time;  // сервер шлёт миллисекунды (time.time()*1000)
+      startTimeRef.current = Date.now();  // локальный отсчёт: начало = момент получения события клиентом
       lastPointTimeRef.current = Date.now();
       setGameState('flying');
       setCountdown(15); // Локальный таймер: сбрасываем отсчёт при старте раунда
