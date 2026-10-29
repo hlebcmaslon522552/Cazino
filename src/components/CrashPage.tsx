@@ -215,12 +215,24 @@ console.log('[DEBUG] STARTED DATA:', data);
       const elapsed = Math.max(0, (now - startTimeRef.current) / 1000);
       const newMultiplier = 1.0 + elapsed * crashRateRef.current;
 
-      if (now - lastPointTimeRef.current >= 120) {
+      if (now - lastPointTimeRef.current >= 300) { // Увеличили до 300мс, чтобы точек было меньше
         setPoints(prev => {
-          const prevX = prev.length > 0 ? prev[prev.length - 1].x : 0;
-          const span = Math.max(serverCrashPointRef.current - 1, 0.05);
-          const newY = Math.min(Math.max(100 - ((newMultiplier - 1) / span) * 88, 12), 100);
-          const newX = Math.min(prevX + 0.5, 100);
+          const lastP = prev[prev.length - 1] || { x: 5, y: 95 };
+
+          // Длина по X (вправо) — делаем её больше, чтобы линия шла вбок
+          const stepX = 8 + Math.random() * 8; // от 8 до 16
+
+          // Подъем по Y (вверх) — делаем его меньше, чтобы не улетать в стену
+          const stepY = 4 + Math.random() * 6; // от 4 до 10
+
+          const newX = lastP.x + stepX;
+          const newY = Math.max(10, lastP.y - stepY); // Ограничиваем верх
+
+          // Проверка на скроллинг: если ушли далеко вправо, сдвигаем всё влево
+          if (newX > 80) {
+            return [{ x: 5, y: 95 }, { x: newX - 60, y: newY }]; // Сброс камеры
+          }
+
           return [...prev, { x: newX, y: newY }];
         });
         lastPointTimeRef.current = now;
