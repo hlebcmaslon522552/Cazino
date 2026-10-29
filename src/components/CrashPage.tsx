@@ -4,7 +4,6 @@ import { CheckCircle, Clock, Users, XCircle, Zap } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { fetchInventory, loadInventoryFromLocal } from '../api';
 
 // ── Минимальный коэффициент краша ───────────────────────────────────────
 // Сервер может прислать crash_point = 1.00 / 1.01 (или вообще не прислать
@@ -39,13 +38,9 @@ interface CrashPlayer {
 }
 
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
-  const { user, initData } = useTelegram();
+  const { user } = useTelegram();
   const [betInput, setBetInput] = useState<string>("1.0");
   const finalBet = parseFloat(betInput) || 0;
-  const [betType, setBetType] = useState<'ton' | 'nft'>('ton');
-  const [selectedNft, setSelectedNft] = useState<any>(null);
-  const [showNftModal, setShowNftModal] = useState(false);
-  const [nftList, setNftList] = useState<any[]>([]);
   const [multiplier, setMultiplier] = useState<number>(1.00);
   const [gameState, setGameState] = useState<ServerRoundState>('waiting');
   const [crashPoint, setCrashPoint] = useState<number>(MIN_CRASH_POINT);
@@ -54,6 +49,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [history, setHistory] = useState<number[]>([1.2, 5.4, 1.0, 14.2, 2.1, 1.8]);
   const [points, setPoints] = useState<{ x: number; y: number }[]>([{ x: 0, y: 100 }]);
   const [countdown, setCountdown] = useState<number>(15);
+  const countdownRef = useRef(15);
   const [hasBet, setHasBet] = useState<boolean>(false);
   // ── Авто-сбор ──
   const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
@@ -267,33 +263,42 @@ console.log('[DEBUG] STARTED DATA:', data);
     if (gameState === 'waiting') {
       // Каждый раз при переходе в ожидание ставим 15
       setCountdown(15);
+      countdownRef.current = 15;
+
+      let forceStartTimer: ReturnType<typeof setTimeout> | null = null;
 
       const interval = setInterval(() => {
-        setCountdown(prev => (prev > 0 ? prev - 1 : 0));
+        // Дошли до нуля — останавливаем отсчёт и даём серверу 2 секунды
+        // на crash_started. Если сервер не ответил — запускаем игру локально.
+        if (countdownRef.current <= 0) return;
+
+        countdownRef.current -= 1;
+        setCountdown(countdownRef.current);
+
+        if (countdownRef.current <= 0) {
+          clearInterval(interval);
+          forceStartTimer = setTimeout(() => {
+            if (gameStateRef.current === 'waiting') {
+              setGameState('flying');
+              setMultiplier(1.00);
+              setPoints([{ x: 5, y: 95 }]);
+            }
+          }, 2000);
+        }
       }, 1000);
 
-      return () => clearInterval(interval);
+      return () => {
+        clearInterval(interval);
+        if (forceStartTimer) clearTimeout(forceStartTimer);
+      };
     }
   }, [gameState]);
 
   const placeBet = () => {
     if (gameState !== 'waiting') return;
-    if (betType === 'ton') {
-      if (finalBet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
-      if (finalBet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
-      onUpdateBalance(-finalBet);
-    } else {
-      if (!selectedNft) { onToast?.('Выберите NFT для ставки', 'error'); return; }
-      // Удаляем NFT из localStorage инвентаря
-      try {
-        const raw = localStorage.getItem('inventory');
-        if (raw) {
-          const local: any[] = JSON.parse(raw);
-          localStorage.setItem('inventory', JSON.stringify(local.filter((i: any) => i.id !== selectedNft.id)));
-        }
-      } catch {}
-      onToast?.(`Ставка NFT: ${selectedNft.model || selectedNft.name}`, 'success');
-    }
+    if (finalBet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
+    if (finalBet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
+    onUpdateBalance(-finalBet);
 
     // ── Авто-сбор: запоминаем целевой коэффициент при ставке, ──
     // если переключатель включён и в поле введено корректное значение (> 1.00)
@@ -310,25 +315,14 @@ console.log('[DEBUG] STARTED DATA:', data);
     setHasBet(true);
 
     // Отправляем ставку на сервер — он рассылает crash_players_update всем
-    const betAmount = betType === 'ton' ? finalBet : (selectedNft?.floor || 0);
+    const betAmount = finalBet;
     socketRef.current?.emit('crash_bet', {
       user_id: String(user?.id ?? 'unknown'),
       username: user?.first_name || 'Игрок',
       bet: betAmount,
     });
 
-    // Для NFT-ставок дополнительно отправляем bet_nft с данными NFT
-    if (betType === 'nft' && selectedNft) {
-      socketRef.current?.emit('bet_nft', {
-        user_id: String(user?.id ?? 'unknown'),
-        username: user?.first_name || 'Игрок',
-        bet: betAmount,
-        nft_id: selectedNft.id,
-        nft_name: selectedNft.model || selectedNft.name || '',
-      });
-    }
-
-    if (betType === 'ton') onToast?.('Ставка принята!', 'success');
+    onToast?.('Ставка принята!', 'success');
 
     // Отправляем оборот
     const turnoverAmount = betAmount;
@@ -344,16 +338,15 @@ console.log('[DEBUG] STARTED DATA:', data);
       }).catch(() => {});
     }
 
-    // Записываем ставку в историю (TON и NFT)
+    // Записываем ставку в историю
     fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
       body: JSON.stringify({
         user_id: user?.id ?? 'unknown',
         game_type: 'crash',
-        bet_type: betType,
+        bet_type: 'ton',
         amount: turnoverAmount,
-        item_name: betType === 'nft' ? (selectedNft?.model || selectedNft?.name || '') : '',
       }),
     }).catch(() => {});
   };
@@ -365,7 +358,7 @@ console.log('[DEBUG] STARTED DATA:', data);
       // Авто-сбор передаёт точный множитель из RAF-цикла (момент достижения цели),
       // ручной забор берёт актуальный multiplier из текущего рендера
       const m = manualMultiplier ?? multiplier;
-      const winAmount = betType === 'ton' ? finalBet * m : (selectedNft?.floor || 0) * m;
+      const winAmount = finalBet * m;
       const currentUserId = String(user?.id ?? 'unknown');
 
       // Фиксируем коэффициент текущего игрока ровно на моменте забора (cashedOutAt).
@@ -394,14 +387,13 @@ console.log('[DEBUG] STARTED DATA:', data);
         body: JSON.stringify({
           user_id: user?.id ?? 'unknown',
           game_type: 'crash',
-          bet_type: betType,
+          bet_type: 'ton',
           amount: winAmount,
-          item_name: betType === 'nft' ? (selectedNft?.model || selectedNft?.name || '') : '',
           kind: 'win',
         }),
       }).catch(() => {});
 
-      onToast?.('Вы забрали ' + winAmount.toFixed(2) + (betType === 'ton' ? ' TON' : ' TON (NFT)') + ' по ' + m.toFixed(2) + 'x', 'success');
+      onToast?.('Вы забрали ' + winAmount.toFixed(2) + ' TON по ' + m.toFixed(2) + 'x', 'success');
     }
   };
 
@@ -416,22 +408,6 @@ console.log('[DEBUG] STARTED DATA:', data);
     // цель установится заново в момент нажатия «Сделать ставку».
     setAutoCashoutEnabled(v => !v);
     setAutoCashout(null);
-  };
-
-  // ── Загрузка NFT из инвентаря: сначала сервер (fetchInventory), ──
-  // при неудаче — fallback на localStorage (loadInventoryFromLocal).
-  const loadNftList = async () => {
-    try {
-      const userId = String(user?.id ?? '6267608438');
-      const serverItems = await fetchInventory(initData || '', userId);
-      if (serverItems && serverItems.length > 0) {
-        setNftList(serverItems);
-        return;
-      }
-    } catch {
-      // сервер недоступен — используем localStorage
-    }
-    setNftList(loadInventoryFromLocal());
   };
 
   const isCrashed = gameState === 'crashed';
@@ -533,7 +509,7 @@ console.log('[DEBUG] STARTED DATA:', data);
         </svg>
         <div className="absolute top-4 left-4 pointer-events-none">
           <span className={`text-5xl font-black tracking-tighter ${isCrashed ? 'text-red-500' : 'text-white'}`} style={{ textShadow: isCrashed ? '0 0 20px rgba(255,51,102,0.8)' : '0 0 20px rgba(255,255,255,0.5)' }}>{multiplier.toFixed(2)}x</span>
-          {hasCashedOut && <div className="mt-2 text-green-400 font-bold text-sm bg-green-900/50 px-3 py-1 rounded-full border border-green-500/50 inline-block">Забрано: {((betType === 'ton' ? finalBet : (selectedNft?.floor || 0)) * cashedOutAt).toFixed(2)} TON</div>}
+          {hasCashedOut && <div className="mt-2 text-green-400 font-bold text-sm bg-green-900/50 px-3 py-1 rounded-full border border-green-500/50 inline-block">Забрано: {(finalBet * cashedOutAt).toFixed(2)} TON</div>}
           {autoCashoutY !== null && autoCashout !== null && (
             <div className="absolute right-3 pointer-events-none" style={{ bottom: `${100 - autoCashoutY}%` }}>
               <span className="text-green-400 font-bold text-xs bg-green-900/60 px-2.5 py-1 rounded-full border border-green-500/60 shadow-[0_0_10px_rgba(34,197,94,0.5)] whitespace-nowrap">
@@ -551,56 +527,15 @@ console.log('[DEBUG] STARTED DATA:', data);
       <div className="mt-4 bg-[#1a1a2e] rounded-3xl p-4 border border-gray-800 shadow-xl">
         <div className="flex justify-between items-center mb-4">
           <div className="flex flex-col"><span className="text-gray-400 text-sm">Баланс</span><span className="text-xl font-bold text-white flex items-center gap-1"><img src="/TON.png" alt="TON" style={{ width: 16, height: 16, objectFit: 'contain' }} /> {balance.toFixed(2)}</span></div>
-          <div className="flex flex-col text-right"><span className="text-gray-400 text-sm">Потенциал</span><span className="text-xl font-bold text-green-400">{gameState === 'flying' ? ((betType === 'ton' ? finalBet : (selectedNft?.floor || 0)) * multiplier).toFixed(2) : '0.00'}</span></div>
+          <div className="flex flex-col text-right"><span className="text-gray-400 text-sm">Потенциал</span><span className="text-xl font-bold text-green-400">{gameState === 'flying' ? (finalBet * multiplier).toFixed(2) : '0.00'}</span></div>
         </div>
 
         {gameState === 'waiting' && (
           <div className="mb-4">
-            {/* TON / NFT табы */}
-            <div className="flex bg-[#0f0f13] rounded-xl p-1 mb-3 border border-gray-700">
-              <button
-                onClick={() => { setBetType('ton'); setSelectedNft(null); }}
-                className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${betType === 'ton' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-500'}`}
-              >
-                TON
-              </button>
-              <button
-                onClick={() => { setBetType('nft'); setShowNftModal(true); loadNftList(); }}
-                className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${betType === 'nft' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-500'}`}
-              >
-                NFT
-              </button>
+            <div className="relative">
+              <input type="text" inputMode="decimal" value={betInput} onChange={(e) => { const val = e.target.value.replace(',', '.'); if (/^\d*\.?\d*$/.test(val)) setBetInput(val); }} className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-4 text-xl font-bold text-white focus:outline-none focus:border-purple-500 pl-12" />
+              <img src="/TON.png" alt="TON" className="absolute left-4 top-1/2 -translate-y-1/2" style={{ width: 16, height: 16, objectFit: 'contain' }} />
             </div>
-
-            {betType === 'ton' ? (
-              <div className="relative">
-                <input type="text" inputMode="decimal" value={betInput} onChange={(e) => { const val = e.target.value.replace(',', '.'); if (/^\d*\.?\d*$/.test(val)) setBetInput(val); }} className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-4 text-xl font-bold text-white focus:outline-none focus:border-purple-500 pl-12" />
-                <img src="/TON.png" alt="TON" className="absolute left-4 top-1/2 -translate-y-1/2" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-              </div>
-            ) : (
-              <button
-                onClick={() => { loadNftList(); setShowNftModal(true); }}
-                className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-4 text-left flex items-center gap-3"
-              >
-                {selectedNft ? (
-                  <>
-                    <img
-                      src={selectedNft.image || selectedNft.thumb}
-                      alt={selectedNft.model || selectedNft.name}
-                      className="w-10 h-10 rounded-lg object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                    <div className="flex-1">
-                      <span className="text-white font-bold text-sm block">{selectedNft.model || selectedNft.name}</span>
-                      <span className="text-gray-400 text-xs">Floor: {selectedNft.floor?.toFixed(2) || '?'} TON</span>
-                    </div>
-                    <span className="text-purple-400 text-xs">Изменить</span>
-                  </>
-                ) : (
-                  <span className="text-gray-400 font-medium">Выбрать NFT</span>
-                )}
-              </button>
-            )}
 
             {/* ── Авто-сбор ── */}
             <div className={`mt-3 rounded-xl border p-3 transition-colors ${autoCashoutEnabled ? 'border-green-500/40 bg-green-900/10' : 'border-gray-700 bg-[#0f0f13]'}`}>
@@ -651,7 +586,7 @@ console.log('[DEBUG] STARTED DATA:', data);
             </div>
 
             <button onClick={placeBet} disabled={hasBet} className={`w-full mt-2 py-3 rounded-xl shadow-lg active:scale-[0.98] transition-all font-black ${hasBet ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white'}`}>
-              {betType === 'ton' ? 'Сделать ставку' : 'Ставка NFT'}
+              Сделать ставку
             </button>
           </div>
         )}
@@ -659,18 +594,16 @@ console.log('[DEBUG] STARTED DATA:', data);
         {gameState === 'flying' && (
           <button
             onClick={() => cashOut()}
-            disabled={!hasBet || hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)}
-            className={`w-full font-black text-xl py-4 rounded-xl transition-all flex items-center justify-center gap-2 ${!hasBet || hasCashedOut || (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft) ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}
+            disabled={!hasBet || hasCashedOut || finalBet === 0}
+            className={`w-full font-black text-xl py-4 rounded-xl transition-all flex items-center justify-center gap-2 ${!hasBet || hasCashedOut || finalBet === 0 ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}
           >
             {!hasBet
               ? 'Вы не делали ставку'
               : hasCashedOut
                 ? 'Вы забрали'
-                : (betType === 'ton' && finalBet === 0) || (betType === 'nft' && !selectedNft)
+                : finalBet === 0
                   ? 'Вы не делали ставку'
-                  : betType === 'ton'
-                    ? `Забрать ${(finalBet * multiplier).toFixed(2)} TON`
-                    : `Забрать ${((selectedNft?.floor || 0) * multiplier).toFixed(2)} TON`}
+                  : `Забрать ${(finalBet * multiplier).toFixed(2)} TON`}
           </button>
         )}
       </div>
@@ -736,60 +669,6 @@ console.log('[DEBUG] STARTED DATA:', data);
         )}
       </div>
 
-      {/* NFT Selection Modal */}
-      {showNftModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          onClick={() => setShowNftModal(false)}
-        >
-          <div
-            className="bg-[#1a1a2e] border border-gray-700 rounded-2xl p-4 w-full max-w-sm mx-4 max-h-[70vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-white font-bold text-lg mb-3">Выберите NFT</h3>
-            {nftList.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">В инвентаре нет NFT. Купите в Маркете</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {nftList.map((nft: any) => (
-                  <button
-                    key={nft.id}
-                    onClick={() => {
-                      setSelectedNft(nft);
-                      setShowNftModal(false);
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                      selectedNft?.id === nft.id
-                        ? 'border-purple-500 bg-purple-900/30'
-                        : 'border-gray-700 bg-[#0f0f13] hover:border-purple-500/50'
-                    }`}
-                  >
-                    <img
-                      src={nft.image || nft.thumb}
-                      alt={nft.model || nft.name}
-                      className="w-12 h-12 rounded-lg object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                    <div className="flex-1 text-left">
-                      <span className="text-white font-bold text-sm block">{nft.model || nft.name}</span>
-                      <span className="text-gray-400 text-xs">Floor: {nft.floor?.toFixed(2) || '?'} TON</span>
-                    </div>
-                    {selectedNft?.id === nft.id && (
-                      <span className="text-purple-400 text-xs font-bold">✓</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-            <button
-              onClick={() => setShowNftModal(false)}
-              className="w-full mt-3 py-2 rounded-xl bg-gray-700 text-gray-300 font-bold"
-            >
-              Закрыть
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
