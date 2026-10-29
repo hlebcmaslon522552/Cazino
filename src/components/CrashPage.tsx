@@ -218,24 +218,27 @@ console.log('[DEBUG] STARTED DATA:', data);
         return;
       }
 
-      if (now - lastPointTimeRef.current >= 200) {
+      if (now - lastPointTimeRef.current >= 400) { // Увеличили интервал до 400мс (мало точек)
         setPoints(prev => {
           const lastP = prev[prev.length - 1] || { x: 5, y: 90 };
-
-          const stepX = 2 + Math.random() * 2;
-          const angleDeg = 10 + Math.random() * 35;
-          const angleRad = (angleDeg * Math.PI) / 180;
-          const stepY = stepX * Math.tan(angleRad);
-
+          
+          // ШАГ ВПРАВО (длинный, чтобы график уходил вбок)
+          const stepX = 8 + Math.random() * 4; // от 8 до 12
+          
+          // ШАГ ВВЕРХ (маленький, чтобы линия была пологой)
+          const stepY = 1.5 + Math.random() * 2.5; // от 1.5 до 4
+          
           const newX = lastP.x + stepX;
           const newY = lastP.y - stepY;
 
           let newPoints = [...prev, { x: newX, y: newY }];
 
-          if (newX > 75 || newY < 30) {
+          // Скроллинг, если уперлись в правый край или потолок
+          if (newX > 70 || newY < 35) {
             newPoints = newPoints.map(p => ({ ...p, x: p.x - stepX, y: p.y + stepY * 0.5 }));
           }
 
+          // Очистка точек за экраном
           return newPoints.filter(p => p.x > -5);
         });
         lastPointTimeRef.current = now;
@@ -462,20 +465,8 @@ console.log('[DEBUG] STARTED DATA:', data);
           strokeLinecap="round"
         />
 
-        {/* 2. Точки на графике (зеленые с черной окантовкой) */}
-        {points.map((p, i) => (
-          <circle 
-            key={i} 
-            cx={p.x} 
-            cy={p.y} 
-            r="3" 
-            fill={mainColor} 
-            stroke={outlineColor} 
-            strokeWidth="1.5" 
-          />
-        ))}
-
-        {/* 3. Последняя точка (большая) */}
+        {/* 2. Точки на графике НЕ рисуем по каждой вершине — только линия
+            (зелёная strokeWidth="2" выше) и большая отметка последней точки */}
         {lastPoint && (
           <circle 
             cx={lastPoint.x} 
