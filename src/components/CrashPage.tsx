@@ -218,27 +218,26 @@ console.log('[DEBUG] STARTED DATA:', data);
         return;
       }
 
-      if (now - lastPointTimeRef.current >= 400) { // Увеличили интервал до 400мс (мало точек)
+      if (now - lastPointTimeRef.current >= 300) {
         setPoints(prev => {
           const lastP = prev[prev.length - 1] || { x: 5, y: 90 };
-          
-          // ШАГ ВПРАВО (длинный, чтобы график уходил вбок)
-          const stepX = 8 + Math.random() * 4; // от 8 до 12
-          
-          // ШАГ ВВЕРХ (маленький, чтобы линия была пологой)
-          const stepY = 1.5 + Math.random() * 2.5; // от 1.5 до 4
-          
+
+          // ДЛИННЫЙ шаг вправо, чтобы график уходил вбок
+          const stepX = 10 + Math.random() * 5; // от 10 до 15
+
+          // КОРОТКИЙ шаг вверх, чтобы линия была пологой
+          const stepY = 0.5 + Math.random() * 1.5; // от 0.5 до 2.0
+
           const newX = lastP.x + stepX;
           const newY = lastP.y - stepY;
 
           let newPoints = [...prev, { x: newX, y: newY }];
 
-          // Скроллинг, если уперлись в правый край или потолок
-          if (newX > 70 || newY < 35) {
-            newPoints = newPoints.map(p => ({ ...p, x: p.x - stepX, y: p.y + stepY * 0.5 }));
+          // Скроллинг, если ушли далеко вправо
+          if (newX > 70) {
+            newPoints = newPoints.map(p => ({ ...p, x: p.x - stepX }));
           }
 
-          // Очистка точек за экраном
           return newPoints.filter(p => p.x > -5);
         });
         lastPointTimeRef.current = now;
