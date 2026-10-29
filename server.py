@@ -264,25 +264,24 @@ CASE_POOLS = {
 MIN_CRASH_POINT = 1.05
 
 def generate_crash_point():
-    # 7% шанс на быстрый краш (минимум 1.05x) - "сбор дани"
-    if random.random() < 0.07:
-        return MIN_CRASH_POINT
-
-    e = 2**32
-    h = random.randint(0, e - 1)
-
-    # 15% преимущество казино (возврат 85% игроку)
-    house_edge = 0.15
-
-    point = (1 - house_edge) / (1 - h / e)
-
-    # Кап множителя на 30x
-    if point > 30.0:
-        return 30.0
-    if point < MIN_CRASH_POINT:
-        return MIN_CRASH_POINT
-
-    return round(point, 2)
+    # Генерируем число от 0.0 до 100.0 для определения вероятности
+    r = random.uniform(0, 100)
+    
+    # 5% шанс на моментальный краш (1.00x)
+    if r < 5:
+        return 1.00
+    
+    # 0.1% шанс на джекпот (от 10.0x до 22.0x)
+    elif r < 5.1:
+        return round(random.uniform(10.0, 22.0), 2)
+    
+    # 25% шанс на средний краш (от 2.15x до 3.0x)
+    elif r < 30.1:
+        return round(random.uniform(2.15, 3.0), 2)
+    
+    # 69.9% шанс на низкий краш (от 1.01x до 1.6x)
+    else:
+        return round(random.uniform(1.01, 1.6), 2)
 
 
 # ── Crash Game Loop (фоновый поток) ───────────────────────────────────────

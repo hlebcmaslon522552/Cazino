@@ -422,18 +422,60 @@ console.log('[DEBUG] STARTED DATA:', data);
       ? Math.min(Math.max(100 - ((autoCashout - 1) / Math.max(serverCrashPointRef.current - 1, 0.05)) * 88, 12), 98)
       : null;
 
+  // lastPoint вынесен на уровень компонента для использования в SVG
+  const lastPoint = points.length > 0 ? points[points.length - 1] : null;
+  
   const renderGraph = () => {
     if (!points || points.length === 0) return null;
-    const pointsAttr = points.map(p => `${p.x},${p.y}`).join(' ');
+    
+    const mainColor = isCrashed ? "#ff3366" : "#00ff88";
+    const outlineColor = "#0f0f13"; // Темный цвет фона для окантовки
+
     return (
-      <polyline
-        points={pointsAttr}
-        fill="none"
-        stroke={isCrashed ? "#ff3366" : "#00ff88"}
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      <g>
+        {/* 1. Линия графика с черной окантовкой */}
+        <path 
+          d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
+          fill="none" 
+          stroke={outlineColor} 
+          strokeWidth="6" 
+          strokeLinejoin="round" 
+          strokeLinecap="round"
+        />
+        <path 
+          d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
+          fill="none" 
+          stroke={mainColor} 
+          strokeWidth="3" 
+          strokeLinejoin="round" 
+          strokeLinecap="round"
+        />
+
+        {/* 2. Точки на графике (зеленые с черной окантовкой) */}
+        {points.map((p, i) => (
+          <circle 
+            key={i} 
+            cx={p.x} 
+            cy={p.y} 
+            r="2.5" 
+            fill={mainColor} 
+            stroke={outlineColor} 
+            strokeWidth="1.5" 
+          />
+        ))}
+
+        {/* 3. Последняя точка (большая) */}
+        {lastPoint && (
+          <circle 
+            cx={lastPoint.x} 
+            cy={lastPoint.y} 
+            r={isCrashed ? 4 : 3} 
+            fill={mainColor} 
+            stroke={outlineColor} 
+            strokeWidth="2"
+          />
+        )}
+      </g>
     );
   };
   return (
@@ -451,7 +493,18 @@ console.log('[DEBUG] STARTED DATA:', data);
       <div className="relative h-[300px] bg-[#1a1a2e] rounded-3xl border border-gray-800 overflow-hidden shadow-lg"><div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
         <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
           {renderGraph()}
-          {isCrashed && points.length > 0 && <line x1={points[points.length - 1].x} y1={points[points.length - 1].y} x2={points[points.length - 1].x} y2="100" stroke="#ff3366" strokeWidth="2" strokeDasharray="3,3" style={{ filter: 'drop-shadow(0 0 8px #ff3366)' }} />}
+          {isCrashed && lastPoint && (
+            <line 
+              x1={lastPoint.x} 
+              y1={lastPoint.y} 
+              x2={lastPoint.x} 
+              y2="100" 
+              stroke="#ff3366" 
+              strokeWidth="2" 
+              strokeDasharray="3,3" 
+              style={{ filter: 'drop-shadow(0 0 8px #ff3366)' }}
+            />
+          )}
           {autoCashoutY !== null && (
             <line x1="0" y1={autoCashoutY} x2="100" y2={autoCashoutY} stroke="#00ff88" strokeWidth="1.5" strokeDasharray="6,4" style={{ filter: 'drop-shadow(0 0 8px rgba(34,197,94,0.6))' }} />
           )}
@@ -467,7 +520,7 @@ console.log('[DEBUG] STARTED DATA:', data);
             </div>
           )}
         </div>
-        {isCrashed && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-red-600/90 backdrop-blur-md px-8 py-4 rounded-2xl shadow-lg border border-red-400/50 transform -rotate-6 animate-pulse"><span className="text-3xl font-black text-white tracking-widest">RUG PULL</span></div></div>}
+        {isCrashed && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-red-600 text-white font-black text-4xl px-8 py-3 rounded-xl transform -rotate-12 border-4 border-red-800 shadow-2xl">RUG PULL</div></div>}
         {gameState === 'waiting' && <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><Clock size={48} className="text-gray-600 mb-2"/><span className="text-4xl font-black text-white">{countdown}</span><span className="text-gray-400 text-sm mt-1">до начала</span></div>}
       </div>
 
