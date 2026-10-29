@@ -377,6 +377,7 @@ def crash_game_loop():
             print(f"[CrashLoop] Раунд завершён. RUG PULL (краш-поинт: {final_crash_point}x).")
 
             # ── 5. Пауза для отображения RUG PULL ──
+            print(f"[CrashLoop] Ожидание 3 сек перед новым раундом...")
             socketio.sleep(3)
 
         except Exception as e:

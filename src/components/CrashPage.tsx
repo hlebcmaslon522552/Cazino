@@ -117,6 +117,13 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     // ── Раунд стартовал ──
     socket.on('crash_started', (data: { crash_point: number; start_time: number; rate?: number; time_to_crash?: number }) => {
       console.log('[CLIENT] STARTED. data:', data);
+      // Если уже летим — дубль, игнорируем
+      if (gameStateRef.current === 'flying') return;
+      // Отменяем любой pending-таймер сброса с предыдущего раунда
+      if (crashedResetRef.current) {
+        clearTimeout(crashedResetRef.current);
+        crashedResetRef.current = null;
+      }
 console.log('[DEBUG] STARTED DATA:', data);
       serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
       setCrashPoint(normalizeCrashPoint(data.crash_point));
@@ -140,7 +147,27 @@ console.log('[DEBUG] STARTED DATA:', data);
       console.log('[CLIENT] ENDED. data:', data);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
 
-      // Защита от дублей
+      // ── Таймер сброса в waiting СТАВИМ ВСЕГДА (даже на дубль-событие),
+      //     иначе если RAF hard stop успел отработать раньше и React уже
+      //     обновил gameStateRef → guard ниже сработает и таймер не будет
+      //     поставлен → экран зависнет навсегда!
+      if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
+      crashedResetRef.current = setTimeout(() => {
+        console.log('[CLIENT] RESETTING TO WAITING');
+        setGameState('waiting');
+        gameStateRef.current = 'waiting';
+        setMultiplier(1.00);
+        setPoints([{ x: 0, y: 100 }]);
+        setHasCashedOut(false);
+        hasCashedOutRef.current = false;
+        setCashedOutAt(0);
+        setHasBet(false);
+        hasBetRef.current = false;
+        setPlayers([]);
+        frozenCashoutsRef.current = {};
+      }, 3000);
+
+      // Защита от дублей: уже обработали этот краш
       if (gameStateRef.current === 'crashed') return;
 
       const finalPt = data?.crash_point || serverCrashPointRef.current;
@@ -154,21 +181,6 @@ console.log('[DEBUG] STARTED DATA:', data);
       hasBetRef.current = false;
       setAutoCashout(null);
       autoCashoutRef.current = null;
-
-      if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
-      crashedResetRef.current = setTimeout(() => {
-        setGameState('waiting');
-        gameStateRef.current = 'waiting';
-        setMultiplier(1.00);
-        setPoints([{ x: 0, y: 100 }]);
-        setHasCashedOut(false);
-        hasCashedOutRef.current = false;
-        setCashedOutAt(0);
-        setHasBet(false);
-        hasBetRef.current = false;
-        setPlayers([]);
-        frozenCashoutsRef.current = {};
-      }, 3000);
     });
 
     // ── Обновление пула ставок ──
