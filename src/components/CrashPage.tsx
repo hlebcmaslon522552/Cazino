@@ -1,25 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { CheckCircle, Clock, Users, XCircle, Zap } from 'lucide-react';
+import { CheckCircle, Users, Zap, XCircle } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-
-// ── Минимальный коэффициент краша ───────────────────────────────────────
-// Сервер может прислать crash_point = 1.00 / 1.01 (или вообще не прислать
-// crash_point), из-за чего игра «крашится» через мгновение после старта и
-// график не успевает отрисоваться. Поднимаем минимум до 1.05, чтобы у линии
-// всегда было время от старта (1.00x) до краш-точки.
-const MIN_CRASH_POINT = 1.05;
-
-// Приводит crash_point из сервера к корректному значению: если точка не
-// пришла или меньше допустимого минимума — используем fallback (1.05 по
-// умолчанию), иначе — исходное значение.
-function normalizeCrashPoint(value: number | undefined | null, fallback: number = MIN_CRASH_POINT): number {
-  const num = Number(value);
-  if (!isFinite(num) || num < MIN_CRASH_POINT) return fallback;
-  return num;
-}
+import { Lottie } from 'lottie-react';
+import flyAnim from '../../public/animations/rocket.json';
+import boomAnim from '../../public/animations/explosion.json';
 
 interface CrashPageProps {
   balance: number;
@@ -39,86 +26,41 @@ interface CrashPlayer {
 
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user } = useTelegram();
-  const [betInput, setBetInput] = useState<string>("1.0");
+  const [betInput, setBetInput] = useState<string>('1.0');
   const finalBet = parseFloat(betInput) || 0;
   const [multiplier, setMultiplier] = useState<number>(1.00);
   const [gameState, setGameState] = useState<ServerRoundState>('waiting');
-  const [crashPoint, setCrashPoint] = useState<number>(MIN_CRASH_POINT);
   const [hasCashedOut, setHasCashedOut] = useState<boolean>(false);
   const [cashedOutAt, setCashedOutAt] = useState<number>(0);
   const [history, setHistory] = useState<number[]>([1.2, 5.4, 1.0, 14.2, 2.1, 1.8]);
-  const [points, setPoints] = useState<{ x: number; y: number }[]>([{ x: 0, y: 100 }]);
   const [countdown, setCountdown] = useState<number>(15);
-  const countdownRef = useRef(15);
   const [hasBet, setHasBet] = useState<boolean>(false);
-  // ── Авто-сбор ──
   const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
   const [autoCashoutInput, setAutoCashoutInput] = useState<string>('');
   const [autoCashout, setAutoCashout] = useState<number | null>(null);
   const [players, setPlayers] = useState<CrashPlayer[]>([]);
+  const [showBoom, setShowBoom] = useState<boolean>(false);
+
   const socketRef = useRef<Socket | null>(null);
-  const crashedResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gameStateRef = useRef<ServerRoundState>('waiting');
-
-  const serverCrashPointRef = useRef<number>(MIN_CRASH_POINT);
-  // Счётчик тиков для добавления точек на график (~каждые 300мс)
-  const tickCounterRef = useRef<number>(0);
-
-  // ── Зафиксированные коэффициенты игроков, забравших выигрыш ─────────────
-  // Сервер присылает в crash_players_update только {user_id, username, bet},
-  // поэтому момент забора храним локально: user_id -> multiplier (cashedOutAt).
-  // Пока игрок играет — в таблице показываем живой multiplier, после забора —
-  // замороженное значение, чтобы оно не продолжало расти с каждым тиком.
   const frozenCashoutsRef = useRef<Record<string, number>>({});
-  // ── Рефы авто-сбора: crash_tick читает актуальные значения через refs, ──
-  // обновляемые на рендере.
   const autoCashoutRef = useRef<number | null>(null);
   const hasCashedOutRef = useRef(false);
   const hasBetRef = useRef(false);
   const cashOutRef = useRef<(manualMultiplier?: number) => void>(() => {});
 
-  // ── WebSocket-синхронизация глобального раунда ───────────────────────
   useEffect(() => {
     const socket = io(CONFIG.API_URL, {
       transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      // ── Первичная синхронизация: игрок может войти в середине раунда ──
-      fetch(`${CONFIG.API_URL}/api/crash_state`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      })
-        .then(res => res.json())
-        .then((data) => {
-          if (data.state === 'flying') {
-            serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
-            setCrashPoint(normalizeCrashPoint(data.crash_point));
-            setGameState('flying');
-            setMultiplier(data.multiplier ?? 1.0);
-            setPoints([{ x: 0, y: 100 }]);
-            setHasCashedOut(false);
-          }
-        })
-        .catch(err => console.error('[Crash] Initial state fetch error:', err));
-    });
+    socket.on('crash_timer', (data: { timer: number }) => setCountdown(data.timer));
 
-    // ── Раунд стартовал ──
-    socket.on('crash_started', (data: { crash_point: number; start_time: number; rate?: number; time_to_crash?: number }) => {
-      // Если уже летим — дубль, игнорируем
-      if (gameStateRef.current === 'flying') return;
-      // Отменяем любой pending-таймер сброса с предыдущего раунда
-      if (crashedResetRef.current) {
-        clearTimeout(crashedResetRef.current);
-        crashedResetRef.current = null;
-      }
-      serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
-      setCrashPoint(normalizeCrashPoint(data.crash_point));
-      tickCounterRef.current = 0;
+    socket.on('crash_started', () => {
       setGameState('flying');
-      setCountdown(15);
-      setMultiplier(1.00);
-      setPoints([{ x: 0, y: 100 }]);
+      setShowBoom(false);
+      setMultiplier(1.0);
       setHasCashedOut(false);
       hasCashedOutRef.current = false;
       setCashedOutAt(0);
@@ -127,501 +69,194 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       frozenCashoutsRef.current = {};
     });
 
-    // ── Раунд завершился (RUG PULL) ──
+    socket.on('crash_tick', (data: { multiplier: number }) => {
+      setMultiplier(data.multiplier);
+      if (autoCashoutRef.current !== null && !hasCashedOutRef.current && data.multiplier >= autoCashoutRef.current) {
+        cashOutRef.current(data.multiplier);
+      }
+    });
+
     socket.on('crash_ended', (data: { crash_point?: number }) => {
-      // ── Таймер сброса в waiting СТАВИМ ВСЕГДА (даже на дубль-событие)
-      if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
-      crashedResetRef.current = setTimeout(() => {
-        setGameState('waiting');
-        gameStateRef.current = 'waiting';
-        setMultiplier(1.00);
-        setPoints([{ x: 0, y: 100 }]);
-        setHasCashedOut(false);
-        hasCashedOutRef.current = false;
-        setCashedOutAt(0);
-        setHasBet(false);
-        hasBetRef.current = false;
-        setPlayers([]);
-        frozenCashoutsRef.current = {};
-      }, 3000);
-
-      // Защита от дублей: уже обработали этот краш
       if (gameStateRef.current === 'crashed') return;
-
-      const finalPt = data?.crash_point || serverCrashPointRef.current;
+      const finalPt = data?.crash_point || 1.0;
       setMultiplier(finalPt);
       setGameState('crashed');
       gameStateRef.current = 'crashed';
+      setShowBoom(true);
       hasCashedOutRef.current = true;
-
-      setHistory(prev => [finalPt, ...prev].slice(0, 30));
+      setHistory((prev) => [finalPt, ...prev].slice(0, 30));
       setHasBet(false);
       hasBetRef.current = false;
       setAutoCashout(null);
       autoCashoutRef.current = null;
     });
 
-    // ── Обновление пула ставок ──
     socket.on('crash_players_update', (data: { players: CrashPlayer[] }) => {
-      // Сервер присылает только {user_id, username, bet}: при перезаписи списка
-      // сохраняем локальную заморозку коэффициента игроков, уже забравших выигрыш,
-      // чтобы их коэффициент в таблице не начинал расти снова.
-      setPlayers(prev => {
-        const prevById = new Map(prev.map(p => [p.user_id, p]));
-        return (data.players || []).map(snp => {
+      setPlayers((prev) => {
+        const prevById = new Map(prev.map((p) => [p.user_id, p]));
+        return (data.players || []).map((snp) => {
           const prevEntry = prevById.get(snp.user_id);
-          return prevEntry?.cashed_out
-            ? { ...snp, cashed_out: true, multiplier: prevEntry.multiplier }
-            : snp;
-        });
+          return prevEntry?.cashed_out ? { ...snp, cashed_out: true, multiplier: prevEntry.multiplier } : snp;});
       });
     });
 
-    // ── Серверный тик (каждые 100мс в полёте) ──
-    socket.on('crash_tick', (data: { multiplier: number; crash_point: number }) => {
-      setMultiplier(data.multiplier);
-
-      // Добавляем точку на график каждые ~3 тика (300мс)
-      tickCounterRef.current += 1;
-      if (tickCounterRef.current % 3 === 0) {
-        setPoints(prev => {
-          const lastP = prev[prev.length - 1] || { x: 5, y: 90 };
-          const stepX = 10 + Math.random() * 5;
-          const stepY = 0.5 + Math.random() * 1.5;
-          const newX = lastP.x + stepX;
-          const newY = lastP.y - stepY;
-          let newPoints = [...prev, { x: newX, y: newY }];
-          if (newX > 70) {
-            newPoints = newPoints.map(p => ({ ...p, x: p.x - stepX }));
-          }
-          return newPoints.filter(p => p.x > -5);
-        });
-      }
-
-      // ── Авто-сбор (проверяем каждый тик) ──
-      if (
-        autoCashoutRef.current !== null &&
-        !hasCashedOutRef.current &&
-        data.multiplier >= autoCashoutRef.current
-      ) {
-        cashOutRef.current(data.multiplier);
-      }
-    });
-
-    return () => {
-      if (crashedResetRef.current) clearTimeout(crashedResetRef.current);
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, []);
 
-  // ── Синхронизация gameStateRef ──
-  useEffect(() => {
-    gameStateRef.current = gameState;
-  }, [gameState]);
-
-  // ── Локальный таймер обратного отсчёта (не зависит от сервера) ──────────
-  // Считаем секунды до старта на клиенте, чтобы таймер не «зависал», если
-  // crash_timer от сервера перестал приходить.
-  useEffect(() => {
-    if (gameState === 'waiting') {
-      // Каждый раз при переходе в ожидание ставим 15
-      setCountdown(15);
-      countdownRef.current = 15;
-
-      let forceStartTimer: ReturnType<typeof setTimeout> | null = null;
-
-      const interval = setInterval(() => {
-        // Дошли до нуля — останавливаем отсчёт и даём серверу 2 секунды
-        // на crash_started. Если сервер не ответил — запускаем игру локально.
-        if (countdownRef.current <= 0) return;
-
-        countdownRef.current -= 1;
-        setCountdown(countdownRef.current);
-
-        if (countdownRef.current <= 0) {
-          clearInterval(interval);
-          forceStartTimer = setTimeout(() => {
-            if (gameStateRef.current === 'waiting') {
-              setGameState('flying');
-              setMultiplier(1.00);
-              setPoints([{ x: 5, y: 95 }]);
-            }
-          }, 2000);
-        }
-      }, 1000);
-
-      return () => {
-        clearInterval(interval);
-        if (forceStartTimer) clearTimeout(forceStartTimer);
-      };
-    }
-  }, [gameState]);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
   const placeBet = () => {
-    if (gameState !== 'waiting') return;
-    if (finalBet > balance) { onToast?.('Недостаточно средств', 'error'); return; }
-    if (finalBet <= 0) { onToast?.('Ставка должна быть больше 0', 'error'); return; }
+    if (gameState !== 'waiting' || finalBet > balance || finalBet <= 0) return;
     onUpdateBalance(-finalBet);
-
-    // ── Авто-сбор: запоминаем целевой коэффициент при ставке, ──
-    // если переключатель включён и в поле введено корректное значение (> 1.00)
     if (autoCashoutEnabled) {
       const target = parseFloat(autoCashoutInput);
-      if (isFinite(target) && target > 1) {
-        setAutoCashout(target);
-      } else {
-        setAutoCashout(null);
-        onToast?.('Укажите корректный коэффициент авто-сбора (> 1.00)', 'error');
-      }
+      if (isFinite(target) && target > 1) setAutoCashout(target);
     }
-
     setHasBet(true);
-
-    // Отправляем ставку на сервер — он рассылает crash_players_update всем
-    const betAmount = finalBet;
+    hasBetRef.current = true;
     socketRef.current?.emit('crash_bet', {
       user_id: String(user?.id ?? 'unknown'),
       username: user?.first_name || 'Игрок',
-      bet: betAmount,
+      bet: finalBet,
     });
-
     onToast?.('Ставка принята!', 'success');
-
-    // Отправляем оборот
-    const turnoverAmount = betAmount;
-    if (turnoverAmount > 0) {
-      fetch(`${CONFIG.API_URL}/api/add_turnover`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({
-          user_id: user?.id ?? 'unknown',
-          username: user?.first_name || 'Игрок',
-          amount: turnoverAmount,
-        }),
-      }).catch(() => {});
-    }
-
-    // Записываем ставку в историю
-    fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({
-        user_id: user?.id ?? 'unknown',
-        game_type: 'crash',
-        bet_type: 'ton',
-        amount: turnoverAmount,
-      }),
-    }).catch(() => {});
   };
 
   const cashOut = (manualMultiplier?: number) => {
-    // Защита от «фантомной» ставки: забирать можно только после реальной ставки
-    if (!hasBet) return;
-    if (gameState === 'flying' && !hasCashedOut) {
-      // Авто-сбор передаёт точный множитель из RAF-цикла (момент достижения цели),
-      // ручной забор берёт актуальный multiplier из текущего рендера
-      const m = manualMultiplier ?? multiplier;
-      const winAmount = finalBet * m;
-      const currentUserId = String(user?.id ?? 'unknown');
-
-      // Фиксируем коэффициент текущего игрока ровно на моменте забора (cashedOutAt).
-      // В таблице этот игрок будет показывать замороженное значение, а не живой
-      // растущий multiplier (серверные обновления не затирают frozenCashoutsRef).
-      setCashedOutAt(m);
-      frozenCashoutsRef.current = { ...frozenCashoutsRef.current, [currentUserId]: m };
-      setPlayers(prev =>
-        prev.map(p =>
-          p.user_id === currentUserId ? { ...p, cashed_out: true, multiplier: m } : p
-        )
-      );
-
-      setHasCashedOut(true);
-      // Синхронная защита от повторного срабатывания авто-сбора: даже если RAF
-      // или клик по кнопке произойдёт до ближайшего ре-рендера — забора не будет
-      hasCashedOutRef.current = true;
-      // Цель авто-сбора достигнута — снимаем её
-      setAutoCashout(null);
-      onUpdateBalance(winAmount);
-
-      // Записываем выигрыш в историю (для статистики max_win)
-      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({
-          user_id: user?.id ?? 'unknown',
-          game_type: 'crash',
-          bet_type: 'ton',
-          amount: winAmount,
-          kind: 'win',
-        }),
-      }).catch(() => {});
-
-      onToast?.('Вы забрали ' + winAmount.toFixed(2) + ' TON по ' + m.toFixed(2) + 'x', 'success');
-    }
+    if (!hasBetRef.current || hasCashedOutRef.current) return;
+    const m = manualMultiplier ?? multiplier;
+    const winAmount = finalBet * m;
+    const currentUserId = String(user?.id ?? 'unknown');
+    setCashedOutAt(m);
+    frozenCashoutsRef.current = { ...frozenCashoutsRef.current, [currentUserId]: m };
+    setPlayers((prev) => prev.map((p) => p.user_id === currentUserId ? { ...p, cashed_out: true, multiplier: m } : p));
+    setHasCashedOut(true);
+    hasCashedOutRef.current = true;
+    onUpdateBalance(winAmount);
+    onToast?.(`Вы забрали ${winAmount.toFixed(2)} TON по ${m.toFixed(2)}x`, 'success');
   };
 
-  // Держим refs авто-сбора актуальными на каждом рендере: RAF-цикл (замыкание,
-  // созданное на старте раунда) читает именно эти refs, а не устаревший стейт.
   autoCashoutRef.current = autoCashout;
   hasCashedOutRef.current = hasCashedOut;
   cashOutRef.current = cashOut;
 
   const toggleAutoCashout = () => {
-    // Выключение тумблера снимает запомненную цель; при повторном включении
-    // цель установится заново в момент нажатия «Сделать ставку».
-    setAutoCashoutEnabled(v => !v);
+    setAutoCashoutEnabled((v) => !v);
     setAutoCashout(null);
   };
 
-  const isCrashed = gameState === 'crashed';
-  // Примерная координата y цели авто-сбора на графике (0..100): 1.00x — верх,
-  // чем выше коэффициент, тем ниже линия. Используем ту же шкалу, что и для
-  // точек графика (y=100 при 1.00x → y=12 при crash_point), чтобы линия
-  // авто-сбора пересекала кривую ровно в точке целевого множителя.
-  const autoCashoutY =
-    autoCashout !== null && gameState === 'flying' && !hasCashedOut
-      ? Math.min(Math.max(100 - ((autoCashout - 1) / Math.max(serverCrashPointRef.current - 1, 0.05)) * 88, 12), 98)
-      : null;
-
-  // lastPoint вынесен на уровень компонента для использования в SVG
-  const lastPoint = points.length > 0 ? points[points.length - 1] : null;
-  
-  const renderGraph = () => {
-    if (!points || points.length === 0) return null;
-    
-    const mainColor = isCrashed ? "#ff3366" : "#00ff88";
-    const outlineColor = "#0f0f13"; // Темный цвет фона для окантовки
-
-    return (
-      <g>
-        {/* 1. Линия графика с черной окантовкой */}
-        <path 
-          d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
-          fill="none" 
-          stroke={outlineColor} 
-          strokeWidth="5" 
-          strokeLinejoin="round" 
-          strokeLinecap="round"
-        />
-        <path 
-          d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
-          fill="none" 
-          stroke={mainColor} 
-          strokeWidth="2" 
-          strokeLinejoin="round" 
-          strokeLinecap="round"
-        />
-
-        {/* 2. Точки на графике НЕ рисуем по каждой вершине — только линия
-            (зелёная strokeWidth="2" выше) и большая отметка последней точки */}
-        {lastPoint && (
-          <circle 
-            cx={lastPoint.x} 
-            cy={lastPoint.y} 
-            r={isCrashed ? 4 : 3} 
-            fill={mainColor} 
-            stroke={outlineColor} 
-            strokeWidth="2"
-          />
-        )}
-      </g>
-    );
-  };
   return (
     <div className="flex flex-col h-full bg-[#0f0f13] text-white p-4 overflow-hidden font-sans">
-      
+      {/* История раундов */}
       <div className="flex items-center justify-between mb-4">
         <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">История раундов</span>
         <div className="flex gap-2 overflow-x-auto whitespace-nowrap pb-2 scrollbar-hide w-full">
           {history.map((h, i) => (
-            <span key={i} className={`px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap flex-shrink-0 ${h >= 2 ? 'bg-green-500 text-[#0f0f13] shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}>{h.toFixed(2)}x</span>
+            <span key={i} className={`px-2.5 py-1 rounded-full text-xs font-black whitespace-nowrap flex-shrink-0 ${h >= 2 ? 'bg-green-500 text-[#0f0f13]' : 'bg-red-500 text-white'}`}>{h.toFixed(2)}x</span>
           ))}
         </div>
       </div>
 
-      <div className="relative h-[300px] bg-[#1a1a2e] rounded-3xl border border-gray-800 overflow-hidden shadow-lg"><div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-        <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-          {renderGraph()}
-          {isCrashed && lastPoint && (
-            <line 
-              x1={lastPoint.x} 
-              y1={lastPoint.y} 
-              x2={lastPoint.x} 
-              y2="100" 
-              stroke="#ff3366" 
-              strokeWidth="2" 
-              strokeDasharray="3,3" 
-              style={{ filter: 'drop-shadow(0 0 8px #ff3366)' }}
+      {/* Игровое поле с Lottie */}
+      <div className="relative h-[300px] bg-[#1a1a2e] rounded-3xl border border-gray-800 overflow-hidden shadow-lg">
+        <div className="absolute inset-0 flex items-center justify-center p-4">
+          {!showBoom && (gameState === 'waiting' || gameState === 'flying') && (
+            <Lottie animationData={flyAnim} loop={true} style={{ width: '100%', height: '100%' }} />
+          )}
+          {showBoom && (
+            <Lottie
+              animationData={boomAnim}
+              loop={false}
+              onComplete={() => { setShowBoom(false); setGameState('waiting'); }}
+              style={{ width: '100%', height: '100%' }}
             />
           )}
-          {autoCashoutY !== null && (
-            <line x1="0" y1={autoCashoutY} x2="100" y2={autoCashoutY} stroke="#00ff88" strokeWidth="1.5" strokeDasharray="6,4" style={{ filter: 'drop-shadow(0 0 8px rgba(34,197,94,0.6))' }} />
-          )}
-        </svg>
-        <div className="absolute top-4 left-4 pointer-events-none">
-          <span className={`text-5xl font-black tracking-tighter ${isCrashed ? 'text-red-500' : 'text-white'}`} style={{ textShadow: isCrashed ? '0 0 20px rgba(255,51,102,0.8)' : '0 0 20px rgba(255,255,255,0.5)' }}>{multiplier.toFixed(2)}x</span>
-          {hasCashedOut && <div className="mt-2 text-green-400 font-bold text-sm bg-green-900/50 px-3 py-1 rounded-full border border-green-500/50 inline-block">Забрано: {(finalBet * cashedOutAt).toFixed(2)} TON</div>}
-          {autoCashoutY !== null && autoCashout !== null && (
-            <div className="absolute right-3 pointer-events-none" style={{ bottom: `${100 - autoCashoutY}%` }}>
-              <span className="text-green-400 font-bold text-xs bg-green-900/60 px-2.5 py-1 rounded-full border border-green-500/60 shadow-[0_0_10px_rgba(34,197,94,0.5)] whitespace-nowrap">
-                Авто-сбор: {autoCashout.toFixed(2)}x
-              </span>
-            </div>
-          )}
         </div>
-        {isCrashed && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-red-600 text-white font-black text-4xl px-8 py-3 rounded-xl transform -rotate-12 border-4 border-red-800 shadow-2xl">RUG PULL</div></div>}
-        {gameState === 'waiting' && <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><Clock size={48} className="text-gray-600 mb-2"/><span className="text-4xl font-black text-white">{countdown}</span><span className="text-gray-400 text-sm mt-1">до начала</span></div>}
-      </div>
 
-      
-
-      <div className="mt-4 bg-[#1a1a2e] rounded-3xl p-4 border border-gray-800 shadow-xl">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex flex-col"><span className="text-gray-400 text-sm">Баланс</span><span className="text-xl font-bold text-white flex items-center gap-1"><img src="/TON.png" alt="TON" style={{ width: 16, height: 16, objectFit: 'contain' }} /> {balance.toFixed(2)}</span></div>
-          <div className="flex flex-col text-right"><span className="text-gray-400 text-sm">Потенциал</span><span className="text-xl font-bold text-green-400">{gameState === 'flying' ? (finalBet * multiplier).toFixed(2) : '0.00'}</span></div>
+        <div className="absolute top-4 left-4 pointer-events-none">
+          <span className={`text-5xl font-black tracking-tighter ${gameState === 'crashed' ? 'text-red-500' : 'text-white'}`}>
+            {multiplier.toFixed(2)}x
+          </span>
+          {hasCashedOut && <div className="mt-2 text-green-400 font-bold text-sm bg-green-900/50 px-3 py-1 rounded-full inline-block">Забрано: {(finalBet * cashedOutAt).toFixed(2)} TON</div>}
         </div>
 
         {gameState === 'waiting' && (
-          <div className="mb-4">
-            <div className="relative">
-              <input type="text" inputMode="decimal" value={betInput} onChange={(e) => { const val = e.target.value.replace(',', '.'); if (/^\d*\.?\d*$/.test(val)) setBetInput(val); }} className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-4 text-xl font-bold text-white focus:outline-none focus:border-purple-500 pl-12" />
-              <img src="/TON.png" alt="TON" className="absolute left-4 top-1/2 -translate-y-1/2" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-            </div>
-
-            {/* ── Авто-сбор ── */}
-            <div className={`mt-3 rounded-xl border p-3 transition-colors ${autoCashoutEnabled ? 'border-green-500/40 bg-green-900/10' : 'border-gray-700 bg-[#0f0f13]'}`}>
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={toggleAutoCashout}
-                  className="flex items-center gap-2 text-gray-300 font-bold text-sm select-none shrink-0"
-                >
-                  <Zap size={14} className="text-green-400" />
-                  Авто-сбор
-                </button>
-                {autoCashout !== null && (
-                  <span className="text-green-400 text-[10px] font-black uppercase tracking-wider bg-green-900/60 px-2 py-0.5 rounded-full border border-green-500/50 whitespace-nowrap">
-                    активен · {autoCashout.toFixed(2)}x
-                  </span>
-                )}
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={autoCashoutEnabled}
-                  onClick={toggleAutoCashout}
-                  className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${autoCashoutEnabled ? 'bg-green-500' : 'bg-gray-600'}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoCashoutEnabled ? 'translate-x-5' : ''}`} />
-                </button>
-              </div>
-
-              {autoCashoutEnabled && (
-                <div className="mt-3">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="1.50"
-                      value={autoCashoutInput}
-                      onChange={(e) => { const val = e.target.value.replace(',', '.'); if (/^\d*\.?\d*$/.test(val)) setAutoCashoutInput(val); }}
-                      className="w-full bg-[#0f0f13] border border-gray-700 rounded-xl p-3 pr-10 text-lg font-bold text-white focus:outline-none focus:border-green-500"
-                    />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-green-400 font-black text-sm pointer-events-none">x</span>
-                  </div>
-                  <p className="text-gray-500 text-xs mt-2 flex items-center justify-between">
-                    <span>Авто-сбор на</span>
-                    <span className="text-green-400 font-bold">{(parseFloat(autoCashoutInput.replace(',', '.')) || 0).toFixed(2)}x</span>
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <button onClick={placeBet} disabled={hasBet} className={`w-full mt-2 py-3 rounded-xl shadow-lg active:scale-[0.98] transition-all font-black ${hasBet ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white'}`}>
-              Сделать ставку
-            </button>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="bg-gray-900/80 text-white font-black text-6xl px-8 py-3 rounded-2xl border border-gray-700/50 shadow-2xl backdrop-blur-sm">{countdown}</div>
           </div>
         )}
+      </div>
 
-        {gameState === 'flying' && (
+      {/* Панель ставки */}
+      <div className="flex flex-col gap-3 mt-4 bg-[#1a1a2e] rounded-3xl border border-gray-800 p-4"><div className="flex items-center justify-between mb-2">
+          <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Авто-сбор</span>
+          <div className="flex items-center gap-2">
+            <input type="number" step="0.1" min="1.1" max="50" placeholder="1.5" value={autoCashoutInput} onChange={(e) => setAutoCashoutInput(e.target.value)} className="w-16 bg-[#0f0f13] text-white text-center text-xs font-bold rounded-lg border border-gray-700/60 outline-none" disabled={!autoCashoutEnabled} />
+            <button onClick={toggleAutoCashout} className={`w-10 h-7 rounded-full transition-all cursor-pointer ${autoCashoutEnabled ? 'bg-green-500' : 'bg-gray-800'}`} />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input type="number" step="0.1" min="0.1" placeholder="1.0" value={betInput} onChange={(e) => setBetInput(e.target.value)} className="flex-1 bg-[#0f0f13] text-white text-center text-lg font-bold rounded-xl border border-gray-700/60 outline-none" />
+          <button
+            onClick={placeBet}
+            disabled={hasBet || gameState !== 'waiting' || finalBet > balance || finalBet <= 0}
+            className={`flex-shrink-0 px-5 font-black text-xl py-4 rounded-xl transition-all ${hasBet || gameState !== 'waiting' || finalBet > balance || finalBet <= 0 ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}
+          >
+            {!hasBet ? 'Сделать ставку' : `Ставка ${finalBet.toFixed(2)} TON`}
+          </button>
+        </div>
+
+        {(hasBet || gameState !== 'waiting') && (
           <button
             onClick={() => cashOut()}
             disabled={!hasBet || hasCashedOut || finalBet === 0}
-            className={`w-full font-black text-xl py-4 rounded-xl transition-all flex items-center justify-center gap-2 ${!hasBet || hasCashedOut || finalBet === 0 ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}
+            className={`w-full font-black text-xl py-4 rounded-xl transition-all ${!hasBet || hasCashedOut || finalBet === 0 ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg active:scale-[0.98]'}`}
           >
-            {!hasBet
-              ? 'Вы не делали ставку'
-              : hasCashedOut
-                ? 'Вы забрали'
-                : finalBet === 0
-                  ? 'Вы не делали ставку'
-                  : `Забрать ${(finalBet * multiplier).toFixed(2)} TON`}
+            {!hasBet ? 'Вы не делали ставку' : hasCashedOut ? 'Вы забрали' : `Забрать ${(finalBet * multiplier).toFixed(2)} TON`}
           </button>
         )}
       </div>
 
-      {/* ── Таблица игроков ── */}
+      {/* Таблица игроков */}
       <div className="mt-4 bg-[#1a1a2e] rounded-3xl border border-gray-800 shadow-xl p-4">
         <div className="flex justify-between items-center pb-3 border-b border-gray-700/60 mb-3">
           <span className="text-gray-400 text-sm font-bold uppercase tracking-wider flex items-center gap-1.5"><Users size={14}/> Пользователь</span>
           <span className="text-gray-400 text-sm font-bold uppercase tracking-wider">Коэффициент</span>
         </div>
-
         {players.length === 0 ? (
           <p className="text-gray-500 text-center text-sm py-6">Ожидание игроков...</p>
         ) : (
           <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
             {players.map((p) => {
               const isCurrentUser = p.user_id === String(user?.id ?? 'unknown');
-              // Игрок забрал выигрыш: статус от сервера, локальный кашаут текущего
-              // игрока или запись в карте замороженных коэффициентов
-              const isCashedOut =
-                p.cashed_out === true ||
-                (isCurrentUser && hasCashedOut) ||
-                typeof frozenCashoutsRef.current[p.user_id] === 'number';
-              // Коэффициент зафиксирован в момент забора (cashedOutAt) и НЕ растёт,
-              // даже когда живой multiplier продолжает увеличиваться
-              const frozenAt =
-                p.multiplier ??
-                (isCurrentUser ? cashedOutAt : frozenCashoutsRef.current[p.user_id]) ??
-                multiplier;
-
+              const isCashedOut = p.cashed_out === true || (isCurrentUser && hasCashedOut);
+              const frozenAt = p.multiplier ?? (isCurrentUser ? cashedOutAt : multiplier);
               return (
                 <div key={p.user_id} className="flex items-center justify-between gap-3 bg-[#0f0f13] rounded-xl px-3 py-2 border border-gray-800">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
-                    {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1">
-                      <span className="text-white font-bold text-sm truncate">{p.username || 'Игрок'}</span>
-                      {isCashedOut ? (
-                        <CheckCircle size={16} className="text-green-500 shrink-0" />
-                      ) : gameState === 'crashed' ? (
-                        <XCircle size={16} className="text-red-500 shrink-0" />
-                      ) : null}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
+                      {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
                     </div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <img src={publicUrl('TON.png')} alt="TON" className="w-3.5 h-3.5 object-contain shrink-0" />
-                      <span className="text-gray-300 font-semibold text-xs">{p.bet.toFixed(2)}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-white font-bold text-sm truncate">{p.username || 'Игрок'}</span>{isCashedOut ? (<CheckCircle size={16} className="text-green-500 shrink-0" />) : gameState === 'crashed' ? (<XCircle size={16} className="text-red-500 shrink-0" />) : null}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <img src={publicUrl('TON.png')} alt="TON" className="w-3.5 h-3.5 object-contain shrink-0" />
+                        <span className="text-gray-300 font-semibold text-xs">{p.bet.toFixed(2)}</span>
+                      </div>
                     </div>
                   </div>
+                  <div className="text-right shrink-0">
+                    {isCashedOut ? (<span className="text-green-400 font-black text-sm">{frozenAt.toFixed(2)}x</span>) : (<span className="text-green-300/90 font-bold text-sm">{multiplier.toFixed(2)}x</span>)}
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  {isCashedOut ? (
-                    <span className="text-green-400 font-black text-sm">{frozenAt.toFixed(2)}x</span>
-                  ) : (
-                    <span className="text-green-300/90 font-bold text-sm">{multiplier.toFixed(2)}x</span>
-                  )}
-                </div>
-              </div>
-            );
+              );
             })}
           </div>
         )}
       </div>
-
     </div>
   );
-};
-
-
+};</div>
