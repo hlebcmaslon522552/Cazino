@@ -116,6 +116,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     // ── Раунд стартовал ──
     socket.on('crash_started', (data: { crash_point: number; start_time: number; rate?: number; time_to_crash?: number }) => {
+      console.log('[CLIENT] STARTED. data:', data);
 console.log('[DEBUG] STARTED DATA:', data);
       serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
       setCrashPoint(normalizeCrashPoint(data.crash_point));
@@ -136,19 +137,18 @@ console.log('[DEBUG] STARTED DATA:', data);
 
     // ── Раунд завершился (RUG PULL) ──
     socket.on('crash_ended', (data: { crash_point?: number }) => {
+      console.log('[CLIENT] ENDED. data:', data);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      setMultiplier(data?.crash_point || serverCrashPointRef.current);
-      setGameState('crashed');
-      hasCashedOutRef.current = true;
 
-      // Защита от дублей: если уже крашнулись, игнорируем
-      if (gameStateRef.current === 'crashed') return; 
-      
+      // Защита от дублей
+      if (gameStateRef.current === 'crashed') return;
+
       const finalPt = data?.crash_point || serverCrashPointRef.current;
       setMultiplier(finalPt);
       setGameState('crashed');
       gameStateRef.current = 'crashed';
-      
+      hasCashedOutRef.current = true;
+
       setHistory(prev => [finalPt, ...prev].slice(0, 30));
       setHasBet(false);
       hasBetRef.current = false;
@@ -256,6 +256,7 @@ console.log('[DEBUG] STARTED DATA:', data);
         cashOutRef.current(clamped);
       }
       requestRef.current = requestAnimationFrame(animate);
+      if (Math.floor(now / 1000) !== Math.floor(lastPointTimeRef.current / 1000)) { console.log('[CLIENT] ANIMATE. multiplier:', newMultiplier.toFixed(2), 'serverCrash:', serverCrashPointRef.current); }
     };
 
     requestRef.current = requestAnimationFrame(animate);

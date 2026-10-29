@@ -343,6 +343,7 @@ def crash_game_loop():
                 CRASH_RATE = 0.2222                     # 1x за 4.5 сек
                 CRASH_STATE = "flying"
 
+            print(f"[SERVER] START. crash_point={CRASH_POINT}, start_time={CRASH_START_TIME}, rate={CRASH_RATE}")
             print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x, rate: {CRASH_RATE}")
             socketio.emit('crash_started', {
                 'crash_point': CRASH_POINT,
@@ -369,6 +370,7 @@ def crash_game_loop():
                 CRASH_PLAYERS = []
 
             print(f"[CrashLoop] КРАШ! {final_crash_point}x")
+            print(f"[SERVER] END. Sending crash_ended with crash_point={final_crash_point}")
             # Отправляем crash_ended всем клиентам (emit вне контекста запроса уже
             # транслируется всем подключённым клиентам, broadcast=True не нужен)
             socketio.emit('crash_ended', {'crash_point': final_crash_point})
