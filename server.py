@@ -206,6 +206,41 @@ def init_db():
 
 init_db()
 
+def sanitize_turnover():
+    """Сброс сломанных данных оборота при старте сервера.
+
+    Проверяет всех пользователей в таблице turnover (оборот = SUM(amount) по
+    user_id). Если суммарный оборот пользователя превышает 1 000 000 TON или
+    встречаются записи с аномальными значениями (формат вида 9.9e+22 от
+    накрутки) — обнуляем его оборот (удаляем его записи оборота).
+    """
+    if not os.path.exists(DB_PATH):
+        return
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        user_ids = [row[0] for row in c.execute("SELECT DISTINCT user_id FROM turnover")]
+        for uid in user_ids:
+            total, max_amount = c.execute(
+                "SELECT COALESCE(SUM(amount), 0), COALESCE(MAX(ABS(amount)), 0) FROM turnover WHERE user_id = ?",
+                (uid,)
+            ).fetchone()
+            # Аномалия: огромная сумма (> 1 000 000) или экспоненциальный формат (e+22)
+            if total > 1_000_000 or max_amount > 1_000_000 or "e+" in repr(max_amount).lower():
+                c.execute("DELETE FROM turnover WHERE user_id = ?", (uid,))
+                print(f"[sanitize_turnover] Сброшен оборот пользователя {uid}: total={total}, max={max_amount}")
+        conn.commit()
+        print("[sanitize_turnover] Проверка оборота завершена.")
+    except Exception as e:
+        print(f"[sanitize_turnover] Ошибка: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+sanitize_turnover()
+
 def verify_init_data(init_data):
     return bool(init_data and init_data.strip())
 
@@ -333,8 +368,11 @@ def crash_game_loop():
                 CRASH_POINT = 1.00
                 CRASH_PLAYERS = []
 
-            print(f"[CrashLoop] Раунд завершён. RUG PULL (краш-поинт: {final_crash_point}x).")
+            print(f"[CrashLoop] КРАШ! {final_crash_point}x")
+            # Отправляем crash_ended всем клиентам (emit вне контекста запроса уже
+            # транслируется всем подключённым клиентам, broadcast=True не нужен)
             socketio.emit('crash_ended', {'crash_point': final_crash_point})
+            print(f"[CrashLoop] Раунд завершён. RUG PULL (краш-поинт: {final_crash_point}x).")
 
             # ── 5. Пауза для отображения RUG PULL ──
             socketio.sleep(3)
@@ -1600,6 +1638,11 @@ def add_turnover():
 
     if amount <= 0:
         return jsonify({"error": "Amount must be > 0"}), 400
+
+    # Защита от накрутки: суммы оборота выше 100 000 TON в базу не пишем
+    if amount > 100000:
+        print(f"[add_turnover] Отклонена аномальная сумма {amount} TON (защита от накрутки)")
+        return jsonify({"error": "Amount exceeds 100000 TON limit"}), 400
 
     conn = None
     try:

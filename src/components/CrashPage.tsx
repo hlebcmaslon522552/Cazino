@@ -136,6 +136,11 @@ console.log('[DEBUG] STARTED DATA:', data);
 
     // ── Раунд завершился (RUG PULL) ──
     socket.on('crash_ended', (data: { crash_point?: number }) => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      setMultiplier(data?.crash_point || serverCrashPointRef.current);
+      setGameState('crashed');
+      hasCashedOutRef.current = true;
+
       // Защита от дублей: если уже крашнулись, игнорируем
       if (gameStateRef.current === 'crashed') return; 
       
@@ -205,25 +210,33 @@ console.log('[DEBUG] STARTED DATA:', data);
       const elapsed = Math.max(0, (now - startTimeRef.current) / 1000);
       const newMultiplier = 1.0 + elapsed * crashRateRef.current;
 
-      if (now - lastPointTimeRef.current >= 300) { // Увеличили до 300мс, чтобы точек было меньше
+      // ── Жёсткая остановка: множитель достиг серверной краш-точки ──
+      if (newMultiplier >= serverCrashPointRef.current) {
+        setMultiplier(serverCrashPointRef.current);
+        setGameState('crashed');
+        if (requestRef.current) cancelAnimationFrame(requestRef.current);
+        return;
+      }
+
+      if (now - lastPointTimeRef.current >= 200) {
         setPoints(prev => {
-          const lastP = prev[prev.length - 1] || { x: 5, y: 95 };
+          const lastP = prev[prev.length - 1] || { x: 5, y: 90 };
 
-          // Длина по X (вправо) — делаем её больше, чтобы линия шла вбок
-          const stepX = 8 + Math.random() * 8; // от 8 до 16
-
-          // Подъем по Y (вверх) — делаем его меньше, чтобы не улетать в стену
-          const stepY = 4 + Math.random() * 6; // от 4 до 10
+          const stepX = 2 + Math.random() * 2;
+          const angleDeg = 10 + Math.random() * 35;
+          const angleRad = (angleDeg * Math.PI) / 180;
+          const stepY = stepX * Math.tan(angleRad);
 
           const newX = lastP.x + stepX;
-          const newY = Math.max(10, lastP.y - stepY); // Ограничиваем верх
+          const newY = lastP.y - stepY;
 
-          // Проверка на скроллинг: если ушли далеко вправо, сдвигаем всё влево
-          if (newX > 80) {
-            return [{ x: 5, y: 95 }, { x: newX - 60, y: newY }]; // Сброс камеры
+          let newPoints = [...prev, { x: newX, y: newY }];
+
+          if (newX > 75 || newY < 30) {
+            newPoints = newPoints.map(p => ({ ...p, x: p.x - stepX, y: p.y + stepY * 0.5 }));
           }
 
-          return [...prev, { x: newX, y: newY }];
+          return newPoints.filter(p => p.x > -5);
         });
         lastPointTimeRef.current = now;
       }
@@ -436,7 +449,7 @@ console.log('[DEBUG] STARTED DATA:', data);
           d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
           fill="none" 
           stroke={outlineColor} 
-          strokeWidth="6" 
+          strokeWidth="5" 
           strokeLinejoin="round" 
           strokeLinecap="round"
         />
@@ -444,7 +457,7 @@ console.log('[DEBUG] STARTED DATA:', data);
           d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')} 
           fill="none" 
           stroke={mainColor} 
-          strokeWidth="3" 
+          strokeWidth="2" 
           strokeLinejoin="round" 
           strokeLinecap="round"
         />
@@ -455,7 +468,7 @@ console.log('[DEBUG] STARTED DATA:', data);
             key={i} 
             cx={p.x} 
             cy={p.y} 
-            r="2.5" 
+            r="3" 
             fill={mainColor} 
             stroke={outlineColor} 
             strokeWidth="1.5" 
