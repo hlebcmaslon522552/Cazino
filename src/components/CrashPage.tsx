@@ -101,9 +101,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       })
         .then(res => res.json())
         .then((data) => {
-          if (data.state === 'waiting') {
-            setCountdown(data.timer || 15);
-          } else if (data.state === 'flying') {
+          if (data.state === 'flying') {
             serverCrashPointRef.current = normalizeCrashPoint(data.crash_point);
             setCrashPoint(normalizeCrashPoint(data.crash_point));
             // Множитель считаем по серверному rate: multiplier = 1.0 + elapsed * rate
@@ -120,11 +118,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         .catch(err => console.error('[Crash] Initial state fetch error:', err));
     });
 
-    // ── Глобальный обратный отсчёт ──
-    socket.on('crash_timer', (data: { timer: number }) => {
-      setCountdown(data.timer);
-    });
-
     // ── Раунд стартовал ──
     socket.on('crash_started', (data: { crash_point: number; start_time: number; rate?: number; time_to_crash?: number }) => {
 console.log('[DEBUG] STARTED DATA:', data);
@@ -134,6 +127,7 @@ console.log('[DEBUG] STARTED DATA:', data);
       startTimeRef.current = data.start_time;  // сервер шлёт миллисекунды (time.time()*1000)
       lastPointTimeRef.current = Date.now();
       setGameState('flying');
+      setCountdown(15); // Локальный таймер: сбрасываем отсчёт при старте раунда
       setMultiplier(1.00);
       setPoints([{ x: 0, y: 100 }]);
       setHasCashedOut(false);
@@ -263,6 +257,22 @@ console.log('[DEBUG] STARTED DATA:', data);
   useEffect(() => {
     if (gameState === 'waiting' || gameState === 'flying') {
       animMultiplierRef.current = 1.0;
+    }
+  }, [gameState]);
+
+  // ── Локальный таймер обратного отсчёта (не зависит от сервера) ──────────
+  // Считаем секунды до старта на клиенте, чтобы таймер не «зависал», если
+  // crash_timer от сервера перестал приходить.
+  useEffect(() => {
+    if (gameState === 'waiting') {
+      // Каждый раз при переходе в ожидание ставим 15
+      setCountdown(15);
+
+      const interval = setInterval(() => {
+        setCountdown(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+
+      return () => clearInterval(interval);
     }
   }, [gameState]);
 
