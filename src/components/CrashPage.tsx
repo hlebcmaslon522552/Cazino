@@ -40,7 +40,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const [players, setPlayers] = useState<CrashPlayer[]>([]);
   const [showBoom, setShowBoom] = useState<boolean>(false);
   const [autoCashoutInput, setAutoCashoutInput] = useState<string>('');
-  const [autoCashout, setAutoCashout] = useState<number | null>(null);
+  const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
 
   // ── Рефы ──
   const socketRef = useRef<Socket | null>(null);
@@ -84,7 +84,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setHistory((prev) => [finalPt, ...prev].slice(0, 30));
       setHasBet(false);
       hasBetRef.current = false;
-      setAutoCashout(null);
       autoCashoutRef.current = null;
     });
 
@@ -102,12 +101,15 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     if (gameState !== 'waiting' || finalBet > balance || finalBet <= 0) return;
     onUpdateBalance(-finalBet);
     
-    if (autoCashoutInput) {
+    if (autoCashoutEnabled && autoCashoutInput) {
       const target = parseFloat(autoCashoutInput);
       if (isFinite(target) && target > 1) {
-        setAutoCashout(target);
         autoCashoutRef.current = target;
+      } else {
+        autoCashoutRef.current = null;
       }
+    } else {
+      autoCashoutRef.current = null;
     }
 
     setHasBet(true);
@@ -129,7 +131,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     setCashedOutAt(m);
     setHasCashedOut(true);
     hasCashedOutRef.current = true;
-    setAutoCashout(null);
     autoCashoutRef.current = null;
     onUpdateBalance(winAmount);
     onToast?.(`Вы забрали ${winAmount.toFixed(2)} TON по ${m.toFixed(2)}x`, 'success');
@@ -192,29 +193,53 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         {/* Авто-сбор */}
         <div className="flex items-center justify-between mb-1">
           <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">Авто-сбор</span>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              step="0.1"
-              min="1.1"
-              placeholder="1.5"
-              value={autoCashoutInput}
-              onChange={(e) => setAutoCashoutInput(e.target.value)}
-              className="w-20 bg-[#0f0f13] text-white text-center text-xs font-bold rounded-lg border border-gray-700/60 outline-none py-1.5"
-            />
-            <span className="text-gray-500 text-xs">x</span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Переключатель авто-сбора */}
+            <button
+              type="button"
+              aria-pressed={autoCashoutEnabled}
+              aria-label="Авто-сбор"
+              onClick={() => {
+                const next = !autoCashoutEnabled;
+                setAutoCashoutEnabled(next);
+                if (next) {
+                  setAutoCashoutInput((prev) => prev || '1.5');
+                } else {
+                  autoCashoutRef.current = null;
+                }
+              }}
+              className={`relative w-10 h-5 rounded-full transition-colors duration-300 flex-shrink-0 ${autoCashoutEnabled ? 'bg-green-500' : 'bg-gray-700'}`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-transform duration-300 ${autoCashoutEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+              />
+            </button>
+            {autoCashoutEnabled && (
+              <>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="1.1"
+                  placeholder="1.5"
+                  value={autoCashoutInput}
+                  onChange={(e) => setAutoCashoutInput(e.target.value)}
+                  className="w-20 bg-[#0f0f13] text-white text-center text-xs font-bold rounded-lg border border-gray-700/60 outline-none py-1.5 flex-shrink-0"
+                />
+                <span className="text-gray-500 text-xs">x</span>
+              </>
+            )}
           </div>
         </div>
 
         {/* Ставка */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full">
           <input
             type="number"
             step="0.1"
             min="0.1"
             value={betInput}
             onChange={(e) => setBetInput(e.target.value)}
-            className="flex-1 bg-[#0f0f13] text-white text-center text-lg font-bold rounded-xl border border-gray-700/60 outline-none py-3"
+            className="flex-1 min-w-0 bg-[#0f0f13] text-white text-center text-lg font-bold rounded-xl border border-gray-700/60 outline-none py-3"
           />
           <button
             onClick={placeBet}
