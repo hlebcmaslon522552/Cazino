@@ -6,6 +6,7 @@ import os
 import random
 import json
 import sqlite3
+import sys
 import threading
 import time
 import uuid
@@ -15,10 +16,59 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room
 
+# Принудительный UTF-8 для stdout/stderr. При запуске с перенаправлением вывода
+# в файл (start_server.bat, > server.log) Python 3.9 на Windows пишет в cp866,
+# и русские сообщения в логе превращаются в "крокозябры".
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+
+# ── Диагностика входящих запросов ─────────────────────────────────────
+# Печатаем КАЖДЫЙ входящий запрос и код ответа прямо в stdout.
+# flush=True обязателен: при запуске с перенаправлением вывода в файл
+# (start_server.bat / server.log) stdout буферизуется блоками, и без
+# flush строки "не появляются" в логе до переполнения буфера.
+# Если в логе нет даже строки "REQUEST: ...", значит запрос физически
+# не дошёл до этого процесса (неверный домен/порт туннеля, CORS-преflight
+# не выполнен, либо сервер был перезапущен после правок).
+@app.before_request
+def _log_incoming_request():
+    print(
+        f"REQUEST: {request.method} {request.path}"
+        f" args={dict(request.args)}"
+        f" origin={request.headers.get('Origin', '-')}",
+        flush=True,
+    )
+
+
+@app.after_request
+def _log_response_status(response):
+    print(
+        f"RESPONSE: {request.method} {request.path} -> {response.status_code}",
+        flush=True,
+    )
+    return response
+
+
+@app.errorhandler(404)
+def _handle_not_found(_error):
+    # Отдаём JSON вместо HTML-страницы Flask, чтобы фронтенд не падал
+    # на res.json() и в логе было видно, какой именно путь не найден.
+    print(f"[404] Нет такого эндпоинта: {request.method} {request.path}", flush=True)
+    return jsonify({
+        "error": "Not found",
+        "path": request.path,
+        "method": request.method,
+    }), 404
+
 
 # ── PvP Rooms ─────────────────────────────────────────────────────────
 PVP_ROOMS = {}
@@ -598,6 +648,7 @@ def check_and_reset_leaderboard():
 @app.route("/api/balance", methods=["GET"])
 def get_balance():
     user_id = request.args.get("user_id", "6267608438")
+    print(f"REQUEST: /api/balance user_id={user_id}", flush=True)
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -1255,6 +1306,7 @@ def inventory_remove():
 @app.route("/api/buy_nft", methods=["POST"])
 def buy_nft():
     """Покупка NFT из маркета: списывает TON и добавляет предмет в инвентарь."""
+    print(f"REQUEST: /api/buy_nft body={request.get_data(as_text=True)[:300]}", flush=True)
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
