@@ -5,8 +5,8 @@ import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 import { Lottie } from 'lottie-react';
-import flyAnim from '/animations/fly.json';
-import boomAnim from '/animations/BOOMnoBOMB.json';
+import flyAnim from '../animations/fly.json';
+import boomAnim from '../animations/BOOMnoBOMB.json';
 
 interface CrashPageProps {
   balance: number;
