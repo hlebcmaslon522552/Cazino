@@ -565,5 +565,37 @@
     "image": "/nft_images/xmas_stocking.webp",
     "collection": "Xmas Stocking",
     "floor": 3.876
+  },
+  {
+    "id": 82,
+    "name": "Resistance Dogs",
+    "image": "/nft_images/resistance_dog.webp",
+    "collection": "Resistance Dogs",
+    "floor": 100.0,
+    "rarity": "Common"
+  },
+  {
+    "id": 83,
+    "name": "Lucky Lockets",
+    "image": "/nft_images/lucky_locket.webp",
+    "collection": "Lucky Lockets",
+    "floor": 100.0,
+    "rarity": "Common"
+  },
+  {
+    "id": 84,
+    "name": "Mirage Lamps",
+    "image": "/nft_images/mirage_lamp.webp",
+    "collection": "Mirage Lamps",
+    "floor": 100.0,
+    "rarity": "Common"
+  },
+  {
+    "id": 85,
+    "name": "Fine Pens",
+    "image": "/nft_images/fine_pen.webp",
+    "collection": "Fine Pens",
+    "floor": 100.0,
+    "rarity": "Common"
   }
 ]
