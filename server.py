@@ -11,6 +11,8 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta
+import hmac
+import math
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -146,6 +148,22 @@ TG_SUBSCRIPTION_CHANNEL = os.environ.get("TG_SUBSCRIPTION_CHANNEL", "@Test_Erra"
 # окружения недоступен, поэтому идём через Cloudflare Worker-прокси
 # (как в send_telegram_notification и withdraw_nft).
 TG_API_BASE = os.environ.get("TG_API_BASE", "https://stars.gleb0256149.workers.dev")
+
+# ── Внутренний API баланса (SECURITY) ─────────────────────────────────
+# Начислять/списывать TON может ТОЛЬКО сервер: подтверждённый депозит (вебхук
+# платёжной системы), выплата при выводе, результат игры. Клиент не должен
+# уметь записывать баланс — поэтому клиентский /api/update_balance удалён,
+# а внутренний /api/add_balance защищён общим секретом (как вебхук).
+# Секрет задаётся ТОЛЬКО через переменную окружения BALANCE_API_SECRET.
+# Если секрет не задан — эндпоинт отключён (fail closed): иначе любой,
+# кто узнал URL, смог бы начислить себе сколько угодно TON.
+BALANCE_API_SECRET = os.environ.get("BALANCE_API_SECRET", "").strip()
+# Заголовок, в котором серверный клиент (вебхук платежей / воркер выплат)
+# передаёт секрет. Именно заголовок, а не тело, чтобы ключ не попадал в логи.
+BALANCE_SECRET_HEADER = "X-Internal-Secret"
+# Предохранитель от опечаток: одна операция не может изменить баланс
+# больше чем на этот лимит.
+MAX_BALANCE_OPERATION = 1_000_000.0
 
 
 def init_db():
@@ -758,56 +776,106 @@ def referral_stats():
             conn.close()
 
 
-@app.route("/api/update_balance", methods=["POST"])
-def update_balance():
+@app.route("/api/add_balance", methods=["POST"])
+def add_balance():
+    """
+    ВНУТРЕННИЙ эндпоинт изменения баланса (не для клиента!).
+
+    Вызывается только серверными компонентами: вебхук подтверждения депозита,
+    воркер выплат при выводе и т.п. Защищён секретом BALANCE_API_SECRET,
+    который передаётся в заголовке X-Internal-Secret (аналог вебхука).
+
+    Тело запроса: { "user_id": "...", "amount": 10.5, "reason": "deposit" }
+        amount — ДЕЛЬТА (сумма к добавлению, может быть отрицательной для
+        списания), НЕ итоговый баланс. Итоговый баланс всегда считает сервер.
+
+    SECURITY: публичный клиентский POST /api/update_balance, принимавший
+    абсолютный баланс от клиента, ПОЛНОСТЬЮ УДАЛЁН — любой мог «накрутить»
+    себе миллион TON. Теперь клиент не способен менять баланс напрямую.
+    """
+    # Fail closed: если владелец не задал секрет, эндпоинт не работает вообще.
+    if not BALANCE_API_SECRET:
+        print("[add_balance] BALANCE_API_SECRET не задан — эндпоинт отключён", flush=True)
+        return jsonify({"error": "Balance API is disabled"}), 503
+
+    provided_secret = request.headers.get(BALANCE_SECRET_HEADER, "")
+    if not hmac.compare_digest(provided_secret, BALANCE_API_SECRET):
+        print("[add_balance] ОТКАЗ: неверный/отсутствующий X-Internal-Secret", flush=True)
+        return jsonify({"error": "Forbidden"}), 403
+
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
-    user_id = str(data.get("user_id", "unknown"))
-    balance = float(data.get("balance", 0))
+
+    user_id = str(data.get("user_id", "")).strip()
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
+
+    try:
+        amount = float(data.get("amount", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "amount must be a number"}), 400
+
+    if not math.isfinite(amount) or amount == 0:
+        return jsonify({"error": "amount must be a non-zero finite number"}), 400
+    if abs(amount) > MAX_BALANCE_OPERATION:
+        return jsonify({"error": f"amount exceeds limit of {MAX_BALANCE_OPERATION}"}), 400
+
+    amount = round(amount, 4)
+    reason = str(data.get("reason", "deposit")).strip().lower() or "deposit"
+
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
 
-        # Получаем старый баланс для вычисления дельты
+        # Создаём пользователя с дефолтным балансом, если его ещё нет
+        c.execute("INSERT OR IGNORE INTO users (id) VALUES (?)", (user_id,))
+
+        # Баланс меняем ДЕЛЬТОЙ прямо в БД — итог считает сервер, а не клиент
+        c.execute(
+            "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+            (amount, user_id),
+        )
+
         c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
-        row = c.fetchone()
-        old_balance = row[0] if row else 15.0
+        new_balance = round(c.fetchone()[0], 4)
 
-        # Upsert: создаём строку если нет, обновляем баланс
-        c.execute("INSERT INTO users (id, balance_ton) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET balance_ton = ?",
-                  (user_id, balance, balance))
+        # Не даём уйти в минус при списании
+        if new_balance < 0:
+            conn.rollback()
+            print(f"[add_balance] ОТКЛОНЕНО: недостаточно средств user={user_id} amount={amount}", flush=True)
+            return jsonify({"error": "Insufficient balance"}), 400
 
-        # Если баланс увеличился — это пополнение/депозит
-        deposit_amount = balance - old_balance
-        if deposit_amount > 0:
-            # Записываем депозит в таблицу deposits
+        # Учёт депозита и реферальные 5% (только для пополнений)
+        if reason == "deposit" and amount > 0:
             c.execute(
                 "INSERT INTO deposits (user_id, amount) VALUES (?, ?)",
-                (user_id, deposit_amount)
+                (user_id, amount),
             )
-            # Проверяем, есть ли у пользователя реферер
             c.execute("SELECT referrer_id FROM users WHERE id = ?", (user_id,))
             user_row = c.fetchone()
             if user_row and user_row[0]:
                 referrer_id = user_row[0]
-                referral_bonus = round(deposit_amount * 0.05, 4)
+                referral_bonus = round(amount * 0.05, 4)
                 if referral_bonus > 0:
-                    # Начисляем 5% рефереру
                     c.execute(
                         "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
-                        (referral_bonus, referrer_id)
+                        (referral_bonus, referrer_id),
                     )
-                    print(f"[referral] user {user_id} deposited {deposit_amount}, "
-                          f"referrer {referrer_id} earned {referral_bonus} TON (5%)")
+                    print(f"[add_balance] referral: user {user_id} deposited {amount}, "
+                          f"referrer {referrer_id} earned {referral_bonus} TON (5%)", flush=True)
 
         conn.commit()
-        return jsonify({"success": True})
+        print(f"[add_balance] OK user={user_id} amount={amount:+.4f} reason={reason} -> balance={new_balance}", flush=True)
+        return jsonify({
+            "success": True,
+            "user_id": user_id,
+            "amount": amount,
+            "balance_ton": new_balance,
+        })
     except Exception as e:
-        print(f"[update_balance] error: {e}")
+        print(f"[add_balance] error: {e}", flush=True)
         return jsonify({"error": "Internal server error"}), 500
     finally:
         if conn:

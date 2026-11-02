@@ -24,7 +24,6 @@ import { LeaderboardPage } from './LeaderboardPage';
 import { BetHistoryPage } from './BetHistoryPage';
 import { BottomNav } from './BottomNav';
 import { publicUrl } from '../helpers/publicUrl';
-import { getBalance } from '../api';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
@@ -45,40 +44,40 @@ export function Root() {
   // вне updater (fetch внутри updater в StrictMode дублировался бы).
   useEffect(() => { balanceRef.current = balance; }, [balance]);
 
-  // Загружаем баланс с сервера при старте
-  useEffect(() => {
+  // Единый способ получить актуальный баланс — ТОЛЬКО GET /api/balance.
+  // POST /api/update_balance удалён: клиент больше НЕ может записать баланс
+  // на сервер, иначе любой мог бы «накрутить» себе миллион TON.
+  const loadBalance = () => {
     fetch(`${CONFIG.API_URL}/api/balance?user_id=${userId}`)
       .then(res => res.json())
       .then(data => {
-        if (data.balance_ton !== undefined) {
+        if (data && data.balance_ton !== undefined) {
           setBalance(Number(data.balance_ton));
         }
       })
       .catch((e) => {
         console.error("Ошибка загрузки баланса:", e);
-        setBalance(15); // Запасной вариант, если сервер недоступен
       });
+  };
+
+  // Загружаем баланс с сервера при старте
+  useEffect(() => {
+    loadBalance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const handleUpdateBalance = (amount: number) => {
-    // Вычисляем новый баланс ВНЕ updater: updater 'setBalance' в dev StrictMode
-    // вызывается дважды, и fetch внутри него уходил бы на сервер 2 раза.
+    // Сумма используется ТОЛЬКО для мгновенного оптимистичного отклика UI.
+    // Деньги в базе двигают исключительно серверные обработчики
+    // (победа в игре, депозит, вывод), а баланс всегда перечитывается
+    // с сервера через GET /api/balance.
     balanceRef.current = balanceRef.current + amount;
     setBalance(balanceRef.current);
 
-    // Отправляем новый баланс на сервер (ровно один раз за вызов)
-    fetch(`${CONFIG.API_URL}/api/update_balance`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({ user_id: userId, balance: balanceRef.current }),
-    }).catch(console.error);
+    // После завершения операции синхронизируем баланс с сервером
+    loadBalance();
   };
 
-  /**
-   * Изменение баланса «дельтой» — алиас для handleUpdateBalance.
-   * Оставлен для обратной совместимости (PlinkoPage, CasePage, CrashPage).
-   */
-  const changeBalance = handleUpdateBalance;
   const { render: renderToast, show: showToast } = useToast();
 
   const handleTabChange = (tab: Tab) => {
@@ -95,9 +94,7 @@ export function Root() {
    * Вызывается после действий, которые меняют баланс (продажа NFT, пополнение и т.д.),
    * чтобы перезапросить баланс из API и Header обновился автоматически.
    */
-  const refreshBalance = () => {
-    getBalance().then(setBalance).catch(() => {});
-  };
+  const refreshBalance = loadBalance;
 
   return (
     <TonConnectUIProvider manifestUrl={`${CONFIG.APP_URL}/tonconnect-manifest.json`}>
