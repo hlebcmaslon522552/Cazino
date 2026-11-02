@@ -1493,16 +1493,16 @@ def create_invoice():
     if amount < 50:
         return jsonify({"error": "Минимум 50 Stars"}), 400
 
-    bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
-    url = f"https://api.telegram.org/bot{bot_token}/createInvoiceLink"
+    # Прямой доступ к api.telegram.org из этого окружения недоступен, поэтому
+    # идём через тот же Cloudflare Worker-прокси, что и остальные методы
+    # (sendMessage / getMe / getChatMember) — см. TG_API_BASE выше.
+    url = f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/createInvoiceLink"
     headers = {"Content-Type": "application/json"}
 
-    # ── Прокси через QuantumProxies ──────────────────────────────────
-    proxy_url = (
-        "http://qp_live_63883d50984c71728cd4f125bdfa64c229299b2f4cf338cbc7000c01ac56a226"
-        ":@residentialboson.quantumproxies.io:10000"
-    )
-    proxies = {"http": proxy_url, "https": proxy_url}
+    # Прокси опционален: если нужен — задаётся через переменную окружения,
+    # креды больше не захардкожены в коде.
+    proxy_url = os.environ.get("TG_PROXY_URL", "").strip()
+    proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
     payload = {
         "title": "Пополнение баланса",
