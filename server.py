@@ -299,24 +299,22 @@ CASE_POOLS = {
 MIN_CRASH_POINT = 1.05
 
 def generate_crash_point():
-    # Генерируем число от 0.0 до 100.0 для определения вероятности
-    r = random.uniform(0, 100)
-    
-    # 5% шанс на моментальный краш (1.00x)
-    if r < 5:
+    # 4% — мгновенный краш (1.00x)
+    if random.random() < 0.04:
+        print(f"[Crash] Generated: 1.00x (instant crash, 4% roll)")
         return 1.00
-    
-    # 0.1% шанс на джекпот (от 10.0x до 22.0x)
-    elif r < 5.1:
-        return round(random.uniform(10.0, 22.0), 2)
-    
-    # 25% шанс на средний краш (от 2.15x до 3.0x)
-    elif r < 30.1:
-        return round(random.uniform(2.15, 3.0), 2)
-    
-    # 69.9% шанс на низкий краш (от 1.01x до 1.6x)
-    else:
-        return round(random.uniform(1.01, 1.6), 2)
+
+    # Остальные 96% — формула 1/(1-R), где R = random.random()
+    r = random.random()               # 0.0 <= r < 1.0
+    crash = 1.0 / (1.0 - r)          # диапазон [1.0, +inf)
+
+    # Жёсткий потолок 1000.0x
+    if crash > 1000.0:
+        crash = 1000.0
+
+    crash = round(crash, 2)
+    print(f"[Crash] Generated: {crash}x (1/(1-{r:.4f}))")
+    return crash
 
 
 # ── Crash Game Loop (фоновый поток) ───────────────────────────────────────
@@ -352,16 +350,21 @@ def crash_game_loop():
                 'time_to_crash': round((CRASH_POINT - 1.0) / CRASH_RATE, 2),
             })
 
-            # ── 3. Ожидание краша ──
+            # ── 3. Ожидание краша — тики каждые ~0.01x ──
             # Время до краша = (crash_point - 1.0) / rate (секунд)
             crash_duration_ms = (CRASH_POINT - 1.0) / CRASH_RATE * 1000
             elapsed = 0.0
+            last_tick = 0.0
             while elapsed < crash_duration_ms:
-                socketio.sleep(0.1)
+                socketio.sleep(0.05)          # ~20 тиков/с, ~0.0111x за тик
                 with CRASH_LOCK:
                     elapsed = (time.time() * 1000) - CRASH_START_TIME
                     current_multiplier = 1.0 + (elapsed / 1000) * CRASH_RATE
-                socketio.emit('crash_tick', {'multiplier': round(current_multiplier, 4), 'crash_point': CRASH_POINT})
+                tick_val = round(current_multiplier, 2)
+                # Отправляем только когда множитель перешагнул очередные 0.01x
+                if tick_val > last_tick:
+                    last_tick = tick_val
+                    socketio.emit('crash_tick', {'multiplier': tick_val})
 
             # ── 4. Краш ──
             with CRASH_LOCK:
@@ -1004,6 +1007,7 @@ def plinko_drop():
     multiplier = multis[slot_index]
 
     win_amount = round(bet_amount * multiplier, 2)
+    print(f"[Plinko] Result: {multiplier}x, slotIndex={slot_index}, bet={bet_amount}, win={win_amount}")
     return jsonify({
         "slotIndex": slot_index,
         "multiplier": multiplier,
@@ -1071,6 +1075,7 @@ def open_case():
                 conn.close()
             return jsonify({"error": "Database error"}), 500
 
+        print(f"[Case] Free case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}")
         return jsonify({"success": True, "item": {**item, "id": item_id}})
 
     # ── Платные кейсы ───────────────────────────────────────────────
@@ -1137,6 +1142,7 @@ def open_case():
             conn.close()
         return jsonify({"error": "Database error"}), 500
 
+    print(f"[Case] Paid case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}, case_id={case_id}")
     return jsonify({"success": True, "item": {**item, "id": item_id}})
 
 
