@@ -17,7 +17,7 @@ export interface InventoryItem {
   floor: number;
 }
 
-const API_URL = 'https://cazino-api.fxtun.ru';
+
 
 export const getInitData = (): string => {
   try {
@@ -33,7 +33,7 @@ export const getInitData = (): string => {
  * Сервер возвращает { balance_ton: number }.
  */
 export const fetchUserData = async (userId: string) => {
-  const res = await fetch(`${API_URL}/api/balance?user_id=${userId}`, {
+  const res = await fetch(`${CONFIG.API_URL}/api/balance?user_id=${userId}`, {
     headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
@@ -47,7 +47,7 @@ export const fetchUserData = async (userId: string) => {
 
 export async function fetchInventory(initData: string, userId: string): Promise<InventoryItem[]> {
   try {
-    const res = await fetch(`${API_URL}/api/inventory?user_id=${userId}`, {
+    const res = await fetch(`${CONFIG.API_URL}/api/inventory?user_id=${userId}`, {
       headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true',
@@ -111,7 +111,7 @@ export async function sellNft(
   price: number,
   userId: string,
 ): Promise<{ success: boolean; new_balance: number }> {
-  const res = await fetch(`${API_URL}/api/sell_nft`, {
+  const res = await fetch(`${CONFIG.API_URL}/api/sell_nft`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -127,7 +127,7 @@ export async function sellNft(
 }
 
 export async function withdrawNft(itemId: number, initData: string): Promise<boolean> {
-  const res = await fetch(`${API_URL}/api/withdraw_nft`, {
+  const res = await fetch(`${CONFIG.API_URL}/api/withdraw_nft`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -154,7 +154,7 @@ export const getBalance = async (): Promise<number> => {
 };
 
 export const getFloorPrice = async (collectionName: string) => {
-  const res = await fetch(`${API_URL}/api/get_floor?collection=${collectionName}`, {
+  const res = await fetch(`${CONFIG.API_URL}/api/get_floor?collection=${collectionName}`, {
     headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
