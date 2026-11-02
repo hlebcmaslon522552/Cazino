@@ -16,7 +16,7 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 
