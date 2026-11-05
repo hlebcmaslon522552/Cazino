@@ -15,13 +15,13 @@
     "predeploy": "npm run build"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.21.1",
     "@lottiefiles/react-lottie-player": "^3.6.0",
     "@tailwindcss/vite": "^4.3.3",
     "@telegram-apps/telegram-ui": "^2.1.9",
     "@tma.js/sdk-react": "^3.0.8",
     "@tonconnect/ui-react": "^2.2.0",
     "eruda": "^3.4.3",
-    "lottie-react": "^3.1.2",
     "lucide-react": "^1.61.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -1,4 +1,4 @@
-import { Lottie } from 'lottie-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 interface LottiePlayerProps {
   path: string;
@@ -8,5 +8,5 @@ interface LottiePlayerProps {
 export function LottiePlayer({ path, loop = true }: LottiePlayerProps) {
   if (!path) return null;
 
-  return <Lottie src={path} loop={loop} />;
+  return <DotLottieReact src={path} loop={loop} autoplay={true} />;
 }

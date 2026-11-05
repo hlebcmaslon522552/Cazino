@@ -4,7 +4,7 @@ import { CheckCircle, Users, XCircle } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
-import { Lottie } from 'lottie-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import flyAnim from '../animations/fly.json';
 import boomAnim from '../animations/BOOMnoBOMB.json';
 
@@ -54,6 +54,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const hasBetRef = useRef(false);
   const hasCashedOutRef = useRef(false);
   const autoCashoutRef = useRef<number | null>(null);
+  const boomLottieRef = useRef<any>(null);
 
   // ── Сокеты ──
   useEffect(() => {
@@ -105,6 +106,20 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   }, []);
 
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+
+  // ── Обработчик завершения boom-анимации ──
+  useEffect(() => {
+    const instance = boomLottieRef.current;
+    if (!instance || typeof instance.addEventListener !== 'function') return;
+
+    const handleComplete = () => {
+      setShowBoom(false);
+      setGameState('waiting');
+    };
+
+    instance.addEventListener('complete', handleComplete);
+    return () => { instance.removeEventListener('complete', handleComplete); };
+  }, [showBoom]);
 
   // ── Ставка ──
   const placeBet = () => {
@@ -166,14 +181,19 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         
         <div className="absolute inset-0 flex items-center justify-center p-4">
           {!showBoom && gameState === 'flying' && (
-            <Lottie animationData={flyAnim} loop={true} style={{ width: '100%', height: '100%' }} onError={(e) => console.log('LOTTIE FLY ERROR:', e)} />
+            <DotLottieReact
+              data={JSON.stringify(flyAnim)}
+              loop={true}
+              autoplay={true}
+              style={{ width: '100%', height: '100%' }}
+            />
           )}
           {showBoom && (
-            <Lottie
-              animationData={boomAnim}
+            <DotLottieReact
+              data={JSON.stringify(boomAnim)}
               loop={false}
-              onComplete={() => { setShowBoom(false); setGameState('waiting'); }}
-              onError={(e) => console.log('LOTTIE BOOM ERROR:', e)}
+              autoplay={true}
+              dotLottieRefCallback={(instance) => { boomLottieRef.current = instance; }}
               style={{ width: '100%', height: '100%' }}
             />
           )}
