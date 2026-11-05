@@ -56,16 +56,38 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const autoCashoutRef = useRef<number | null>(null);
   const boomLottieRef = useRef<any>(null);
 
-  // ── Сброс состояния при входе в игру ──
+  // ── Синхронизация состояния при входе в игру (позднее подключение) ──
   useEffect(() => {
-    setMultiplier(1.00);
-    setGameState('waiting');
+    (async () => {
+      try {
+        const res = await fetch(`${CONFIG.API_URL}/api/crash_state`);
+        const data = await res.json();
+
+        if (data.state === 'flying') {
+          setGameState('flying');
+          setMultiplier(data.multiplier);
+          setCountdown(0);
+          setShowBoom(false);
+        } else if (data.state === 'waiting') {
+          setGameState('waiting');
+          setCountdown(data.timer);
+        } else if (data.state === 'crashed') {
+          setGameState('crashed');
+          setMultiplier(data.crash_point);
+          setShowBoom(true);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch crash_state, falling back to defaults:', err);
+        setMultiplier(1.00);
+        setGameState('waiting');
+        setCountdown(15);
+      }
+    })();
+
     setHasCashedOut(false);
     setHasBet(false);
     hasBetRef.current = false;
     setCashedOutAt(0);
-    setShowBoom(false);
-    setCountdown(15);
   }, []);
 
   // ── Сокеты ──
