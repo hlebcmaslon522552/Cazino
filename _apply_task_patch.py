@@ -22,7 +22,7 @@ CASE_POOL = [
     {"name": "Astral Shard", "image": "/nft_images/astral_shard.webp", "rarity": "rare", "chance": 10, "price": 80},
     {"name": "Golden Fish", "image": "/nft_images/bonded_ring.webp", "rarity": "rare", "chance": 10, "price": 75},
     {"name": "Shadow Veil", "image": "/nft_images/westside_sign.webp", "rarity": "uncommon", "chance": 15, "price": 40},
-    {"name": "Ruby Heart", "image": "/nft_images/heart_locket-removebg-preview.png", "rarity": "uncommon", "chance": 15, "price": 35},
+    {"name": "Ruby Heart", "image": "/nft_images/heart_locket.webp", "rarity": "uncommon", "chance": 15, "price": 35},
     {"name": "Emerald Eye", "image": "/nft_images/clover_pin.webp", "rarity": "uncommon", "chance": 15, "price": 30},
     {"name": "Moonstone", "image": "/nft_images/moon_pendant.webp", "rarity": "common", "chance": 30, "price": 10},
 ]
@@ -73,7 +73,7 @@ CASE_SILVER_POOL = [
 ]
 
 CASE_GOLD_POOL = [
-    {"name": "Heart Locket", "image": "/nft_images/heart_locket-removebg-preview.png", "rarity": "legendary", "chance": 1, "price": 1249.48},
+    {"name": "Heart Locket", "image": "/nft_images/heart_locket.webp", "rarity": "legendary", "chance": 1, "price": 1249.48},
     {"name": "Precious Peach", "image": "/nft_images/precious_peach.webp", "rarity": "epic", "chance": 4, "price": 259.57},
     {"name": "Durovs Cap", "image": "/nft_images/durovs_cap.webp", "rarity": "rare", "chance": 15, "price": 420.24},
     {"name": "Mighty Arm", "image": "/nft_images/mighty_arm.webp", "rarity": "rare", "chance": 30, "price": 127.45},
@@ -155,7 +155,7 @@ CP_POOL_OLD = """const DEFAULT_POOL: DropItem[] = [
   { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'rare', chance: 10, price: 80 },
   { name: 'Golden Fish', image: '/nft_images/bonded_ring.webp', rarity: 'rare', chance: 10, price: 75 },
   { name: 'Shadow Veil', image: '/nft_images/westside_sign.webp', rarity: 'uncommon', chance: 15, price: 40 },
-  { name: 'Ruby Heart', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'uncommon', chance: 15, price: 35 },
+  { name: 'Ruby Heart', image: '/nft_images/heart_locket.webp', rarity: 'uncommon', chance: 15, price: 35 },
   { name: 'Emerald Eye', image: '/nft_images/clover_pin.webp', rarity: 'uncommon', chance: 15, price: 30 },
   { name: 'Moonstone', image: '/nft_images/moon_pendant.webp', rarity: 'common', chance: 30, price: 10 },
 ];
@@ -189,7 +189,7 @@ const CASE_POOLS: Record<string, DropItem[]> = {
     { name: 'Love Potion', image: '/nft_images/love_potion.webp', rarity: 'uncommon', chance: 40, price: 14.79 },
   ],
   case_gold: [
-    { name: 'Heart Locket', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'legendary', chance: 1, price: 1249.48 },
+    { name: 'Heart Locket', image: '/nft_images/heart_locket.webp', rarity: 'legendary', chance: 1, price: 1249.48 },
     { name: 'Precious Peach', image: '/nft_images/precious_peach.webp', rarity: 'epic', chance: 4, price: 259.57 },
     { name: 'Durovs Cap', image: '/nft_images/durovs_cap.webp', rarity: 'rare', chance: 15, price: 420.24 },
     { name: 'Mighty Arm', image: '/nft_images/mighty_arm.webp', rarity: 'rare', chance: 30, price: 127.45 },

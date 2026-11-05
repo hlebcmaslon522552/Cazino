@@ -52,7 +52,7 @@ const CASE_POOLS: Record<string, DropItem[]> = {
     { name: 'Love Potion', image: '/nft_images/love_potion.webp', rarity: 'uncommon', chance: 40, price: 14.79 },
   ],
   case_gold: [
-    { name: 'Heart Locket', image: '/nft_images/heart_locket-removebg-preview.png', rarity: 'legendary', chance: 1, price: 1249.4897 },
+    { name: 'Heart Locket', image: '/nft_images/heart_locket.webp', rarity: 'legendary', chance: 1, price: 1249.4897 },
     { name: 'Precious Peach', image: '/nft_images/precious_peach.webp', rarity: 'epic', chance: 4, price: 259.5798 },
     { name: 'Durovs Cap', image: '/nft_images/durovs_cap.webp', rarity: 'rare', chance: 15, price: 420.24 },
     { name: 'Mighty Arm', image: '/nft_images/mighty_arm.webp', rarity: 'rare', chance: 30, price: 127.4592 },

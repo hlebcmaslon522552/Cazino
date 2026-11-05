@@ -1,6 +1,6 @@
 [
   {
-    "id": 82,
+    "id": "resistance_dog",
     "name": "Resistance Dogs",
     "image": "/nft_images/resistance_dog.webp",
     "collection": "Resistance Dogs",
@@ -8,7 +8,7 @@
     "rarity": "Common"
   },
   {
-    "id": 83,
+    "id": "lucky_locket",
     "name": "Lucky Lockets",
     "image": "/nft_images/lucky_locket.webp",
     "collection": "Lucky Lockets",
@@ -16,7 +16,7 @@
     "rarity": "Common"
   },
   {
-    "id": 84,
+    "id": "mirage_lamp",
     "name": "Mirage Lamps",
     "image": "/nft_images/mirage_lamp.webp",
     "collection": "Mirage Lamps",
@@ -24,7 +24,7 @@
     "rarity": "Common"
   },
   {
-    "id": 85,
+    "id": "fine_pen",
     "name": "Fine Pens",
     "image": "/nft_images/fine_pen.webp",
     "collection": "Fine Pens",
@@ -146,13 +146,6 @@
   {
     "id": "diamond_ring",
     "name": "Diamond Ring",
-    "image": "/nft_images/diamond_ring-removebg-preview.png",
-    "collection": "Diamond Ring",
-    "floor": 33.8946
-  },
-  {
-    "id": "diamond_ring",
-    "name": "Diamond Ring",
     "image": "/nft_images/diamond_ring.webp",
     "collection": "Diamond Ring",
     "floor": 16.176
@@ -265,13 +258,6 @@
   {
     "id": "heart_locket",
     "name": "Heart Locket",
-    "image": "/nft_images/heart_locket-removebg-preview.png",
-    "collection": "Heart Locket",
-    "floor": 1249.4897
-  },
-  {
-    "id": "heart_locket",
-    "name": "Heart Locket",
     "image": "/nft_images/heart_locket.webp",
     "collection": "Heart Locket",
     "floor": 15.887
@@ -324,13 +310,6 @@
     "image": "/nft_images/input_key.webp",
     "collection": "Input Key",
     "floor": 6.273
-  },
-  {
-    "id": "instant_ramen",
-    "name": "Instant Ramen",
-    "image": "/nft_images/instant_ramen-removebg-preview.png",
-    "collection": "Instant Ramen",
-    "floor": 3.7943
   },
   {
     "id": "instant_ramen",
@@ -408,13 +387,6 @@
     "image": "/nft_images/joyful_bundle.webp",
     "collection": "Joyful Bundle",
     "floor": 7.9356
-  },
-  {
-    "id": "khabibs_papakha",
-    "name": "Khabibs Papakha",
-    "image": "/nft_images/khabibs_papakha-removebg-preview.png",
-    "collection": "Khabibs Papakha",
-    "floor": 24.9594
   },
   {
     "id": "khabibs_papakha",
@@ -531,13 +503,6 @@
   {
     "id": "mood_pack",
     "name": "Mood Pack",
-    "image": "/nft_images/mood_pack-removebg-preview.png",
-    "collection": "Mood Pack",
-    "floor": 4.335
-  },
-  {
-    "id": "mood_pack",
-    "name": "Mood Pack",
     "image": "/nft_images/mood_pack.webp",
     "collection": "Mood Pack",
     "floor": 89.626
@@ -555,13 +520,6 @@
     "image": "/nft_images/mousse_cake.webp",
     "collection": "Mousse Cake",
     "floor": 5.202
-  },
-  {
-    "id": "nail_bracelet",
-    "name": "Nail Bracelet",
-    "image": "/nft_images/nail_bracelet-removebg-preview.png",
-    "collection": "Nail Bracelet",
-    "floor": 116.535
   },
   {
     "id": "nail_bracelet",

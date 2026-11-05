@@ -1,0 +1,706 @@
+diff --git a/public/my_nfts.json b/public/my_nfts.json
+index 8ae8c1e..f4f734d 100644
+--- a/public/my_nfts.json
++++ b/public/my_nfts.json
+@@ -1,4 +1,36 @@
+ [
++  {
++    "id": 82,
++    "name": "Resistance Dogs",
++    "image": "/nft_images/resistance_dog.webp",
++    "collection": "Resistance Dogs",
++    "floor": 100.0,
++    "rarity": "Common"
++  },
++  {
++    "id": 83,
++    "name": "Lucky Lockets",
++    "image": "/nft_images/lucky_locket.webp",
++    "collection": "Lucky Lockets",
++    "floor": 100.0,
++    "rarity": "Common"
++  },
++  {
++    "id": 84,
++    "name": "Mirage Lamps",
++    "image": "/nft_images/mirage_lamp.webp",
++    "collection": "Mirage Lamps",
++    "floor": 100.0,
++    "rarity": "Common"
++  },
++  {
++    "id": 85,
++    "name": "Fine Pens",
++    "image": "/nft_images/fine_pen.webp",
++    "collection": "Fine Pens",
++    "floor": 100.0,
++    "rarity": "Common"
++  },
+   {
+     "id": "algorithm_cup",
+     "name": "Algorithm Cup",
+@@ -20,6 +52,13 @@
+     "collection": "Astral Shard",
+     "floor": 120.819
+   },
++  {
++    "id": "berry_box",
++    "name": "Berry Box",
++    "image": "/nft_images/berry_box.webp",
++    "collection": "Berry Box",
++    "floor": 121.613
++  },
+   {
+     "id": "big_year",
+     "name": "Big Year",
+@@ -48,6 +87,13 @@
+     "collection": "Bow Tie",
+     "floor": 5.814
+   },
++  {
++    "id": "bunny_muffin",
++    "name": "Bunny Muffin",
++    "image": "/nft_images/bunny_muffin.webp",
++    "collection": "Bunny Muffin",
++    "floor": 133.617
++  },
+   {
+     "id": "candy_cane",
+     "name": "Candy Cane",
+@@ -76,6 +122,13 @@
+     "collection": "Cookie Heart",
+     "floor": 5.0459
+   },
++  {
++    "id": "crystal_ball",
++    "name": "Crystal Ball",
++    "image": "/nft_images/crystal_ball.webp",
++    "collection": "Crystal Ball",
++    "floor": 89.474
++  },
+   {
+     "id": "cupid_charm",
+     "name": "Cupid Charm",
+@@ -83,6 +136,13 @@
+     "collection": "Cupid Charm",
+     "floor": 22.8582
+   },
++  {
++    "id": "desk_calendar",
++    "name": "Desk Calendar",
++    "image": "/nft_images/desk_calendar.webp",
++    "collection": "Desk Calendar",
++    "floor": 38.367
++  },
+   {
+     "id": "diamond_ring",
+     "name": "Diamond Ring",
+@@ -90,6 +150,13 @@
+     "collection": "Diamond Ring",
+     "floor": 33.8946
+   },
++  {
++    "id": "diamond_ring",
++    "name": "Diamond Ring",
++    "image": "/nft_images/diamond_ring.webp",
++    "collection": "Diamond Ring",
++    "floor": 16.176
++  },
+   {
+     "id": "durovs_cap",
+     "name": "Durovs Cap",
+@@ -111,6 +178,34 @@
+     "collection": "Easter Egg",
+     "floor": 4.1718
+   },
++  {
++    "id": "electric_skull",
++    "name": "Electric Skull",
++    "image": "/nft_images/electric_skull.webp",
++    "collection": "Electric Skull",
++    "floor": 69.279
++  },
++  {
++    "id": "eternal_candle",
++    "name": "Eternal Candle",
++    "image": "/nft_images/eternal_candle.webp",
++    "collection": "Eternal Candle",
++    "floor": 141.615
++  },
++  {
++    "id": "eternal_rose",
++    "name": "Eternal Rose",
++    "image": "/nft_images/eternal_rose.webp",
++    "collection": "Eternal Rose",
++    "floor": 78.565
++  },
++  {
++    "id": "evil_eye",
++    "name": "Evil Eye",
++    "image": "/nft_images/evil_eye.webp",
++    "collection": "Evil Eye",
++    "floor": 73.357
++  },
+   {
+     "id": "faith_amulet",
+     "name": "Faith Amulet",
+@@ -118,6 +213,13 @@
+     "collection": "Faith Amulet",
+     "floor": 5.712
+   },
++  {
++    "id": "flying_broom",
++    "name": "Flying Broom",
++    "image": "/nft_images/flying_broom.webp",
++    "collection": "Flying Broom",
++    "floor": 39.605
++  },
+   {
+     "id": "fresh_socks",
+     "name": "Fresh Socks",
+@@ -125,6 +227,13 @@
+     "collection": "Fresh Socks",
+     "floor": 4.488
+   },
++  {
++    "id": "gem_signet",
++    "name": "Gem Signet",
++    "image": "/nft_images/gem_signet.webp",
++    "collection": "Gem Signet",
++    "floor": 35.583
++  },
+   {
+     "id": "genie_lamp",
+     "name": "Genie Lamp",
+@@ -132,6 +241,20 @@
+     "collection": "Genie Lamp",
+     "floor": 38.7294
+   },
++  {
++    "id": "ginger_cookie",
++    "name": "Ginger Cookie",
++    "image": "/nft_images/ginger_cookie.webp",
++    "collection": "Ginger Cookie",
++    "floor": 140.717
++  },
++  {
++    "id": "hanging_star",
++    "name": "Hanging Star",
++    "image": "/nft_images/hanging_star.webp",
++    "collection": "Hanging Star",
++    "floor": 92.128
++  },
+   {
+     "id": "happy_brownie",
+     "name": "Happy Brownie",
+@@ -146,6 +269,13 @@
+     "collection": "Heart Locket",
+     "floor": 1249.4897
+   },
++  {
++    "id": "heart_locket",
++    "name": "Heart Locket",
++    "image": "/nft_images/heart_locket.webp",
++    "collection": "Heart Locket",
++    "floor": 15.887
++  },
+   {
+     "id": "heroic_helmet",
+     "name": "Heroic Helmet",
+@@ -153,6 +283,13 @@
+     "collection": "Heroic Helmet",
+     "floor": 176.8476
+   },
++  {
++    "id": "hex_pot",
++    "name": "Hex Pot",
++    "image": "/nft_images/hex_pot.webp",
++    "collection": "Hex Pot",
++    "floor": 94.231
++  },
+   {
+     "id": "holiday_drink",
+     "name": "Holiday Drink",
+@@ -160,6 +297,20 @@
+     "collection": "Holiday Drink",
+     "floor": 4.488
+   },
++  {
++    "id": "homemade_cake",
++    "name": "Homemade Cake",
++    "image": "/nft_images/homemade_cake.webp",
++    "collection": "Homemade Cake",
++    "floor": 21.019
++  },
++  {
++    "id": "hypno_lollipop",
++    "name": "Hypno Lollipop",
++    "image": "/nft_images/hypno_lollipop.webp",
++    "collection": "Hypno Lollipop",
++    "floor": 3.344
++  },
+   {
+     "id": "ice_cream",
+     "name": "Ice Cream",
+@@ -181,6 +332,13 @@
+     "collection": "Instant Ramen",
+     "floor": 3.7943
+   },
++  {
++    "id": "instant_ramen",
++    "name": "Instant Ramen",
++    "image": "/nft_images/instant_ramen.webp",
++    "collection": "Instant Ramen",
++    "floor": 85.805
++  },
+   {
+     "id": "intelligence_cup",
+     "name": "Intelligence Cup",
+@@ -188,6 +346,13 @@
+     "collection": "Intelligence Cup",
+     "floor": 1200.03
+   },
++  {
++    "id": "ion_gem",
++    "name": "Ion Gem",
++    "image": "/nft_images/ion_gem.webp",
++    "collection": "Ion Gem",
++    "floor": 9.549
++  },
+   {
+     "id": "ionic_dryer",
+     "name": "Ionic Dryer",
+@@ -202,6 +367,27 @@
+     "collection": "Jack In The Box",
+     "floor": 4.9776
+   },
++  {
++    "id": "jackinthebox",
++    "name": "Jackinthebox",
++    "image": "/nft_images/jackinthebox.webp",
++    "collection": "Jackinthebox",
++    "floor": 102.51
++  },
++  {
++    "id": "jelly_bunny",
++    "name": "Jelly Bunny",
++    "image": "/nft_images/jelly_bunny.webp",
++    "collection": "Jelly Bunny",
++    "floor": 13.015
++  },
++  {
++    "id": "jester_hat",
++    "name": "Jester Hat",
++    "image": "/nft_images/jester_hat.webp",
++    "collection": "Jester Hat",
++    "floor": 28.643
++  },
+   {
+     "id": "jingle_bells",
+     "name": "Jingle Bells",
+@@ -230,6 +416,20 @@
+     "collection": "Khabibs Papakha",
+     "floor": 24.9594
+   },
++  {
++    "id": "khabibs_papakha",
++    "name": "Khabibs Papakha",
++    "image": "/nft_images/khabibs_papakha.webp",
++    "collection": "Khabibs Papakha",
++    "floor": 70.277
++  },
++  {
++    "id": "kissed_frog",
++    "name": "Kissed Frog",
++    "image": "/nft_images/kissed_frog.webp",
++    "collection": "Kissed Frog",
++    "floor": 26.451
++  },
+   {
+     "id": "liberty_figure",
+     "name": "Liberty Figure",
+@@ -244,6 +444,13 @@
+     "collection": "Light Sword",
+     "floor": 6.4083
+   },
++  {
++    "id": "lol_pop",
++    "name": "Lol Pop",
++    "image": "/nft_images/lol_pop.webp",
++    "collection": "Lol Pop",
++    "floor": 93.762
++  },
+   {
+     "id": "loot_bag",
+     "name": "Loot Bag",
+@@ -251,6 +458,13 @@
+     "collection": "Loot Bag",
+     "floor": 136.4352
+   },
++  {
++    "id": "love_candle",
++    "name": "Love Candle",
++    "image": "/nft_images/love_candle.webp",
++    "collection": "Love Candle",
++    "floor": 130.66
++  },
+   {
+     "id": "love_potion",
+     "name": "Love Potion",
+@@ -279,6 +493,20 @@
+     "collection": "Lush Bouquet",
+     "floor": 5.8752
+   },
++  {
++    "id": "mad_pumpkin",
++    "name": "Mad Pumpkin",
++    "image": "/nft_images/mad_pumpkin.webp",
++    "collection": "Mad Pumpkin",
++    "floor": 135.868
++  },
++  {
++    "id": "magic_potion",
++    "name": "Magic Potion",
++    "image": "/nft_images/magic_potion.webp",
++    "collection": "Magic Potion",
++    "floor": 125.745
++  },
+   {
+     "id": "mighty_arm",
+     "name": "Mighty Arm",
+@@ -286,6 +514,13 @@
+     "collection": "Mighty Arm",
+     "floor": 127.4592
+   },
++  {
++    "id": "mini_oscar",
++    "name": "Mini Oscar",
++    "image": "/nft_images/mini_oscar.webp",
++    "collection": "Mini Oscar",
++    "floor": 17.389
++  },
+   {
+     "id": "money_pot",
+     "name": "Money Pot",
+@@ -300,6 +535,13 @@
+     "collection": "Mood Pack",
+     "floor": 4.335
+   },
++  {
++    "id": "mood_pack",
++    "name": "Mood Pack",
++    "image": "/nft_images/mood_pack.webp",
++    "collection": "Mood Pack",
++    "floor": 89.626
++  },
+   {
+     "id": "moon_pendant",
+     "name": "Moon Pendant",
+@@ -321,6 +563,13 @@
+     "collection": "Nail Bracelet",
+     "floor": 116.535
+   },
++  {
++    "id": "nail_bracelet",
++    "name": "Nail Bracelet",
++    "image": "/nft_images/nail_bracelet.webp",
++    "collection": "Nail Bracelet",
++    "floor": 4.227
++  },
+   {
+     "id": "neko_helmet",
+     "name": "Neko Helmet",
+@@ -384,6 +633,13 @@
+     "collection": "Rare Bird",
+     "floor": 29.4678
+   },
++  {
++    "id": "record_player",
++    "name": "Record Player",
++    "image": "/nft_images/record_player.webp",
++    "collection": "Record Player",
++    "floor": 133.747
++  },
+   {
+     "id": "restless_jar",
+     "name": "Restless Jar",
+@@ -391,6 +647,13 @@
+     "collection": "Restless Jar",
+     "floor": 5.2326
+   },
++  {
++    "id": "sakura_flower",
++    "name": "Sakura Flower",
++    "image": "/nft_images/sakura_flower.webp",
++    "collection": "Sakura Flower",
++    "floor": 111.428
++  },
+   {
+     "id": "santa_hat",
+     "name": "Santa Hat",
+@@ -405,6 +668,13 @@
+     "collection": "Scared Cat",
+     "floor": 274.3698
+   },
++  {
++    "id": "sharp_tongue",
++    "name": "Sharp Tongue",
++    "image": "/nft_images/sharp_tongue.webp",
++    "collection": "Sharp Tongue",
++    "floor": 41.867
++  },
+   {
+     "id": "signet_ring",
+     "name": "Signet Ring",
+@@ -412,6 +682,13 @@
+     "collection": "Signet Ring",
+     "floor": 36.006
+   },
++  {
++    "id": "skull_flower",
++    "name": "Skull Flower",
++    "image": "/nft_images/skull_flower.webp",
++    "collection": "Skull Flower",
++    "floor": 123.907
++  },
+   {
+     "id": "sky_stilettos",
+     "name": "Sky Stilettos",
+@@ -419,6 +696,13 @@
+     "collection": "Sky Stilettos",
+     "floor": 18.36
+   },
++  {
++    "id": "sleigh_bell",
++    "name": "Sleigh Bell",
++    "image": "/nft_images/sleigh_bell.webp",
++    "collection": "Sleigh Bell",
++    "floor": 32.503
++  },
+   {
+     "id": "snake_box",
+     "name": "Snake Box",
+@@ -447,6 +731,20 @@
+     "collection": "Snow Globe",
+     "floor": 6.426
+   },
++  {
++    "id": "snow_mittens",
++    "name": "Snow Mittens",
++    "image": "/nft_images/snow_mittens.webp",
++    "collection": "Snow Mittens",
++    "floor": 12.213
++  },
++  {
++    "id": "spiced_wine",
++    "name": "Spiced Wine",
++    "image": "/nft_images/spiced_wine.webp",
++    "collection": "Spiced Wine",
++    "floor": 54.905
++  },
+   {
+     "id": "spring_basket",
+     "name": "Spring Basket",
+@@ -454,6 +752,20 @@
+     "collection": "Spring Basket",
+     "floor": 5.5998
+   },
++  {
++    "id": "spy_agaric",
++    "name": "Spy Agaric",
++    "image": "/nft_images/spy_agaric.webp",
++    "collection": "Spy Agaric",
++    "floor": 43.503
++  },
++  {
++    "id": "star_notepad",
++    "name": "Star Notepad",
++    "image": "/nft_images/star_notepad.webp",
++    "collection": "Star Notepad",
++    "floor": 40.479
++  },
+   {
+     "id": "stellar_rocket",
+     "name": "Stellar Rocket",
+@@ -510,6 +822,13 @@
+     "collection": "Toy Bear",
+     "floor": 34.5984
+   },
++  {
++    "id": "trapped_heart",
++    "name": "Trapped Heart",
++    "image": "/nft_images/trapped_heart.webp",
++    "collection": "Trapped Heart",
++    "floor": 59.261
++  },
+   {
+     "id": "ufc_strike",
+     "name": "Ufc Strike",
+@@ -545,6 +864,13 @@
+     "collection": "Vintage Cigar",
+     "floor": 38.7192
+   },
++  {
++    "id": "voodoo_doll",
++    "name": "Voodoo Doll",
++    "image": "/nft_images/voodoo_doll.webp",
++    "collection": "Voodoo Doll",
++    "floor": 149.653
++  },
+   {
+     "id": "westside_sign",
+     "name": "Westside Sign",
+@@ -559,43 +885,25 @@
+     "collection": "Whip Cupcake",
+     "floor": 3.876
+   },
++  {
++    "id": "winter_wreath",
++    "name": "Winter Wreath",
++    "image": "/nft_images/winter_wreath.webp",
++    "collection": "Winter Wreath",
++    "floor": 81.264
++  },
++  {
++    "id": "witch_hat",
++    "name": "Witch Hat",
++    "image": "/nft_images/witch_hat.webp",
++    "collection": "Witch Hat",
++    "floor": 96.302
++  },
+   {
+     "id": "xmas_stocking",
+     "name": "Xmas Stocking",
+     "image": "/nft_images/xmas_stocking.webp",
+     "collection": "Xmas Stocking",
+     "floor": 3.876
+-  },
+-  {
+-    "id": 82,
+-    "name": "Resistance Dogs",
+-    "image": "/nft_images/resistance_dog.webp",
+-    "collection": "Resistance Dogs",
+-    "floor": 100.0,
+-    "rarity": "Common"
+-  },
+-  {
+-    "id": 83,
+-    "name": "Lucky Lockets",
+-    "image": "/nft_images/lucky_locket.webp",
+-    "collection": "Lucky Lockets",
+-    "floor": 100.0,
+-    "rarity": "Common"
+-  },
+-  {
+-    "id": 84,
+-    "name": "Mirage Lamps",
+-    "image": "/nft_images/mirage_lamp.webp",
+-    "collection": "Mirage Lamps",
+-    "floor": 100.0,
+-    "rarity": "Common"
+-  },
+-  {
+-    "id": 85,
+-    "name": "Fine Pens",
+-    "image": "/nft_images/fine_pen.webp",
+-    "collection": "Fine Pens",
+-    "floor": 100.0,
+-    "rarity": "Common"
+   }
+ ]
+\ No newline at end of file
+diff --git a/server.py b/server.py
+index 742b377..02524f2 100644
+--- a/server.py
++++ b/server.py
+@@ -1460,6 +1460,41 @@ def inventory_remove():
+     return jsonify({"success": True})
+ 
+ 
++# тФАтФА ╨Ч╨░╨│╤А╤Г╨╖╨║╨░ NFT-╨┐╤Г╨╗╨░ ╨╕╨╖ my_nfts.json тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
++NFT_POOL_PATH = os.path.join(os.path.dirname(__file__), "public", "my_nfts.json")
++NFT_POOL = []
++try:
++    if os.path.exists(NFT_POOL_PATH):
++        with open(NFT_POOL_PATH, "r", encoding="utf-8") as f:
++            NFT_POOL = json.load(f)
++        print(f"[NFT_POOL] ╨Ч╨░╨│╤А╤Г╨╢╨╡╨╜╨╛ {len(NFT_POOL)} ╨┐╤А╨╡╨┤╨╝╨╡╤В╨╛╨▓ ╨╕╨╖ {NFT_POOL_PATH}")
++    else:
++        print(f"[NFT_POOL] ╨д╨░╨╣╨╗ {NFT_POOL_PATH} ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜ тАФ ╨┐╤Г╨╗ ╨┐╤Г╤Б╤В")
++except Exception as e:
++    print(f"[NFT_POOL] ╨Ю╤И╨╕╨▒╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕: {e}")
++
++
++# тФАтФА Get Floor Price тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
++@app.route("/api/get_floor", methods=["GET"])
++def get_floor():
++    """╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В floor-╤Ж╨╡╨╜╤Г ╨┐╤А╨╡╨┤╨╝╨╡╤В╨░ ╨╕╨╖ my_nfts.json ╨┐╨╛ ╨╕╨╝╨╡╨╜╨╕ ╨║╨╛╨╗╨╗╨╡╨║╤Ж╨╕╨╕."""
++    collection = request.args.get("collection", "").strip().lower()
++    if not collection:
++        return jsonify({"error": "collection is required"}), 400
++
++    for entry in NFT_POOL:
++        entry_name = (entry.get("collection", "") or entry.get("name", "")).strip().lower()
++        if entry_name == collection:
++            floor = entry.get("floor", 0)
++            return jsonify({
++                "floor_price": floor,
++                "price": floor,
++                "collection": entry.get("collection", entry.get("name", "")),
++            })
++
++    return jsonify({"error": "Collection not found"}), 404
++
++
+ # тФАтФА Buy NFT (Market) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+ @app.route("/api/buy_nft", methods=["POST"])
+ def buy_nft():
+@@ -1482,10 +1517,26 @@ def buy_nft():
+     if not item:
+         return jsonify({"error": "item is required"}), 400
+ 
+-    price = float(item.get("floor", 0))
++    # ╨Т╨░╨╗╨╕╨┤╨░╤Ж╨╕╤П ╤Ж╨╡╨╜╤Л ╨╕ ╨┤╨░╨╜╨╜╤Л╤Е ╨╕╨╖ my_nfts.json
++    item_id = str(item.get("id", "")).strip()
++    expected_item = None
++    for pool_item in NFT_POOL:
++        if str(pool_item.get("id", "")).strip() == item_id:
++            expected_item = pool_item
++            break
++
++    if expected_item is None:
++        return jsonify({"error": "Item not found in NFT pool"}), 400
++
++    price = float(expected_item.get("floor", 0))
+     if price <= 0:
+         return jsonify({"error": "Invalid item price"}), 400
+ 
++    # ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╨╝ ╨┤╨░╨╜╨╜╤Л╨╡ ╨╕╨╖ ╨┐╤Г╨╗╨░, ╨░ ╨╜╨╡ ╨╛╤В ╨║╨╗╨╕╨╡╨╜╤В╨░
++    name = bleach.clean(expected_item.get("name", "Unknown"), tags=[], strip=True)
++    image = expected_item.get("image", "")
++    floor = price
++
+     try:
+         conn = sqlite3.connect(DB_PATH)
+         c = conn.cursor()
+@@ -1514,17 +1565,14 @@ def buy_nft():
+         return jsonify({"error": "╨Э╨╡╨┤╨╛╤Б╤В╨░╤В╨╛╤З╨╜╨╛ TON"}), 400
+ 
+     # ╨Ф╨╛╨▒╨░╨▓╨╗╤П╨╡╨╝ ╨┐╤А╨╡╨┤╨╝╨╡╤В ╨▓ ╨╛╤В╨┤╨╡╨╗╤М╨╜╤Г╤О ╤В╨░╨▒╨╗╨╕╤Ж╤Г ╨╕╨╜╨▓╨╡╨╜╤В╨░╤А╤П
+-    item_id = item.get("id") if isinstance(item, dict) else str(uuid.uuid4())
+-    name = bleach.clean(item.get("name", "Unknown") if isinstance(item, dict) else "Unknown", tags=[], strip=True)
+-    image = item.get("image", "") if isinstance(item, dict) else ""
+-    floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
+-
++    # ╨Ф╨░╨╜╨╜╤Л╨╡ ╨▒╨╡╤А╤С╨╝ ╨╕╨╖ NFT_POOL (my_nfts.json), ╨░ ╨╜╨╡ ╨╛╤В ╨║╨╗╨╕╨╡╨╜╤В╨░
++    pool_item_id = expected_item.get("id", str(uuid.uuid4()))
+     new_balance = round(balance - price, 2)
+ 
+     try:
+         c.execute(
+             "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
+-            (user_id, item_id, name, image, floor)
++            (user_id, pool_item_id, name, image, floor)
+         )
+         c.execute(
+             "UPDATE users SET balance_ton = ? WHERE id = ?",
