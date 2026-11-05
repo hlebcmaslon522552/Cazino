@@ -1,93 +1,310 @@
+warning: in the working copy of 'src/components/Root.tsx', LF will be replaced by CRLF the next time Git touches it
+diff --git a/diff_output.txt b/diff_output.txt
+index 6053807..e69de29 100644
+--- a/diff_output.txt
++++ b/diff_output.txt
+@@ -1,93 +0,0 @@
+-diff --git a/server.py b/server.py
+-index 6cb5947..d3b3d0c 100644
+---- a/server.py
+-+++ b/server.py
+-@@ -299,24 +299,22 @@ CASE_POOLS = {
+- MIN_CRASH_POINT = 1.05
+- 
+- def generate_crash_point():
+--    # ╨У╨╡╨╜╨╡╤А╨╕╤А╤Г╨╡╨╝ ╤З╨╕╤Б╨╗╨╛ ╨╛╤В 0.0 ╨┤╨╛ 100.0 ╨┤╨╗╤П ╨╛╨┐╤А╨╡╨┤╨╡╨╗╨╡╨╜╨╕╤П ╨▓╨╡╤А╨╛╤П╤В╨╜╨╛╤Б╤В╨╕
+--    r = random.uniform(0, 100)
+--    
+--    # 5% ╤И╨░╨╜╤Б ╨╜╨░ ╨╝╨╛╨╝╨╡╨╜╤В╨░╨╗╤М╨╜╤Л╨╣ ╨║╤А╨░╤И (1.00x)
+--    if r < 5:
+-+    # 4% тАФ ╨╝╨│╨╜╨╛╨▓╨╡╨╜╨╜╤Л╨╣ ╨║╤А╨░╤И (1.00x)
+-+    if random.random() < 0.04:
+-+        print(f"[Crash] Generated: 1.00x (instant crash, 4% roll)")
+-         return 1.00
+--    
+--    # 0.1% ╤И╨░╨╜╤Б ╨╜╨░ ╨┤╨╢╨╡╨║╨┐╨╛╤В (╨╛╤В 10.0x ╨┤╨╛ 22.0x)
+--    elif r < 5.1:
+--        return round(random.uniform(10.0, 22.0), 2)
+--    
+--    # 25% ╤И╨░╨╜╤Б ╨╜╨░ ╤Б╤А╨╡╨┤╨╜╨╕╨╣ ╨║╤А╨░╤И (╨╛╤В 2.15x ╨┤╨╛ 3.0x)
+--    elif r < 30.1:
+--        return round(random.uniform(2.15, 3.0), 2)
+--    
+--    # 69.9% ╤И╨░╨╜╤Б ╨╜╨░ ╨╜╨╕╨╖╨║╨╕╨╣ ╨║╤А╨░╤И (╨╛╤В 1.01x ╨┤╨╛ 1.6x)
+--    else:
+--        return round(random.uniform(1.01, 1.6), 2)
+-+
+-+    # ╨Ю╤Б╤В╨░╨╗╤М╨╜╤Л╨╡ 96% тАФ ╤Д╨╛╤А╨╝╤Г╨╗╨░ 1/(1-R), ╨│╨┤╨╡ R = random.random()
+-+    r = random.random()               # 0.0 <= r < 1.0
+-+    crash = 1.0 / (1.0 - r)          # ╨┤╨╕╨░╨┐╨░╨╖╨╛╨╜ [1.0, +inf)
+-+
+-+    # ╨Ц╤С╤Б╤В╨║╨╕╨╣ ╨┐╨╛╤В╨╛╨╗╨╛╨║ 1000.0x
+-+    if crash > 1000.0:
+-+        crash = 1000.0
+-+
+-+    crash = round(crash, 2)
+-+    print(f"[Crash] Generated: {crash}x (1/(1-{r:.4f}))")
+-+    return crash
+- 
+- 
+- # тФАтФА Crash Game Loop (╤Д╨╛╨╜╨╛╨▓╤Л╨╣ ╨┐╨╛╤В╨╛╨║) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+-@@ -352,16 +350,21 @@ def crash_game_loop():
+-                 'time_to_crash': round((CRASH_POINT - 1.0) / CRASH_RATE, 2),
+-             })
+- 
+--            # тФАтФА 3. ╨Ю╨╢╨╕╨┤╨░╨╜╨╕╨╡ ╨║╤А╨░╤И╨░ тФАтФА
+-+            # тФАтФА 3. ╨Ю╨╢╨╕╨┤╨░╨╜╨╕╨╡ ╨║╤А╨░╤И╨░ тАФ ╤В╨╕╨║╨╕ ╨║╨░╨╢╨┤╤Л╨╡ ~0.01x тФАтФА
+-             # ╨Т╤А╨╡╨╝╤П ╨┤╨╛ ╨║╤А╨░╤И╨░ = (crash_point - 1.0) / rate (╤Б╨╡╨║╤Г╨╜╨┤)
+-             crash_duration_ms = (CRASH_POINT - 1.0) / CRASH_RATE * 1000
+-             elapsed = 0.0
+-+            last_tick = 0.0
+-             while elapsed < crash_duration_ms:
+--                socketio.sleep(0.1)
+-+                socketio.sleep(0.05)          # ~20 ╤В╨╕╨║╨╛╨▓/╤Б, ~0.0111x ╨╖╨░ ╤В╨╕╨║
+-                 with CRASH_LOCK:
+-                     elapsed = (time.time() * 1000) - CRASH_START_TIME
+-                     current_multiplier = 1.0 + (elapsed / 1000) * CRASH_RATE
+--                socketio.emit('crash_tick', {'multiplier': round(current_multiplier, 4), 'crash_point': CRASH_POINT})
+-+                tick_val = round(current_multiplier, 2)
+-+                # ╨Ю╤В╨┐╤А╨░╨▓╨╗╤П╨╡╨╝ ╤В╨╛╨╗╤М╨║╨╛ ╨║╨╛╨│╨┤╨░ ╨╝╨╜╨╛╨╢╨╕╤В╨╡╨╗╤М ╨┐╨╡╤А╨╡╤И╨░╨│╨╜╤Г╨╗ ╨╛╤З╨╡╤А╨╡╨┤╨╜╤Л╨╡ 0.01x
+-+                if tick_val > last_tick:
+-+                    last_tick = tick_val
+-+                    socketio.emit('crash_tick', {'multiplier': tick_val})
+- 
+-             # тФАтФА 4. ╨Ъ╤А╨░╤И тФАтФА
+-             with CRASH_LOCK:
+-@@ -1004,6 +1007,7 @@ def plinko_drop():
+-     multiplier = multis[slot_index]
+- 
+-     win_amount = round(bet_amount * multiplier, 2)
+-+    print(f"[Plinko] Result: {multiplier}x, slotIndex={slot_index}, bet={bet_amount}, win={win_amount}")
+-     return jsonify({
+-         "slotIndex": slot_index,
+-         "multiplier": multiplier,
+-@@ -1071,6 +1075,7 @@ def open_case():
+-                 conn.close()
+-             return jsonify({"error": "Database error"}), 500
+- 
+-+        print(f"[Case] Free case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}")
+-         return jsonify({"success": True, "item": {**item, "id": item_id}})
+- 
+-     # тФАтФА ╨Я╨╗╨░╤В╨╜╤Л╨╡ ╨║╨╡╨╣╤Б╤Л тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+-@@ -1137,6 +1142,7 @@ def open_case():
+-             conn.close()
+-         return jsonify({"error": "Database error"}), 500
+- 
+-+    print(f"[Case] Paid case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}, case_id={case_id}")
+-     return jsonify({"success": True, "item": {**item, "id": item_id}})
+- 
+- 
 diff --git a/server.py b/server.py
-index 6cb5947..d3b3d0c 100644
+index 23e140c..0e4825c 100644
 --- a/server.py
 +++ b/server.py
-@@ -299,24 +299,22 @@ CASE_POOLS = {
- MIN_CRASH_POINT = 1.05
+@@ -12,7 +12,10 @@ import time
+ import uuid
+ from datetime import datetime, timedelta
+ import hmac
++import hashlib
+ import math
++import urllib.parse
++import bleach
+ import requests
+ from flask import Flask, request, jsonify
+ from flask_cors import CORS
+@@ -310,7 +313,61 @@ def sanitize_turnover():
+ sanitize_turnover()
  
- def generate_crash_point():
--    # Генерируем число от 0.0 до 100.0 для определения вероятности
--    r = random.uniform(0, 100)
--    
--    # 5% шанс на моментальный краш (1.00x)
--    if r < 5:
-+    # 4% — мгновенный краш (1.00x)
-+    if random.random() < 0.04:
-+        print(f"[Crash] Generated: 1.00x (instant crash, 4% roll)")
-         return 1.00
--    
--    # 0.1% шанс на джекпот (от 10.0x до 22.0x)
--    elif r < 5.1:
--        return round(random.uniform(10.0, 22.0), 2)
--    
--    # 25% шанс на средний краш (от 2.15x до 3.0x)
--    elif r < 30.1:
--        return round(random.uniform(2.15, 3.0), 2)
--    
--    # 69.9% шанс на низкий краш (от 1.01x до 1.6x)
--    else:
--        return round(random.uniform(1.01, 1.6), 2)
+ def verify_init_data(init_data):
+-    return bool(init_data and init_data.strip())
++    """╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╤В ╨┐╨╛╨┤╨┐╨╕╤Б╤М Telegram initData ╤Б ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╨╡╨╝ HMAC-SHA256.
++    
++    ╨Р╨╗╨│╨╛╤А╨╕╤В╨╝:
++    1. ╨а╨░╨╖╨▒╨╕╤А╨░╨╡╨╝ ╤Б╤В╤А╨╛╨║╤Г ╨╖╨░╨┐╤А╨╛╤Б╨░
++    2. ╨Ш╨╖╨▓╨╗╨╡╨║╨░╨╡╨╝ hash
++    3. ╨г╨┤╨░╨╗╤П╨╡╨╝ hash ╨╕╨╖ ╨╜╨░╨▒╨╛╤А╨░
++    4. ╨б╨╛╤А╤В╨╕╤А╤Г╨╡╨╝ ╨╛╤Б╤В╨░╨▓╤И╨╕╨╡╤Б╤П ╨┐╨╛╨╗╤П
++    5. ╨б╨╛╨▒╨╕╤А╨░╨╡╨╝ data_check_string
++    6. ╨Т╤Л╤З╨╕╤Б╨╗╤П╨╡╨╝ secret_key = HMAC-SHA256('WebAppData', bot_token)
++    7. ╨Т╤Л╤З╨╕╤Б╨╗╤П╨╡╨╝ signature = HMAC-SHA256(secret_key, data_check_string)
++    8. ╨б╤А╨░╨▓╨╜╨╕╨▓╨░╨╡╨╝ signature ╤Б hash (constant-time)
++    """
++    if not init_data or not init_data.strip():
++        return False
++    
++    try:
++        # ╨а╨░╨╖╨▒╨╕╤А╨░╨╡╨╝ ╤Б╤В╤А╨╛╨║╤Г ╨╖╨░╨┐╤А╨╛╤Б╨░ (query_id=...&hash=...)
++        parsed = urllib.parse.parse_qs(init_data, keep_blank_values=True)
++        
++        # ╨Ш╨╖╨▓╨╗╨╡╨║╨░╨╡╨╝ hash
++        hash_value = parsed.pop('hash', None)
++        if not hash_value or not hash_value[0]:
++            return False
++        hash_value = hash_value[0]
++        
++        # ╨г╨┤╨░╨╗╤П╨╡╨╝ ╨┤╤Г╨▒╨╗╨╕╤А╤Г╤О╤Й╨╕╨╡╤Б╤П ╨║╨╗╤О╤З╨╕ тАФ ╨▒╨╡╤А╤С╨╝ ╨┐╨╛╤Б╨╗╨╡╨┤╨╜╨╡╨╡ ╨╖╨╜╨░╤З╨╡╨╜╨╕╨╡
++        data_check_pairs = []
++        for key, values in parsed.items():
++            # ╨С╨╡╤А╤С╨╝ ╨┐╨╛╤Б╨╗╨╡╨┤╨╜╨╡╨╡ ╨╖╨╜╨░╤З╨╡╨╜╨╕╨╡ ╨┤╨╗╤П ╨║╨░╨╢╨┤╨╛╨│╨╛ ╨║╨╗╤О╤З╨░
++            data_check_pairs.append((key, values[-1]))
++        
++        # ╨б╨╛╤А╤В╨╕╤А╤Г╨╡╨╝ ╨┐╨╛ ╨║╨╗╤О╤З╤Г
++        data_check_pairs.sort(key=lambda x: x[0])
++        
++        # ╨б╨╛╨▒╨╕╤А╨░╨╡╨╝ data_check_string
++        data_check_string = '\n'.join(f'{k}={v}' for k, v in data_check_pairs)
++        
++        # ╨Т╤Л╤З╨╕╤Б╨╗╤П╨╡╨╝ secret_key = HMAC-SHA256('WebAppData', bot_token)
++        secret_key = hmac.new(
++            b'WebAppData',
++            TG_BOT_TOKEN.encode('utf-8'),
++            hashlib.sha256
++        ).digest()
++        
++        # ╨Т╤Л╤З╨╕╤Б╨╗╤П╨╡╨╝ ╨┐╨╛╨┤╨┐╨╕╤Б╤М
++        signature = hmac.new(
++            secret_key,
++            data_check_string.encode('utf-8'),
++            hashlib.sha256
++        ).hexdigest()
++        
++        return hmac.compare_digest(signature, hash_value)
++    except Exception as e:
++        print(f"[verify_init_data] error: {e}", flush=True)
++        return False
+ 
+ 
+ # тФАтФА ╨Я╤Г╨╗╤Л ╨┐╤А╨╡╨┤╨╝╨╡╤В╨╛╨▓ ╨┤╨╗╤П ╨║╨╡╨╣╤Б╨╛╨▓ (╨┐╨╛ ID ╨║╨╡╨╣╤Б╨░) тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+@@ -665,6 +722,11 @@ def check_and_reset_leaderboard():
+ # тФАтФА ╨С╨░╨╗╨░╨╜╤Б тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+ @app.route("/api/balance", methods=["GET"])
+ def get_balance():
++    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ initData (╨╡╤Б╨╗╨╕ ╨┐╨╡╤А╨╡╨┤╨░╨╜ ╨╖╨░╨│╨╛╨╗╨╛╨▓╨╛╨║ X-Init-Data)
++    init_data_header = request.headers.get("X-Init-Data", "")
++    if init_data_header and not verify_init_data(init_data_header):
++        return jsonify({"error": "Forbidden: invalid initData"}), 403
 +
-+    # Остальные 96% — формула 1/(1-R), где R = random.random()
-+    r = random.random()               # 0.0 <= r < 1.0
-+    crash = 1.0 / (1.0 - r)          # диапазон [1.0, +inf)
+     user_id = request.args.get("user_id", "6267608438")
+     print(f"REQUEST: /api/balance user_id={user_id}", flush=True)
+     conn = None
+@@ -981,7 +1043,7 @@ def play_game():
+     if game_type == "upgrade":
+         start_price = float(data.get("start_price", 0))
+         end_price = float(data.get("end_price", 0))
+-        target_name = str(data.get("target_name", "")).strip()
++        target_name = bleach.clean(str(data.get("target_name", "")).strip(), tags=[], strip=True)
+         target_image = str(data.get("target_image", "")).strip()
+         if start_price <= 0 or end_price <= 0:
+             return jsonify({"error": "start_price and end_price must be > 0"}), 400
+@@ -1140,6 +1202,12 @@ def open_case():
+     data = request.get_json(force=True, silent=True)
+     if not data:
+         return jsonify({"error": "Invalid JSON body"}), 400
 +
-+    # Жёсткий потолок 1000.0x
-+    if crash > 1000.0:
-+        crash = 1000.0
++    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ initData
++    init_data = data.get("initData", "")
++    if not verify_init_data(init_data):
++        return jsonify({"error": "Forbidden: invalid initData"}), 403
 +
-+    crash = round(crash, 2)
-+    print(f"[Crash] Generated: {crash}x (1/(1-{r:.4f}))")
-+    return crash
+     user_id = str(data.get("user_id", "unknown"))
+     case_price = float(data.get("case_price", 0))
+     case_id = str(data.get("case_id", "")).strip()
+@@ -1268,6 +1336,11 @@ def open_case():
+ # тФАтФА Inventory тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+ @app.route("/api/inventory", methods=["GET"])
+ def get_inventory():
++    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ initData (╨╡╤Б╨╗╨╕ ╨┐╨╡╤А╨╡╨┤╨░╨╜ ╨╖╨░╨│╨╛╨╗╨╛╨▓╨╛╨║ X-Init-Data)
++    init_data_header = request.headers.get("X-Init-Data", "")
++    if init_data_header and not verify_init_data(init_data_header):
++        return jsonify({"error": "Forbidden: invalid initData"}), 403
++
+     user_id = request.args.get("user_id", "6267608438")
+     conn = None
+     try:
+@@ -1319,7 +1392,7 @@ def inventory_add():
+     item_id = item.get("id") if isinstance(item, dict) else None
+     if not item_id:
+         item_id = str(uuid.uuid4())
+-    name = item.get("name", "Unknown") if isinstance(item, dict) else "Unknown"
++    name = bleach.clean(item.get("name", "Unknown") if isinstance(item, dict) else "Unknown", tags=[], strip=True)
+     image = item.get("image", "") if isinstance(item, dict) else ""
+     floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
  
+@@ -1379,6 +1452,11 @@ def buy_nft():
+     if not data:
+         return jsonify({"error": "Invalid JSON body"}), 400
  
- # ── Crash Game Loop (фоновый поток) ───────────────────────────────────────
-@@ -352,16 +350,21 @@ def crash_game_loop():
-                 'time_to_crash': round((CRASH_POINT - 1.0) / CRASH_RATE, 2),
-             })
++    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░ initData
++    init_data = data.get("initData", "")
++    if not verify_init_data(init_data):
++        return jsonify({"error": "Forbidden: invalid initData"}), 403
++
+     user_id = str(data.get("user_id", "unknown"))
+     item = data.get("item")
  
--            # ── 3. Ожидание краша ──
-+            # ── 3. Ожидание краша — тики каждые ~0.01x ──
-             # Время до краша = (crash_point - 1.0) / rate (секунд)
-             crash_duration_ms = (CRASH_POINT - 1.0) / CRASH_RATE * 1000
-             elapsed = 0.0
-+            last_tick = 0.0
-             while elapsed < crash_duration_ms:
--                socketio.sleep(0.1)
-+                socketio.sleep(0.05)          # ~20 тиков/с, ~0.0111x за тик
-                 with CRASH_LOCK:
-                     elapsed = (time.time() * 1000) - CRASH_START_TIME
-                     current_multiplier = 1.0 + (elapsed / 1000) * CRASH_RATE
--                socketio.emit('crash_tick', {'multiplier': round(current_multiplier, 4), 'crash_point': CRASH_POINT})
-+                tick_val = round(current_multiplier, 2)
-+                # Отправляем только когда множитель перешагнул очередные 0.01x
-+                if tick_val > last_tick:
-+                    last_tick = tick_val
-+                    socketio.emit('crash_tick', {'multiplier': tick_val})
+@@ -1420,7 +1498,7 @@ def buy_nft():
  
-             # ── 4. Краш ──
-             with CRASH_LOCK:
-@@ -1004,6 +1007,7 @@ def plinko_drop():
-     multiplier = multis[slot_index]
+     # ╨Ф╨╛╨▒╨░╨▓╨╗╤П╨╡╨╝ ╨┐╤А╨╡╨┤╨╝╨╡╤В ╨▓ ╨╛╤В╨┤╨╡╨╗╤М╨╜╤Г╤О ╤В╨░╨▒╨╗╨╕╤Ж╤Г ╨╕╨╜╨▓╨╡╨╜╤В╨░╤А╤П
+     item_id = item.get("id") if isinstance(item, dict) else str(uuid.uuid4())
+-    name = item.get("name", "Unknown") if isinstance(item, dict) else "Unknown"
++    name = bleach.clean(item.get("name", "Unknown") if isinstance(item, dict) else "Unknown", tags=[], strip=True)
+     image = item.get("image", "") if isinstance(item, dict) else ""
+     floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
  
-     win_amount = round(bet_amount * multiplier, 2)
-+    print(f"[Plinko] Result: {multiplier}x, slotIndex={slot_index}, bet={bet_amount}, win={win_amount}")
-     return jsonify({
-         "slotIndex": slot_index,
-         "multiplier": multiplier,
-@@ -1071,6 +1075,7 @@ def open_case():
-                 conn.close()
-             return jsonify({"error": "Database error"}), 500
+@@ -1730,7 +1808,7 @@ def withdraw_nft():
+         return jsonify({"error": "Invalid JSON body"}), 400
  
-+        print(f"[Case] Free case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}")
-         return jsonify({"success": True, "item": {**item, "id": item_id}})
+     user_id = str(data.get("user_id", "unknown"))
+-    username = str(data.get("username", "unknown"))
++    username = bleach.clean(str(data.get("username", "unknown")), tags=[], strip=True)
+     nft_name = str(data.get("nft_name", "unknown"))
+     nft_price = float(data.get("nft_price", 0))
  
-     # ── Платные кейсы ───────────────────────────────────────────────
-@@ -1137,6 +1142,7 @@ def open_case():
-             conn.close()
-         return jsonify({"error": "Database error"}), 500
+@@ -1768,7 +1846,7 @@ def add_turnover():
+         return jsonify({"error": "Invalid JSON body"}), 400
  
-+    print(f"[Case] Paid case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}, case_id={case_id}")
-     return jsonify({"success": True, "item": {**item, "id": item_id}})
+     user_id = str(data.get("user_id", "unknown"))
+-    username = str(data.get("username", "Unknown"))
++    username = bleach.clean(str(data.get("username", "Unknown")), tags=[], strip=True)
+     amount = float(data.get("amount", 0))
  
+     if amount <= 0:
+diff --git a/src/components/CasePage.tsx b/src/components/CasePage.tsx
+index b6c5003..b721388 100644
+--- a/src/components/CasePage.tsx
++++ b/src/components/CasePage.tsx
+@@ -231,7 +231,10 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
+         }),
+       });
  
+-      const data = await res.json();
++      const rawText = await res.text();
++      console.log('RAW CASE:', rawText);
++      let data;
++      try { data = JSON.parse(rawText); } catch(e) { throw new Error('Invalid JSON from server'); }
+ 
+       if (!res.ok || !data.success || !data.item) {
+         // ╨б╨╡╤А╨▓╨╡╤А ╨▓╨╡╤А╨╜╤Г╨╗ ╨╛╤И╨╕╨▒╨║╤Г тАФ ╨┤╨╡╨╜╤М╨│╨╕ ╨Э╨Х ╤Б╨┐╨╕╤Б╨░╨╜╤Л (╤Б╨╡╤А╨▓╨╡╤А ╨╛╤В╨║╨░╤В╤Л╨▓╨░╨╡╤В ╤В╤А╨░╨╜╨╖╨░╨║╤Ж╨╕╤О)
+diff --git a/src/components/Root.tsx b/src/components/Root.tsx
+index 47dccbc..c6b6365 100644
+--- a/src/components/Root.tsx
++++ b/src/components/Root.tsx
+@@ -52,12 +52,12 @@ export function Root() {
+     console.log('BALANCE USER ID:', userId);
+     console.log('FETCH:', url);
+     fetch(url)
+-      .then(res => res.json())
+-      .then(data => {
+-        console.log('BALANCE RESPONSE:', data);
+-        if (data && data.balance_ton !== undefined) {
+-          setBalance(Number(data.balance_ton));
+-        }
++      .then(res => res.text())
++      .then(text => {
++        console.log('RAW BALANCE:', text);
++        let data;
++        try { data = JSON.parse(text); } catch(e) { return; }
++        setBalance(Number(data.balance_ton ?? data.balance ?? 0));
+       })
+       .catch((e) => {
+         console.error("╨Ю╤И╨╕╨▒╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕ ╨▒╨░╨╗╨░╨╜╤Б╨░:", e);

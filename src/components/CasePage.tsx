@@ -231,7 +231,10 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
         }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      console.log('RAW CASE:', rawText);
+      let data;
+      try { data = JSON.parse(rawText); } catch(e) { throw new Error('Invalid JSON from server'); }
 
       if (!res.ok || !data.success || !data.item) {
         // Сервер вернул ошибку — деньги НЕ списаны (сервер откатывает транзакцию)

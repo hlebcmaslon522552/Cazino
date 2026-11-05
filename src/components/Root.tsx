@@ -52,12 +52,12 @@ export function Root() {
     console.log('BALANCE USER ID:', userId);
     console.log('FETCH:', url);
     fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        console.log('BALANCE RESPONSE:', data);
-        if (data && data.balance_ton !== undefined) {
-          setBalance(Number(data.balance_ton));
-        }
+      .then(res => res.text())
+      .then(text => {
+        console.log('RAW BALANCE:', text);
+        let data;
+        try { data = JSON.parse(text); } catch(e) { return; }
+        setBalance(Number(data.balance_ton ?? data.balance ?? 0));
       })
       .catch((e) => {
         console.error("Ошибка загрузки баланса:", e);

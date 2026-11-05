@@ -12,7 +12,10 @@ import time
 import uuid
 from datetime import datetime, timedelta
 import hmac
+import hashlib
 import math
+import urllib.parse
+import bleach
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -310,7 +313,61 @@ def sanitize_turnover():
 sanitize_turnover()
 
 def verify_init_data(init_data):
-    return bool(init_data and init_data.strip())
+    """Проверяет подпись Telegram initData с использованием HMAC-SHA256.
+    
+    Алгоритм:
+    1. Разбираем строку запроса
+    2. Извлекаем hash
+    3. Удаляем hash из набора
+    4. Сортируем оставшиеся поля
+    5. Собираем data_check_string
+    6. Вычисляем secret_key = HMAC-SHA256('WebAppData', bot_token)
+    7. Вычисляем signature = HMAC-SHA256(secret_key, data_check_string)
+    8. Сравниваем signature с hash (constant-time)
+    """
+    if not init_data or not init_data.strip():
+        return False
+    
+    try:
+        # Разбираем строку запроса (query_id=...&hash=...)
+        parsed = urllib.parse.parse_qs(init_data, keep_blank_values=True)
+        
+        # Извлекаем hash
+        hash_value = parsed.pop('hash', None)
+        if not hash_value or not hash_value[0]:
+            return False
+        hash_value = hash_value[0]
+        
+        # Удаляем дублирующиеся ключи — берём последнее значение
+        data_check_pairs = []
+        for key, values in parsed.items():
+            # Берём последнее значение для каждого ключа
+            data_check_pairs.append((key, values[-1]))
+        
+        # Сортируем по ключу
+        data_check_pairs.sort(key=lambda x: x[0])
+        
+        # Собираем data_check_string
+        data_check_string = '\n'.join(f'{k}={v}' for k, v in data_check_pairs)
+        
+        # Вычисляем secret_key = HMAC-SHA256('WebAppData', bot_token)
+        secret_key = hmac.new(
+            b'WebAppData',
+            TG_BOT_TOKEN.encode('utf-8'),
+            hashlib.sha256
+        ).digest()
+        
+        # Вычисляем подпись
+        signature = hmac.new(
+            secret_key,
+            data_check_string.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        
+        return hmac.compare_digest(signature, hash_value)
+    except Exception as e:
+        print(f"[verify_init_data] error: {e}", flush=True)
+        return False
 
 
 # ── Пулы предметов для кейсов (по ID кейса) ───────────────────────────
@@ -665,6 +722,11 @@ def check_and_reset_leaderboard():
 # ── Баланс ───────────────────────────────────────────────────────────
 @app.route("/api/balance", methods=["GET"])
 def get_balance():
+    # Проверка initData (если передан заголовок X-Init-Data)
+    init_data_header = request.headers.get("X-Init-Data", "")
+    if init_data_header and not verify_init_data(init_data_header):
+        return jsonify({"error": "Forbidden: invalid initData"}), 403
+
     user_id = request.args.get("user_id", "6267608438")
     print(f"REQUEST: /api/balance user_id={user_id}", flush=True)
     conn = None
@@ -981,7 +1043,7 @@ def play_game():
     if game_type == "upgrade":
         start_price = float(data.get("start_price", 0))
         end_price = float(data.get("end_price", 0))
-        target_name = str(data.get("target_name", "")).strip()
+        target_name = bleach.clean(str(data.get("target_name", "")).strip(), tags=[], strip=True)
         target_image = str(data.get("target_image", "")).strip()
         if start_price <= 0 or end_price <= 0:
             return jsonify({"error": "start_price and end_price must be > 0"}), 400
@@ -1140,6 +1202,12 @@ def open_case():
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
+
+    # Проверка initData
+    init_data = data.get("initData", "")
+    if not verify_init_data(init_data):
+        return jsonify({"error": "Forbidden: invalid initData"}), 403
+
     user_id = str(data.get("user_id", "unknown"))
     case_price = float(data.get("case_price", 0))
     case_id = str(data.get("case_id", "")).strip()
@@ -1268,6 +1336,11 @@ def open_case():
 # ── Inventory ──────────────────────────────────────────────────────────
 @app.route("/api/inventory", methods=["GET"])
 def get_inventory():
+    # Проверка initData (если передан заголовок X-Init-Data)
+    init_data_header = request.headers.get("X-Init-Data", "")
+    if init_data_header and not verify_init_data(init_data_header):
+        return jsonify({"error": "Forbidden: invalid initData"}), 403
+
     user_id = request.args.get("user_id", "6267608438")
     conn = None
     try:
@@ -1319,7 +1392,7 @@ def inventory_add():
     item_id = item.get("id") if isinstance(item, dict) else None
     if not item_id:
         item_id = str(uuid.uuid4())
-    name = item.get("name", "Unknown") if isinstance(item, dict) else "Unknown"
+    name = bleach.clean(item.get("name", "Unknown") if isinstance(item, dict) else "Unknown", tags=[], strip=True)
     image = item.get("image", "") if isinstance(item, dict) else ""
     floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
 
@@ -1379,6 +1452,11 @@ def buy_nft():
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
+    # Проверка initData
+    init_data = data.get("initData", "")
+    if not verify_init_data(init_data):
+        return jsonify({"error": "Forbidden: invalid initData"}), 403
+
     user_id = str(data.get("user_id", "unknown"))
     item = data.get("item")
 
@@ -1420,7 +1498,7 @@ def buy_nft():
 
     # Добавляем предмет в отдельную таблицу инвентаря
     item_id = item.get("id") if isinstance(item, dict) else str(uuid.uuid4())
-    name = item.get("name", "Unknown") if isinstance(item, dict) else "Unknown"
+    name = bleach.clean(item.get("name", "Unknown") if isinstance(item, dict) else "Unknown", tags=[], strip=True)
     image = item.get("image", "") if isinstance(item, dict) else ""
     floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
 
@@ -1730,7 +1808,7 @@ def withdraw_nft():
         return jsonify({"error": "Invalid JSON body"}), 400
 
     user_id = str(data.get("user_id", "unknown"))
-    username = str(data.get("username", "unknown"))
+    username = bleach.clean(str(data.get("username", "unknown")), tags=[], strip=True)
     nft_name = str(data.get("nft_name", "unknown"))
     nft_price = float(data.get("nft_price", 0))
 
@@ -1768,7 +1846,7 @@ def add_turnover():
         return jsonify({"error": "Invalid JSON body"}), 400
 
     user_id = str(data.get("user_id", "unknown"))
-    username = str(data.get("username", "Unknown"))
+    username = bleach.clean(str(data.get("username", "Unknown")), tags=[], strip=True)
     amount = float(data.get("amount", 0))
 
     if amount <= 0:
