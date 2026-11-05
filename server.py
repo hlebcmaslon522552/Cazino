@@ -1460,6 +1460,41 @@ def inventory_remove():
     return jsonify({"success": True})
 
 
+# ── Загрузка NFT-пула из my_nfts.json ─────────────────────────────────
+NFT_POOL_PATH = os.path.join(os.path.dirname(__file__), "public", "my_nfts.json")
+NFT_POOL = []
+try:
+    if os.path.exists(NFT_POOL_PATH):
+        with open(NFT_POOL_PATH, "r", encoding="utf-8") as f:
+            NFT_POOL = json.load(f)
+        print(f"[NFT_POOL] Загружено {len(NFT_POOL)} предметов из {NFT_POOL_PATH}")
+    else:
+        print(f"[NFT_POOL] Файл {NFT_POOL_PATH} не найден — пул пуст")
+except Exception as e:
+    print(f"[NFT_POOL] Ошибка загрузки: {e}")
+
+
+# ── Get Floor Price ─────────────────────────────────────────────────────
+@app.route("/api/get_floor", methods=["GET"])
+def get_floor():
+    """Возвращает floor-цену предмета из my_nfts.json по имени коллекции."""
+    collection = request.args.get("collection", "").strip().lower()
+    if not collection:
+        return jsonify({"error": "collection is required"}), 400
+
+    for entry in NFT_POOL:
+        entry_name = (entry.get("collection", "") or entry.get("name", "")).strip().lower()
+        if entry_name == collection:
+            floor = entry.get("floor", 0)
+            return jsonify({
+                "floor_price": floor,
+                "price": floor,
+                "collection": entry.get("collection", entry.get("name", "")),
+            })
+
+    return jsonify({"error": "Collection not found"}), 404
+
+
 # ── Buy NFT (Market) ─────────────────────────────────────────────────────
 @app.route("/api/buy_nft", methods=["POST"])
 def buy_nft():
@@ -1482,9 +1517,25 @@ def buy_nft():
     if not item:
         return jsonify({"error": "item is required"}), 400
 
-    price = float(item.get("floor", 0))
+    # Валидация цены и данных из my_nfts.json
+    item_id = str(item.get("id", "")).strip()
+    expected_item = None
+    for pool_item in NFT_POOL:
+        if str(pool_item.get("id", "")).strip() == item_id:
+            expected_item = pool_item
+            break
+
+    if expected_item is None:
+        return jsonify({"error": "Item not found in NFT pool"}), 400
+
+    price = float(expected_item.get("floor", 0))
     if price <= 0:
         return jsonify({"error": "Invalid item price"}), 400
+
+    # Используем данные из пула, а не от клиента
+    name = bleach.clean(expected_item.get("name", "Unknown"), tags=[], strip=True)
+    image = expected_item.get("image", "")
+    floor = price
 
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -1514,17 +1565,14 @@ def buy_nft():
         return jsonify({"error": "Недостаточно TON"}), 400
 
     # Добавляем предмет в отдельную таблицу инвентаря
-    item_id = item.get("id") if isinstance(item, dict) else str(uuid.uuid4())
-    name = bleach.clean(item.get("name", "Unknown") if isinstance(item, dict) else "Unknown", tags=[], strip=True)
-    image = item.get("image", "") if isinstance(item, dict) else ""
-    floor = float(item.get("floor", 0)) if isinstance(item, dict) else 0.0
-
+    # Данные берём из NFT_POOL (my_nfts.json), а не от клиента
+    pool_item_id = expected_item.get("id", str(uuid.uuid4()))
     new_balance = round(balance - price, 2)
 
     try:
         c.execute(
             "INSERT INTO inventory (user_id, item_id, name, image, floor) VALUES (?, ?, ?, ?, ?)",
-            (user_id, item_id, name, image, floor)
+            (user_id, pool_item_id, name, image, floor)
         )
         c.execute(
             "UPDATE users SET balance_ton = ? WHERE id = ?",
