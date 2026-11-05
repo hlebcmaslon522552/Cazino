@@ -3,7 +3,10 @@ import '@telegram-apps/telegram-ui/dist/styles.css';
 
 import ReactDOM from 'react-dom/client';
 import { StrictMode } from 'react';
+import eruda from 'eruda';
 import { retrieveLaunchParams } from '@tma.js/sdk-react';
+
+eruda.init();
 
 import { Root } from '@/components/Root.tsx';
 import { EnvUnsupported } from '@/components/EnvUnsupported.tsx';
