@@ -2323,7 +2323,8 @@ def handle_crash_bet(data):
 # ── Hockey WebSocket Handlers ───────────────────────────────────────────
 @socketio.on('hockey_bet')
 def handle_hockey_bet(data):
-    """Принимает { user_id, username, bet }. Добавляет игрока в HOCKEY_PLAYERS."""
+    """Принимает { user_id, username, bet }. Проверяет баланс, списывает ставку в БД,
+    добавляет игрока в HOCKEY_PLAYERS и рассылает обновлённый список."""
     global HOCKEY_PLAYERS
     user_id = str(data.get('user_id', ''))
     username = str(data.get('username', 'Игрок'))
@@ -2337,6 +2338,41 @@ def handle_hockey_bet(data):
         emit('hockey_error', {'error': 'Invalid bet data'})
         return
 
+    # ── Проверка баланса и списание в БД ──
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if not row:
+            emit('hockey_error', {'error': 'User not found'})
+            return
+        balance_before = row[0]
+        print(f"[Hockey] Баланс ДО: user={user_id} balance={balance_before} bet={bet}")
+
+        if balance_before < bet:
+            print(f"[Hockey] ОТКЛОНЕНО: недостаточно средств user={user_id} balance={balance_before} bet={bet}")
+            emit('hockey_error', {'error': 'nssufficient balance'})
+            return
+
+        # Списываем ставку
+        c.execute("UPDATE users SET balance_ton = COALESCE(balance_ton, 0) - ? WHERE id = ?", (bet, user_id))
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        balance_after = c.fetchone()[0]
+        print(f"[Hockey] Баланс ПОСЛЕ: user={user_id} balance={balance_after} bet={bet}")
+        conn.commit()
+    except Exception as e:
+        print(f"[Hockey] DB error in handle_hockey_bet: {e}")
+        if conn:
+            conn.rollback()
+        emit('hockey_error', {'error': 'nternal error'})
+        return
+    finally:
+        if conn:
+            conn.close()
+
+    # ── Добавление в in-memory список и рассылка ──
     with HOCKEY_LOCK:
         HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p['user_id'] != user_id]
         HOCKEY_PLAYERS.append({
@@ -2356,14 +2392,21 @@ def handle_hockey_bet(data):
 
 @socketio.on('pvp_leave')
 def handle_pvp_leave(data):
-    """Выход из лобби Hockey: удаляет игрока из HOCKEY_PLAYERS и рассылает всем свежий список."""
+    """Выход из лобби Hockey: возвращает ставку в БД, удаляет игрока из HOCKEY_PLAYERS
+    и рассылает всем свежий список."""
     global HOCKEY_PLAYERS
     data = data or {}
     user_id = str(data.get('user_id', ''))
     if not user_id:
         return
 
+    # Сначала находим ставку игрока под блокировкой
+    bet_to_refund = 0
     with HOCKEY_LOCK:
+        for p in HOCKEY_PLAYERS:
+            if p.get('user_id') == user_id:
+                bet_to_refund = p.get('bet', 0)
+                break
         before = len(HOCKEY_PLAYERS)
         HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p.get('user_id') != user_id]
         removed = len(HOCKEY_PLAYERS) != before
@@ -2371,6 +2414,32 @@ def handle_pvp_leave(data):
             {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
             for p in HOCKEY_PLAYERS
         ]
+
+    # Возвращаем ставку в БД (только если игрок реально был в пуле)
+    if bet_to_refund > 0 and removed:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            balance_before = row[0] if row else 0
+            print(f"[Hockey] Возврат ставки user={user_id} сумма={bet_to_refund} баланс ДО={balance_before}")
+            c.execute(
+                "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+                (bet_to_refund, user_id)
+            )
+            c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+            balance_after = c.fetchone()[0]
+            print(f"[Hockey] Возврат ставки user={user_id} баланс ПОСЛЕ={balance_after}")
+            conn.commit()
+        except Exception as e:
+            print(f"[Hockey] DB error refunding bet: {e}")
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                conn.close()
 
     # Рассылаем актуальный список ВСЕМ клиентам, чтобы лобби обновлялось мгновенно
     socketio.emit('hockey_players_update', {'players': players_snapshot})
@@ -2409,19 +2478,62 @@ def handle_disconnect():
             })
             print(f"[Crash] Игрок отключился. Осталось в пуле: {len(CRASH_PLAYERS)}")
 
-    # Убираем отключившегося игрока из глобального пула Hockey
+    # Убираем отключившегося игрока из глобального пула Hockey и возвращаем ставку
     global HOCKEY_PLAYERS
+    hockey_disconnected = None  # { user_id, bet }
+    players_snapshot = []
     with HOCKEY_LOCK:
         before = len(HOCKEY_PLAYERS)
+        # Находим данные игрока ДО удаления
+        for p in HOCKEY_PLAYERS:
+            if p.get('sid') == request.sid:
+                hockey_disconnected = {
+                    'user_id': p.get('user_id', ''),
+                    'bet': p.get('bet', 0),
+                }
+                break
         HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p.get('sid') != request.sid]
         if len(HOCKEY_PLAYERS) != before:
-            socketio.emit('hockey_players_update', {
-                'players': [
-                    {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
-                    for p in HOCKEY_PLAYERS
-                ]
-            })
-            print(f"[Hockey] Игрок отключился. Осталось в пуле: {len(HOCKEY_PLAYERS)}")
+            players_snapshot = [
+                {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
+                for p in HOCKEY_PLAYERS
+            ]
+
+    if hockey_disconnected and hockey_disconnected['bet'] > 0:
+        # Возвращаем ставку в БД
+        disco_conn = None
+        try:
+            disco_conn = sqlite3.connect(DB_PATH)
+            dc = disco_conn.cursor()
+            dc.execute("SELECT balance_ton FROM users WHERE id = ?", (hockey_disconnected['user_id'],))
+            row = dc.fetchone()
+            bal_before = row[0] if row else 0
+            print(f"[Hockey] Отключение: возврат ставки user={hockey_disconnected['user_id']} "
+                  f"сумма={hockey_disconnected['bet']} баланс ДО={bal_before}")
+            dc.execute(
+                "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+                (hockey_disconnected['bet'], hockey_disconnected['user_id'])
+            )
+            dc.execute("SELECT balance_ton FROM users WHERE id = ?", (hockey_disconnected['user_id'],))
+            bal_after = dc.fetchone()[0]
+            print(f"[Hockey] Отключение: возврат ставки user={hockey_disconnected['user_id']} "
+                  f"баланс ПОСЛЕ={bal_after}")
+            disco_conn.commit()
+        except Exception as e:
+            print(f"[Hockey] DB error refunding bet on disconnect: {e}")
+            if disco_conn:
+                try:
+                    disco_conn.rollback()
+                except Exception:
+                    pass
+        finally:
+            if disco_conn:
+                disco_conn.close()
+
+        if players_snapshot:
+            socketio.emit('hockey_players_update', {'players': players_snapshot})
+        print(f"[Hockey] Игрок {hockey_disconnected['user_id']} отключился. "
+              f"Осталось в пуле: {len(HOCKEY_PLAYERS)}")
 
 # ── Запуск фоновой задачи сброса лидерборда ───────────────────────────
 def start_leaderboard_reset_worker():
@@ -2497,6 +2609,34 @@ def hockey_game_loop():
                         commission = round(total_pot * CASINO_COMMISSION_RATE, 2)
                         # Победитель получает банк за вычетом комиссии: total_pot * 0.975 (2.5%)
                         prize = round(total_pot * (1 - CASINO_COMMISSION_RATE), 2)
+
+                        # ── Начисляем выигрыш победителю в БД ──
+                        winner_conn = None
+                        try:
+                            winner_conn = sqlite3.connect(DB_PATH)
+                            wc = winner_conn.cursor()
+                            wc.execute("SELECT balance_ton FROM users WHERE id = ?", (winner['user_id'],))
+                            w_row = wc.fetchone()
+                            balance_before = w_row[0] if w_row else 0
+                            print(f"[Hockey] ПОБЕДИТЕЛЬ {winner['username']} ({winner['user_id']}): "
+                                  f"баланс ДО={balance_before}, приз={prize}")
+                            wc.execute(
+                                "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+                                (prize, winner['user_id'])
+                            )
+                            wc.execute("SELECT balance_ton FROM users WHERE id = ?", (winner['user_id'],))
+                            balance_after = wc.fetchone()[0]
+                            print(f"[Hockey] ПОБЕДИТЕЛЬ {winner['username']} ({winner['user_id']}): "
+                                  f"баланс ПОСЛЕ={balance_after}")
+                            winner_conn.commit()
+                        except Exception as db_err:
+                            print(f"[Hockey] DB error crediting winner: {db_err}")
+                            if winner_conn:
+                                winner_conn.rollback()
+                        finally:
+                            if winner_conn:
+                                winner_conn.close()
+
                         socketio.emit('hockey_result', {
                             'winner_id': winner['user_id'],
                             'winner_name': winner['username'],

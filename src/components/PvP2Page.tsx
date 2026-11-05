@@ -475,30 +475,27 @@ useEffect(() => {
   // ── Выход из лобби: возврат ставки и снятие игрока из пула ────────────
   const leaveLobby = () => {
     const socket = socketRef.current;
+    if (!socket) return;
     const uid = userIdRef.current || String(user?.id ?? 'unknown');
 
-    socket.emit('pvp_leave', { user_id: String(user?.id ?? 'unknown') });
+    // 1. Сервер убирает игрока из HOCKEY_PLAYERS, возвращает ставку в БД
+    //    и рассылает всем hockey_players_update (см. handle_pvp_leave).
+    socket.emit('pvp_leave', { user_id: uid });
+
+    // 2. Сбрасываем локальный стейт
     setPlayers([]);
     setHasJoined(false);
+    hasJoinedRef.current = false;
+    setIsJoining(false);
 
-    // 1. Сервер убирает игрока из HOCKEY_PLAYERS и рассылает всем hockey_players_update
-    socket?.emit('pvp_leave', { user_id: uid });
-
-    // 2. Возвращаем ставку на баланс
+    // 3. Возвращаем ставку на баланс (оптимистично, сервер тоже вернёт)
     const refund = placedBetRef.current;
     if (refund > 0) {
       onUpdateBalance(refund);
       placedBetRef.current = 0;
     }
 
-    // 3. Сбрасываем локальный стейт игрока в лобби
-    setHasJoined(false);
-    hasJoinedRef.current = false;
-    setIsJoining(false);
-
     // 4. Сокет НЕ разрываем: соединение остаётся живым для новых ставок.
-    //    Вышедшего игрока из пула убирает серверный обработчик pvp_leave.
-
     onToast?.('Вы вышли из лобби', 'success');
   };
 
