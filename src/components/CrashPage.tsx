@@ -56,6 +56,18 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const autoCashoutRef = useRef<number | null>(null);
   const boomLottieRef = useRef<any>(null);
 
+  // ── Сброс состояния при входе в игру ──
+  useEffect(() => {
+    setMultiplier(1.00);
+    setGameState('waiting');
+    setHasCashedOut(false);
+    setHasBet(false);
+    hasBetRef.current = false;
+    setCashedOutAt(0);
+    setShowBoom(false);
+    setCountdown(15);
+  }, []);
+
   // ── Сокеты ──
   useEffect(() => {
     console.log('SOCKET URL:', CONFIG.API_URL);
@@ -74,6 +86,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setHasCashedOut(false);
       hasCashedOutRef.current = false;
       setCashedOutAt(0);
+      setHasBet(false);
+      hasBetRef.current = false;
     });
 
     socket.on('crash_tick', (data: { multiplier: number }) => {
@@ -114,6 +128,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     const handleComplete = () => {
       setShowBoom(false);
+      setMultiplier(1.0);
       setGameState('waiting');
     };
 
