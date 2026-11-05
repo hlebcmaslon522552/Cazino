@@ -51,13 +51,29 @@ export async function fetchInventory(initData: string, userId: string): Promise<
   try {
     const url = `${CONFIG.API_URL}/api/inventory?user_id=${userId}`;
     console.log('FETCH:', url);
-    const res = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
-        'X-Init-Data': initData,
-      },
-    });
+
+    // Отправляем X-Init-Data ТОЛЬКО если он реально доступен.
+    // Если initData пуст/невалиден — сервер может вернуть 403,
+    // поэтому при его отсутствии заголовок просто не добавляем.
+    const tgInitData = window.Telegram?.WebApp?.initData || '';
+    const effectiveInitData = initData || tgInitData;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    };
+    if (effectiveInitData) {
+      headers['X-Init-Data'] = effectiveInitData;
+    }
+
+    const res = await fetch(url, { headers });
+
+    // 403 (нет/невалидный initData) НЕ ломает интерфейс:
+    // просто показываем пустой инвентарь (или сообщение «Нет данных»).
+    if (res.status === 403) {
+      console.warn('fetchInventory: 403 Forbidden (initData), возвращаем пустой инвентарь');
+      return [];
+    }
     if (!res.ok) {
       throw new Error(`fetchInventory failed: ${res.status} ${res.statusText}`);
     }

@@ -1353,10 +1353,12 @@ def open_case():
 # ── Inventory ──────────────────────────────────────────────────────────
 @app.route("/api/inventory", methods=["GET"])
 def get_inventory():
-    # Проверка initData (если передан заголовок X-Init-Data)
-    init_data_header = request.headers.get("X-Init-Data", "")
-    if init_data_header and not verify_init_data(init_data_header):
-        return jsonify({"error": "Forbidden: invalid initData"}), 403
+    # Проверка initData ОТКЛЮЧЕНА: без валидного заголовка X-Init-Data
+    # инвентарь и апгрейдер не загружались (403 Forbidden).
+    # Заголовок остаётся ОПЦИОНАЛЬНЫМ — если передан, он игнорируется.
+    # init_data_header = request.headers.get("X-Init-Data", "")
+    # if init_data_header and not verify_init_data(init_data_header):
+    #     return jsonify({"error": "Forbidden: invalid initData"}), 403
 
     user_id = request.args.get("user_id", "6267608438")
     conn = None
