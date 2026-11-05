@@ -51,7 +51,12 @@ export function Root() {
     const url = `${CONFIG.API_URL}/api/balance?user_id=${userId}`;
     console.log('BALANCE USER ID:', userId);
     console.log('FETCH:', url);
-    fetch(url)
+    fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+    })
       .then(res => res.text())
       .then(text => {
         console.log('RAW BALANCE:', text);

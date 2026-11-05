@@ -31,36 +31,53 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
 
+# ── CORS ────────────────────────────────────────────────────────────────
+# flask-cors обрабатывает CORS-заголовки, включая preflight (OPTIONS).
+# supports_credentials=True необходим для отправки X-Init-Data и кук.
+CORS(app, resources={r"/api/*": {"origins": "*", "supports_credentials": True}})
+
+# SocketIO — свой CORS (cors_allowed_origins="*" разрешает любые источники)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-
-# ── Диагностика входящих запросов ─────────────────────────────────────
-# Печатаем КАЖДЫЙ входящий запрос и код ответа прямо в stdout.
-# flush=True обязателен: при запуске с перенаправлением вывода в файл
-# (start_server.bat / server.log) stdout буферизуется блоками, и без
-# flush строки "не появляются" в логе до переполнения буфера.
-# Если в логе нет даже строки "REQUEST: ...", значит запрос физически
-# не дошёл до этого процесса (неверный домен/порт туннеля, CORS-преflight
-# не выполнен, либо сервер был перезапущен после правок).
-@app.before_request
-def _log_incoming_request():
+# ── Fallback CORS-заголовки (на случай, если flask-cors не отработал) ──
+@app.after_request
+def _add_cors_and_log(response):
+    origin = request.headers.get("Origin", "")
     print(
         f"REQUEST: {request.method} {request.path}"
         f" args={dict(request.args)}"
-        f" origin={request.headers.get('Origin', '-')}",
+        f" origin={origin or '-'}",
         flush=True,
     )
 
+    # Гарантированно добавляем CORS-заголовки к каждому ответу.
+    # Если flask-cors уже добавил — перезаписываем тем же значением.
+    response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Content-Type, Authorization, X-Init-Data, "
+        "X-Internal-Secret, ngrok-skip-browser-warning"
+    )
+    response.headers["Access-Control-Max-Age"] = "86400"
+    # Vary: Origin — подсказка кешу, что ответ зависит от Origin
+    response.headers.add("Vary", "Origin")
 
-@app.after_request
-def _log_response_status(response):
     print(
-        f"RESPONSE: {request.method} {request.path} -> {response.status_code}",
+        f"RESPONSE: {request.method} {request.path} -> {response.status_code}"
+        f" origin={origin or '*'}",
         flush=True,
     )
     return response
+
+
+# ── OPTIONS (preflight) — гарантированный ответ 200 для всех /api/* ──
+# flask-cors должен обрабатывать preflight сам, но если SocketIO перехватил
+# запрос до него — явный маршрут гарантирует 200 + CORS-заголовки из after_request.
+@app.route("/api/<path:subpath>", methods=["OPTIONS"])
+def _handle_preflight(subpath):
+    return jsonify({"ok": True})
 
 
 @app.errorhandler(404)
