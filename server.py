@@ -1064,6 +1064,8 @@ def play_game():
         target_image = str(data.get("target_image", "")).strip()
         if start_price <= 0 or end_price <= 0:
             return jsonify({"error": "start_price and end_price must be > 0"}), 400
+        if end_price <= start_price:
+            return jsonify({"error": "Цель должна быть дороже начальной NFT"}), 400
         if not target_name:
             return jsonify({"error": "target_name is required"}), 400
 

@@ -352,7 +352,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const rawChance = targetPrice > 0 ? (startPrice / targetPrice) * 100 : 0;
   const chance = Math.min(rawChance, MAX_CHANCE);
 
-  const startOkay = startNfts.length > 0 && !!targetNft && targetPrice >= startPrice;
+  const priceError = startNfts.length > 0 && !!targetNft && startPrice >= targetPrice;
+  const startOkay = startNfts.length > 0 && !!targetNft && targetPrice > startPrice;
   const canUpgrade = startOkay && !spinning;
 
   /* ── Сброс ─────────────────────────────────────── */
@@ -653,6 +654,21 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
       {/* Кнопка запуска */}
       <div style={{ marginTop: spacing.md }}>
+        {priceError && (
+          <div style={{
+            background: 'rgba(255,59,48,0.12)',
+            border: '1px solid rgba(255,59,48,0.3)',
+            borderRadius: 10,
+            padding: '8px 12px',
+            marginBottom: 10,
+            color: '#ff3b30',
+            fontSize: 12,
+            textAlign: 'center',
+            fontWeight: 'bold',
+          }}>
+            ❌ Нельзя ставить NFT той же стоимости
+          </div>
+        )}
         <Button
           size="lg"
           fullWidth
