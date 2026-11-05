@@ -51,8 +51,12 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
   // ── Сокеты ──
   useEffect(() => {
+    console.log('SOCKET URL:', CONFIG.API_URL);
     const socket = io(CONFIG.API_URL, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
+
+    socket.on('connect', () => console.log('SOCKET CONNECTED'));
+    socket.on('connect_error', (err) => console.log('SOCKET ERROR:', err.message));
 
     socket.on('crash_timer', (data: { timer: number }) => setCountdown(data.timer));
 

@@ -48,9 +48,13 @@ export function Root() {
   // POST /api/update_balance удалён: клиент больше НЕ может записать баланс
   // на сервер, иначе любой мог бы «накрутить» себе миллион TON.
   const loadBalance = () => {
-    fetch(`${CONFIG.API_URL}/api/balance?user_id=${userId}`)
+    const url = `${CONFIG.API_URL}/api/balance?user_id=${userId}`;
+    console.log('BALANCE USER ID:', userId);
+    console.log('FETCH:', url);
+    fetch(url)
       .then(res => res.json())
       .then(data => {
+        console.log('BALANCE RESPONSE:', data);
         if (data && data.balance_ton !== undefined) {
           setBalance(Number(data.balance_ton));
         }

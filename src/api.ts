@@ -33,7 +33,9 @@ export const getInitData = (): string => {
  * Сервер возвращает { balance_ton: number }.
  */
 export const fetchUserData = async (userId: string) => {
-  const res = await fetch(`${CONFIG.API_URL}/api/balance?user_id=${userId}`, {
+  const url = `${CONFIG.API_URL}/api/balance?user_id=${userId}`;
+  console.log('FETCH:', url);
+  const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
@@ -47,7 +49,9 @@ export const fetchUserData = async (userId: string) => {
 
 export async function fetchInventory(initData: string, userId: string): Promise<InventoryItem[]> {
   try {
-    const res = await fetch(`${CONFIG.API_URL}/api/inventory?user_id=${userId}`, {
+    const url = `${CONFIG.API_URL}/api/inventory?user_id=${userId}`;
+    console.log('FETCH:', url);
+    const res = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true',
@@ -78,7 +82,9 @@ export async function topUpStars(_initData: string, amount: number): Promise<boo
 
 export const addToInventory = async (item: any, userId: string): Promise<boolean> => {
   try {
-    const res = await fetch(`${CONFIG.API_URL}/api/inventory/add`, {
+    const url = `${CONFIG.API_URL}/api/inventory/add`;
+    console.log('FETCH:', url);
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json', 
@@ -111,7 +117,9 @@ export async function sellNft(
   price: number,
   userId: string,
 ): Promise<{ success: boolean; new_balance: number }> {
-  const res = await fetch(`${CONFIG.API_URL}/api/sell_nft`, {
+  const url = `${CONFIG.API_URL}/api/sell_nft`;
+  console.log('FETCH:', url);
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -127,7 +135,9 @@ export async function sellNft(
 }
 
 export async function withdrawNft(itemId: number, initData: string): Promise<boolean> {
-  const res = await fetch(`${CONFIG.API_URL}/api/withdraw_nft`, {
+  const url = `${CONFIG.API_URL}/api/withdraw_nft`;
+  console.log('FETCH:', url);
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -154,7 +164,9 @@ export const getBalance = async (): Promise<number> => {
 };
 
 export const getFloorPrice = async (collectionName: string) => {
-  const res = await fetch(`${CONFIG.API_URL}/api/get_floor?collection=${collectionName}`, {
+  const url = `${CONFIG.API_URL}/api/get_floor?collection=${collectionName}`;
+  console.log('FETCH:', url);
+  const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true',
