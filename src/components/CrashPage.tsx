@@ -26,6 +26,12 @@ interface CrashPlayer {
 
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user } = useTelegram();
+
+  // ── Логи загрузки анимаций ──
+  console.log('FLY ANIM LOADED:', flyAnim ? 'YES' : 'NO');
+  console.log('BOOM ANIM LOADED:', boomAnim ? 'YES' : 'NO');
+  if (flyAnim && typeof flyAnim === 'object') console.log('flyAnim.tgs:', (flyAnim as any).tgs);
+  if (boomAnim && typeof boomAnim === 'object') console.log('boomAnim.tgs:', (boomAnim as any).tgs);
   
   // ── Стейты ──
   const [betInput, setBetInput] = useState<string>('1.0');
@@ -160,13 +166,14 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         
         <div className="absolute inset-0 flex items-center justify-center p-4">
           {!showBoom && gameState === 'flying' && (
-            <Lottie animationData={flyAnim} loop={true} style={{ width: '100%', height: '100%' }} />
+            <Lottie animationData={flyAnim} loop={true} style={{ width: '100%', height: '100%' }} onError={(e) => console.log('LOTTIE FLY ERROR:', e)} />
           )}
           {showBoom && (
             <Lottie
               animationData={boomAnim}
               loop={false}
               onComplete={() => { setShowBoom(false); setGameState('waiting'); }}
+              onError={(e) => console.log('LOTTIE BOOM ERROR:', e)}
               style={{ width: '100%', height: '100%' }}
             />
           )}
