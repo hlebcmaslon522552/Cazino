@@ -139,6 +139,19 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     socket.on('crash_players_update', (data: { players: CrashPlayer[] }) => {
       setPlayers(data.players || []);
+      // Синхронизируем hasBet: если текущий пользователь есть в списке игроков,
+      // значит он сделал ставку в этом раунде
+      const currentUserId = String(user?.id ?? 'unknown');
+      const currentPlayer = (data.players || []).find(p => p.user_id === currentUserId);
+      if (currentPlayer) {
+        setHasBet(true);
+        hasBetRef.current = true;
+        if (currentPlayer.cashed_out) {
+          setHasCashedOut(true);
+          hasCashedOutRef.current = true;
+          setCashedOutAt(currentPlayer.multiplier || 1);
+        }
+      }
     });
 
     socket.on('crash_cashout_result', (data: { success: boolean; win_amount: number; multiplier: number; new_balance: number }) => {
@@ -146,6 +159,15 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         // Сервер подтвердил забор — обновляем баланс из данных сервера
         onUpdateBalance(data.win_amount);
         onToast?.(`Вы забрали ${data.win_amount.toFixed(2)} TON по ${data.multiplier.toFixed(2)}x`, 'success');
+      }
+    });
+
+    // Подтверждение ставки от сервера
+    socket.on('crash_bet_result', (data: { success: boolean; bet?: number }) => {
+      if (data.success) {
+        setHasBet(true);
+        hasBetRef.current = true;
+        console.log('[Crash] Ставка подтверждена сервером:', data.bet);
       }
     });
 

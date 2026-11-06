@@ -482,6 +482,11 @@ def crash_game_loop():
                 CRASH_START_TIME = time.time() * 1000   # миллисекунды для JS-клиента
                 CRASH_RATE = 0.2222                     # 1x за 4.5 сек
                 CRASH_STATE = "flying"
+                # Очищаем список игроков для нового раунда и рассылаем пустой список
+                CRASH_PLAYERS = []
+
+            socketio.emit('crash_players_update', {'players': []})
+            print(f"[CrashLoop] Список игроков очищен для нового раунда")
 
             print(f"[SERVER] START. crash_point={CRASH_POINT}, start_time={CRASH_START_TIME}, rate={CRASH_RATE}")
             print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x, rate: {CRASH_RATE}")
@@ -2329,6 +2334,10 @@ def handle_crash_bet(data):
             {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet']}
             for p in CRASH_PLAYERS
         ]
+
+    # Отправляем подтверждение ставки конкретному клиенту
+    emit('crash_bet_result', {'success': True, 'bet': bet})
+    print(f"[Crash] Подтверждение ставки отправлено {username} ({user_id})")
 
     socketio.emit('crash_players_update', {'players': players_snapshot})
     print(f"[Crash] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(CRASH_PLAYERS)}")
