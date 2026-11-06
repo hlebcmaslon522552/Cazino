@@ -226,6 +226,70 @@ const reset = () => {
     setPuckPos({ x: FIELD_W / 2, y: FIELD_H / 2 });
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
   };
+  // ── Сохранение состояния при сворачивании/уходе со страницы ──
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        const state = {
+          phase,
+          betInput,
+          hasJoined,
+          placedBet: placedBetRef.current,
+          userId: userIdRef.current,
+          players,
+          totalPot,
+          waitSeconds,
+        };
+        sessionStorage.setItem('pvp2_state', JSON.stringify(state));
+      } catch (e) {
+        // ignore
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [phase, betInput, hasJoined, players, totalPot, waitSeconds]);
+
+  // ── Восстановление состояния при монтировании ──
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const saved = sessionStorage.getItem('pvp2_state');
+        if (saved) {
+          const state = JSON.parse(saved);
+          if (state.phase) setPhase(state.phase);
+          if (state.betInput) setBetInput(state.betInput);
+          if (state.hasJoined) {
+            setHasJoined(true);
+            hasJoinedRef.current = true;
+          }
+          if (state.placedBet) placedBetRef.current = state.placedBet;
+          if (state.userId) userIdRef.current = state.userId;
+          if (state.players) setPlayers(state.players);
+          if (state.totalPot) setTotalPot(state.totalPot);
+          if (state.waitSeconds) setWaitSeconds(state.waitSeconds);
+          sessionStorage.removeItem('pvp2_state');
+          return;
+        }
+
+        // Если sessionStorage пуст — пробуем API
+        const uid = String(user?.id ?? '');
+        if (!uid) return;
+        const res = await fetch(`${CONFIG.API_URL}/api/pvp_state?user_id=${encodeURIComponent(uid)}`);
+        const data = await res.json();
+        if (data.in_pool && data.player) {
+          setPhase('setup');
+          setHasJoined(true);
+          hasJoinedRef.current = true;
+          placedBetRef.current = data.player.bet;
+          userIdRef.current = data.player.user_id;
+          onToast?.('Ставка восстановлена', 'info');
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    restore();
+  }, []);
 
   // При монтировании шайбы сразу ставим её в puckPos — без «вспышки» в углу (0,0).
   // useCallback со стабильной ссылкой: React НЕ перезапишет transform при обычных ре-рендерах.
@@ -521,8 +585,13 @@ useEffect(() => {
         <line x1={FIELD_W/2} y1="0" x2={FIELD_W/2} y2={FIELD_H} stroke="rgba(255,255,255,0.15)" strokeWidth="2" strokeDasharray="6,4" />
         <circle cx={FIELD_W/2} cy={FIELD_H/2} r={40} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" />
         {shapes.map((shape) => {
-          const fill = 'hsl(' + shape.hue + ',70%,' + (shape.winner ? '55%' : '45%') + ')';
-          const stroke = shape.winner ? '#22c55e' : '#000';
+          const isWinner = shape.winner;
+          const fill = isWinner
+            ? 'hsl(' + shape.hue + ',70%,55%)'
+            : phase === 'result'
+              ? 'hsl(0,60%,25%)'  // проигравший — тёмно-красный
+              : 'hsl(' + shape.hue + ',70%,45%)';
+          const stroke = isWinner ? '#22c55e' : phase === 'result' ? '#991b1b' : '#000';
           const strokeWidth = shape.winner ? 3 : 1.5;
           const svgStyle = {
             transition: 'stroke 0.3s,fill 0.3s',

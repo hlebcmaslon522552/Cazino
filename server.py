@@ -482,11 +482,8 @@ def crash_game_loop():
                 CRASH_START_TIME = time.time() * 1000   # миллисекунды для JS-клиента
                 CRASH_RATE = 0.2222                     # 1x за 4.5 сек
                 CRASH_STATE = "flying"
-                # Очищаем список игроков для нового раунда и рассылаем пустой список
-                CRASH_PLAYERS = []
-
-            socketio.emit('crash_players_update', {'players': []})
-            print(f"[CrashLoop] Список игроков очищен для нового раунда")
+                # НЕ очищаем CRASH_PLAYERS здесь — список очищается только после краша,
+                # чтобы таблица игроков не пропадала во время летящего раунда.
 
             print(f"[SERVER] START. crash_point={CRASH_POINT}, start_time={CRASH_START_TIME}, rate={CRASH_RATE}")
             print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x, rate: {CRASH_RATE}")
@@ -1885,6 +1882,32 @@ def crash_state():
 
 
 
+@app.route("/api/pvp_state", methods=["GET"])
+def pvp_state():
+    """Возвращает текущее состояние PvP (Hockey) для восстановления при сворачивании."""
+    user_id = request.args.get("user_id", "").strip()
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
+
+    player_info = None
+    with HOCKEY_LOCK:
+        for p in HOCKEY_PLAYERS:
+            if p.get("user_id") == user_id:
+                player_info = {
+                    "user_id": p["user_id"],
+                    "username": p["username"],
+                    "bet": p["bet"],
+                }
+                break
+
+    return jsonify({
+        "state": HOCKEY_STATE,
+        "timer": HOCKEY_TIMER,
+        "player": player_info,
+        "players_count": len(HOCKEY_PLAYERS),
+        "in_pool": player_info is not None,
+    })
+
 # ── Withdraw NFT (уведомление админу) ─────────────────────────────────
 @app.route("/api/withdraw_nft", methods=["POST"])
 def withdraw_nft():
@@ -2498,6 +2521,8 @@ def handle_hockey_bet(data):
 
     socketio.emit('hockey_players_update', {'players': players_snapshot})
     socketio.emit('pvp_players_update', {'players': players_snapshot})
+    # Отправляем подтверждение ставки конкретному игроку
+    emit('hockey_bet_result', {'success': True, 'bet': bet})
     print(f"[Hockey] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(HOCKEY_PLAYERS)}")
 
 
