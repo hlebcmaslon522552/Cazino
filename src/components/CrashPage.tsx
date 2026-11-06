@@ -141,6 +141,14 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setPlayers(data.players || []);
     });
 
+    socket.on('crash_cashout_result', (data: { success: boolean; win_amount: number; multiplier: number; new_balance: number }) => {
+      if (data.success) {
+        // Сервер подтвердил забор — обновляем баланс из данных сервера
+        onUpdateBalance(data.win_amount);
+        onToast?.(`Вы забрали ${data.win_amount.toFixed(2)} TON по ${data.multiplier.toFixed(2)}x`, 'success');
+      }
+    });
+
     return () => { socket.disconnect(); };
   }, []);
 
@@ -197,8 +205,15 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     setHasCashedOut(true);
     hasCashedOutRef.current = true;
     autoCashoutRef.current = null;
-    onUpdateBalance(winAmount);
-    onToast?.(`Вы забрали ${winAmount.toFixed(2)} TON по ${m.toFixed(2)}x`, 'success');
+    
+    // Отправляем запрос на сервер — сервер начислит выигрыш в БД
+    socketRef.current?.emit('crash_cashout', {
+      user_id: String(user?.id ?? 'unknown'),
+      multiplier: m,
+    });
+    
+    // Показываем пользователю, что запрос отправлен
+    onToast?.(`Отправлен запрос на забор ${winAmount.toFixed(2)} TON по ${m.toFixed(2)}x`, 'success');
   };
 
   return (

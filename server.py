@@ -514,7 +514,21 @@ def crash_game_loop():
                 CRASH_TIMER = 15
                 final_crash_point = CRASH_POINT
                 CRASH_POINT = 1.00
+                # Рассылаем финальный список игроков перед очисткой
+                final_players = [
+                    {
+                        'user_id': p['user_id'],
+                        'username': p['username'],
+                        'bet': p['bet'],
+                        'multiplier': p.get('multiplier'),
+                        'cashed_out': p.get('cashed_out', False),
+                    }
+                    for p in CRASH_PLAYERS
+                ]
                 CRASH_PLAYERS = []
+
+            if final_players:
+                socketio.emit('crash_players_update', {'players': final_players})
 
             print(f"[CrashLoop] КРАШ! {final_crash_point}x")
             print(f"[SERVER] END. Sending crash_ended with crash_point={final_crash_point}")
@@ -2318,6 +2332,93 @@ def handle_crash_bet(data):
 
     socketio.emit('crash_players_update', {'players': players_snapshot})
     print(f"[Crash] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(CRASH_PLAYERS)}")
+
+
+@socketio.on('crash_cashout')
+def handle_crash_cashout(data):
+    """Принимает { user_id, multiplier }. Начисляет выигрыш в БД,
+    помечает игрока как cashed_out в CRASH_PLAYERS и рассылает обновление."""
+    global CRASH_PLAYERS
+    user_id = str(data.get('user_id', ''))
+    multiplier = float(data.get('multiplier', 1.0))
+
+    if not user_id or multiplier < 1.0:
+        emit('crash_error', {'error': 'Invalid cashout data'})
+        return
+
+    bet_amount = 0
+    username = 'Игрок'
+    found = False
+
+    with CRASH_LOCK:
+        for p in CRASH_PLAYERS:
+            if p['user_id'] == user_id:
+                bet_amount = p['bet']
+                username = p['username']
+                p['cashed_out'] = True
+                p['multiplier'] = multiplier
+                found = True
+                break
+
+    if not found:
+        emit('crash_error', {'error': 'Bet not found'})
+        return
+
+    if bet_amount <= 0:
+        return
+
+    win_amount = bet_amount * multiplier
+
+    # ── Начисление выигрыша в БД ──
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        balance_before = row[0] if row else 0
+
+        c.execute(
+            "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+            (win_amount, user_id)
+        )
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        balance_after = c.fetchone()[0]
+        conn.commit()
+        print(f"[CrashCashout] {username} ({user_id}): {bet_amount} -> {win_amount} TON ({multiplier}x). Баланс: {balance_before} -> {balance_after}")
+    except Exception as e:
+        print(f"[CrashCashout] DB error: {e}")
+        if conn:
+            conn.rollback()
+        emit('crash_error', {'error': 'Internal error'})
+        return
+    finally:
+        if conn:
+            conn.close()
+
+    # ── Рассылаем обновлённый список игроков ──
+    with CRASH_LOCK:
+        players_snapshot = [
+            {
+                'user_id': p['user_id'],
+                'username': p['username'],
+                'bet': p['bet'],
+                'multiplier': p.get('multiplier'),
+                'cashed_out': p.get('cashed_out', False),
+            }
+            for p in CRASH_PLAYERS
+        ]
+
+    socketio.emit('crash_players_update', {'players': players_snapshot})
+
+    # ── Отправляем результат конкретному клиенту ──
+    emit('crash_cashout_result', {
+        'success': True,
+        'win_amount': round(win_amount, 2),
+        'multiplier': multiplier,
+        'new_balance': round(balance_after, 2),
+    })
+    print(f"[CrashCashout] Успех: {username} ({user_id}) забрал {win_amount:.2f} TON по {multiplier}x")
 
 
 # ── Hockey WebSocket Handlers ───────────────────────────────────────────
