@@ -4,7 +4,7 @@
     "name": "Resistance Dogs",
     "image": "/nft_images/resistance_dog.webp",
     "collection": "Resistance Dogs",
-    "floor": 100.0,
+    "floor": 517.58,
     "rarity": "Common"
   },
   {
@@ -12,7 +12,7 @@
     "name": "Lucky Lockets",
     "image": "/nft_images/lucky_locket.webp",
     "collection": "Lucky Lockets",
-    "floor": 100.0,
+    "floor": 14.77,
     "rarity": "Common"
   },
   {
@@ -20,7 +20,7 @@
     "name": "Mirage Lamps",
     "image": "/nft_images/mirage_lamp.webp",
     "collection": "Mirage Lamps",
-    "floor": 100.0,
+    "floor": 4.17,
     "rarity": "Common"
   },
   {
@@ -28,7 +28,7 @@
     "name": "Fine Pens",
     "image": "/nft_images/fine_pen.webp",
     "collection": "Fine Pens",
-    "floor": 100.0,
+    "floor": 8.3,
     "rarity": "Common"
   },
   {
