@@ -2586,92 +2586,10 @@ def handle_pvp_leave(data):
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    """При отключении удаляем игрока из комнат."""
-    with PVP_ROOMS_LOCK:
-        for room_id, room in list(PVP_ROOMS.items()):
-            before = len(room['players'])
-            room['players'] = [p for p in room['players'] if p['sid'] != request.sid]
-            after = len(room['players'])
-            if before != after:
-                print(f"[PvP] Игрок отключился из комнаты {room_id}")
-                if len(room['players']) == 0:
-                    del PVP_ROOMS[room_id]
-                    print(f"[PvP] Комната {room_id} удалена (пуста)")
-                else:
-                    # Уведомляем оставшегося игрока
-                    emit('pvp_error', {'error': 'Соперник отключился'}, room=room_id)
-
-    # Убираем отключившегося игрока из глобального пула Crash
-    global CRASH_PLAYERS
-    with CRASH_LOCK:
-        before = len(CRASH_PLAYERS)
-        CRASH_PLAYERS = [p for p in CRASH_PLAYERS if p.get('sid') != request.sid]
-        if len(CRASH_PLAYERS) != before:
-            socketio.emit('crash_players_update', {
-                'players': [
-                    {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet']}
-                    for p in CRASH_PLAYERS
-                ]
-            })
-            print(f"[Crash] Игрок отключился. Осталось в пуле: {len(CRASH_PLAYERS)}")
-
-    # Убираем отключившегося игрока из глобального пула Hockey и возвращаем ставку
-    global HOCKEY_PLAYERS
-    hockey_disconnected = None  # { user_id, bet }
-    players_snapshot = []
-    with HOCKEY_LOCK:
-        before = len(HOCKEY_PLAYERS)
-        # Находим данные игрока ДО удаления
-        for p in HOCKEY_PLAYERS:
-            if p.get('sid') == request.sid:
-                hockey_disconnected = {
-                    'user_id': p.get('user_id', ''),
-                    'bet': p.get('bet', 0),
-                }
-                break
-        HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p.get('sid') != request.sid]
-        if len(HOCKEY_PLAYERS) != before:
-            players_snapshot = [
-                {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
-                for p in HOCKEY_PLAYERS
-            ]
-
-    if hockey_disconnected and hockey_disconnected['bet'] > 0:
-        # Возвращаем ставку в БД
-        disco_conn = None
-        try:
-            disco_conn = sqlite3.connect(DB_PATH)
-            dc = disco_conn.cursor()
-            dc.execute("SELECT balance_ton FROM users WHERE id = ?", (hockey_disconnected['user_id'],))
-            row = dc.fetchone()
-            bal_before = row[0] if row else 0
-            print(f"[Hockey] Отключение: возврат ставки user={hockey_disconnected['user_id']} "
-                  f"сумма={hockey_disconnected['bet']} баланс ДО={bal_before}")
-            dc.execute(
-                "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
-                (hockey_disconnected['bet'], hockey_disconnected['user_id'])
-            )
-            dc.execute("SELECT balance_ton FROM users WHERE id = ?", (hockey_disconnected['user_id'],))
-            bal_after = dc.fetchone()[0]
-            print(f"[Hockey] Отключение: возврат ставки user={hockey_disconnected['user_id']} "
-                  f"баланс ПОСЛЕ={bal_after}")
-            disco_conn.commit()
-        except Exception as e:
-            print(f"[Hockey] DB error refunding bet on disconnect: {e}")
-            if disco_conn:
-                try:
-                    disco_conn.rollback()
-                except Exception:
-                    pass
-        finally:
-            if disco_conn:
-                disco_conn.close()
-
-        if players_snapshot:
-            socketio.emit('hockey_players_update', {'players': players_snapshot})
-            socketio.emit('pvp_players_update', {'players': players_snapshot})
-        print(f"[Hockey] Игрок {hockey_disconnected['user_id']} отключился. "
-              f"Осталось в пуле: {len(HOCKEY_PLAYERS)}")
+    """При отключении сокета НЕ удаляем игрока из пулов — ставка остаётся.
+    Игрок удаляется только по явному событию (pvp_leave, crash_cashout, crash_ended).
+    Это нужно, чтобы при сворачивании вкладки Telegram WebSocket не стирал ставку."""
+    print(f"Client disconnected: {request.sid}")
 
 # ── Запуск фоновой задачи сброса лидерборда ───────────────────────────
 def start_leaderboard_reset_worker():
