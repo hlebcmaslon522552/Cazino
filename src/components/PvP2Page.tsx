@@ -369,10 +369,24 @@ const reset = () => {
     // ── Обновление списка игроков в пуле ──
     socket.on('hockey_players_update', (data: { players: Player[] }) => {
       setPlayers(data.players);
+      // Синхронизируем hasJoined: если текущий пользователь есть в списке — значит он в пуле
+      const currentUserId = String(user?.id ?? userIdRef.current ?? '');
+      const found = data.players?.some(p => p.user_id === currentUserId);
+      if (found) {
+        setHasJoined(true);
+        hasJoinedRef.current = true;
+      }
     });
     // ── Синхронизация PvP игроков ──
     socket.on('pvp_players_update', (data: { players: Player[] }) => {
       setPlayers(data.players);
+      // Та же синхронизация hasJoined
+      const currentUserId = String(user?.id ?? userIdRef.current ?? '');
+      const found = data.players?.some(p => p.user_id === currentUserId);
+      if (found) {
+        setHasJoined(true);
+        hasJoinedRef.current = true;
+      }
     });
     // ── Старт раунда (сервер шлёт игроков и фигуры) ──
     socket.on('hockey_started', (data: { players: Player[]; shapes: Shape[]; total_pot: number }) => {

@@ -61,9 +61,53 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     // Принудительный сброс состояния при монтировании
     setMultiplier(1.00);
     setGameState('waiting');
+
+    // ── Восстановление из sessionStorage ──
+    const savedBetAmount = (() => {
+      try {
+        const saved = sessionStorage.getItem('crash_state');
+        if (saved) {
+          const state = JSON.parse(saved);
+          if (state.userId !== String(user?.id ?? '')) {
+            sessionStorage.removeItem('crash_state');
+            return null;
+          }
+          if (state.hasBet) {
+            setHasBet(true);
+            hasBetRef.current = true;
+            if (state.betInput) setBetInput(state.betInput);
+            if (state.hasCashedOut) {
+              setHasCashedOut(true);
+              hasCashedOutRef.current = true;
+              if (state.cashedOutAt) setCashedOutAt(state.cashedOutAt);
+            }
+            if (state.autoCashoutEnabled) setAutoCashoutEnabled(true);
+            if (state.autoCashoutInput) setAutoCashoutInput(state.autoCashoutInput);
+          }
+          sessionStorage.removeItem('crash_state');
+          return state.betAmount || null;
+        }
+      } catch (e) { /* ignore */ }
+      return null;
+    })();
+
     (async () => {
       try {
         const res = await fetch(`${CONFIG.API_URL}/api/crash_state`);
+
+  // ── Переподключение сокета при возврате на вкладку ──
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && socketRef.current && !socketRef.current.connected) {
+        console.log('[Crash] Page visible, reconnecting socket');
+        socketRef.current.connect();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
+
         const data = await res.json();
 
         if (data.state === 'flying') {
@@ -161,6 +205,31 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         onToast?.(`Вы забрали ${data.win_amount.toFixed(2)} TON по ${data.multiplier.toFixed(2)}x`, 'success');
       }
     });
+
+  // ── Сохранение ставки в sessionStorage при сворачивании вкладки ──
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        const state = {
+          hasBet: hasBetRef.current,
+          hasCashedOut: hasCashedOutRef.current,
+          betAmount: finalBet,
+          betInput,
+          userId: String(user?.id ?? ''),
+          gameState,
+          cashedOutAt,
+          autoCashoutEnabled,
+          autoCashoutInput,
+        };
+        sessionStorage.setItem('crash_state', JSON.stringify(state));
+      } catch (e) {
+        // ignore
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasBet, hasCashedOut, finalBet, betInput, gameState, cashedOutAt, autoCashoutEnabled, autoCashoutInput]);
+
 
     // Подтверждение ставки от сервера
     socket.on('crash_bet_result', (data: { success: boolean; bet?: number }) => {
