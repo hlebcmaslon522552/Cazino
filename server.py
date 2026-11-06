@@ -123,6 +123,9 @@ HOCKEY_PLAYERS = []            # ставки текущего раунда: [{ 
 HOCKEY_LOCK = threading.Lock()
 HOCKEY_START_TIME = 0.0
 
+# Активные ставки в Хоккее: user_id -> bet (чтобы восстанавливать при реконнекте)
+ACTIVE_HOCKEY_BETS = {}
+
 # Комиссия казино: победитель получает 97.5% банка, 2.5% уходит казино
 CASINO_COMMISSION_RATE = 0.025
 
@@ -2458,7 +2461,7 @@ def handle_crash_cashout(data):
 def handle_hockey_bet(data):
     """Принимает { user_id, username, bet }. Проверяет баланс, списывает ставку в БД,
     добавляет игрока в HOCKEY_PLAYERS и рассылает обновлённый список."""
-    global HOCKEY_PLAYERS
+    global HOCKEY_PLAYERS, ACTIVE_HOCKEY_BETS
     user_id = str(data.get('user_id', ''))
     username = str(data.get('username', 'Игрок'))
     # Сохраняем реальный username игрока (клиент шлёт user?.username || first_name).
@@ -2514,6 +2517,7 @@ def handle_hockey_bet(data):
             'bet': bet,
             'sid': request.sid,
         })
+        ACTIVE_HOCKEY_BETS[user_id] = bet
         players_snapshot = [
             {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
             for p in HOCKEY_PLAYERS
@@ -2526,11 +2530,79 @@ def handle_hockey_bet(data):
     print(f"[Hockey] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(HOCKEY_PLAYERS)}")
 
 
+@socketio.on('connect')
+def handle_connect():
+    """Восстанавливает игрока в HOCKEY_PLAYERS при переподключении, если у него была
+    активная ставка (user_id передаётся query-параметром сокета)."""
+    user_id = request.args.get('user_id', '')
+    if not user_id or user_id not in ACTIVE_HOCKEY_BETS:
+        # Даже без user_id отправляем новому клиенту актуальный список игроков
+        with HOCKEY_LOCK:
+            players_snapshot = [
+                {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
+                for p in HOCKEY_PLAYERS
+            ]
+        emit('hockey_players_update', {'players': players_snapshot})
+        return
+
+    restored = False
+    with HOCKEY_LOCK:
+        # Проверяем, есть ли игрок уже в пуле
+        found = False
+        for p in HOCKEY_PLAYERS:
+            if p['user_id'] == user_id:
+                p['sid'] = request.sid  # обновляем SID для точечных сообщений
+                found = True
+                break
+
+        if not found:
+            # Игрока нет в пуле — восстанавливаем из ACTIVE_HOCKEY_BETS
+            bet = ACTIVE_HOCKEY_BETS.get(user_id, 0)
+            if bet > 0:
+                # Достаём username из БД
+                username = 'Игрок'
+                conn = None
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    c = conn.cursor()
+                    c.execute("SELECT username, first_name FROM users WHERE id = ?", (user_id,))
+                    row = c.fetchone()
+                    if row:
+                        username = row[0] or row[1] or 'Игрок'
+                except Exception as e:
+                    print(f"[Hockey] DB error fetching username for restore: {e}")
+                finally:
+                    if conn:
+                        conn.close()
+
+                HOCKEY_PLAYERS.append({
+                    'user_id': user_id,
+                    'username': username,
+                    'bet': bet,
+                    'sid': request.sid,
+                })
+                restored = True
+                print(f"[Hockey] Игрок {username} ({user_id}) восстановлен при реконнекте. Ставка: {bet} TON")
+
+        players_snapshot = [
+            {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
+            for p in HOCKEY_PLAYERS
+        ]
+
+    # Если игрок был восстановлен — шлём обновление всем
+    if restored:
+        socketio.emit('hockey_players_update', {'players': players_snapshot})
+        socketio.emit('pvp_players_update', {'players': players_snapshot})
+    else:
+        # Если просто переподключился — шлём новому клиенту актуальный список
+        emit('hockey_players_update', {'players': players_snapshot})
+
+
 @socketio.on('pvp_leave')
 def handle_pvp_leave(data):
     """Выход из лобби Hockey: возвращает ставку в БД, удаляет игрока из HOCKEY_PLAYERS
     и рассылает всем свежий список."""
-    global HOCKEY_PLAYERS
+    global HOCKEY_PLAYERS, ACTIVE_HOCKEY_BETS
     data = data or {}
     user_id = str(data.get('user_id', ''))
     if not user_id:
@@ -2581,6 +2653,7 @@ def handle_pvp_leave(data):
     socketio.emit('hockey_players_update', {'players': players_snapshot})
     socketio.emit('pvp_players_update', {'players': players_snapshot})
     if removed:
+        ACTIVE_HOCKEY_BETS.pop(user_id, None)
         print(f"[Hockey] Игрок {user_id} вышел из лобби. Осталось в пуле: {len(HOCKEY_PLAYERS)}")
 
 
@@ -2604,7 +2677,7 @@ start_leaderboard_reset_worker()
 # ── Hockey Game Loop (фоновый поток, глобальные раунды) ─────────────────
 def hockey_game_loop():
     """Фоновый поток: глобальные раунды Hockey PvP каждые ~20 секунд (15 waiting + 5 playing)."""
-    global HOCKEY_STATE, HOCKEY_TIMER, HOCKEY_PLAYERS, HOCKEY_START_TIME
+    global HOCKEY_STATE, HOCKEY_TIMER, HOCKEY_PLAYERS, HOCKEY_START_TIME, ACTIVE_HOCKEY_BETS
     print("[HockeyLoop] Поток запущен.")
     while True:
         try:
@@ -2701,6 +2774,7 @@ def hockey_game_loop():
                         })
                         HOCKEY_STATE = "waiting"
                         HOCKEY_PLAYERS = []
+                        ACTIVE_HOCKEY_BETS.clear()
                         print(f"[Hockey] Раунд завершён. Победил {winner['username']}, "
                               f"банк {total_pot}, комиссия {commission}, выплата {prize}")
         except Exception as e:

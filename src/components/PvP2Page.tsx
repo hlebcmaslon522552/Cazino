@@ -429,7 +429,12 @@ const reset = () => {
       }
       setPhase('result');
     });
-    socket.on('disconnect', () => { console.log('[PvP2] Socket disconnected'); });
+    // ВАЖНО: disconnect НЕ очищает players — таблица игроков должна жить до следующего
+    // hockey_players_update от сервера. Сервер сам не удаляет игрока из пула при дисконнекте
+    // (см. handle_disconnect в server.py), поэтому клиент тоже НЕ должен этого делать.
+    socket.on('disconnect', () => {
+      console.log('[PvP2] Socket disconnected — players сохранён, очистка НЕ выполняется');
+    });
     socketRef.current = socket;
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
