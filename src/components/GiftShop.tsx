@@ -58,6 +58,7 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
         headers: { 
           'Content-Type': 'application/json', 
           'ngrok-skip-browser-warning': 'true' 
+          'X-Init-Data': window.Telegram?.WebApp?.initData || '',
         },
         body: JSON.stringify({ user_id: userId, item: item })
       });
@@ -191,3 +192,4 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
     </div>
   );
 }
+

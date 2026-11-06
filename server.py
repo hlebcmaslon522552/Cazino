@@ -1508,9 +1508,9 @@ def buy_nft():
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
-    # Проверка initData
-    init_data = data.get("initData", "")
-    if not verify_init_data(init_data):
+    # Проверка initData НЕОБЯЗАТЕЛЬНАЯ: если заголовка X-Init-Data нет — пропускаем
+    init_data_header = request.headers.get("X-Init-Data", "")
+    if init_data_header and not verify_init_data(init_data_header):
         return jsonify({"error": "Forbidden: invalid initData"}), 403
 
     user_id = str(data.get("user_id", "unknown"))
@@ -2387,6 +2387,7 @@ def handle_hockey_bet(data):
         ]
 
     socketio.emit('hockey_players_update', {'players': players_snapshot})
+    socketio.emit('pvp_players_update', {'players': players_snapshot})
     print(f"[Hockey] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(HOCKEY_PLAYERS)}")
 
 
@@ -2443,6 +2444,7 @@ def handle_pvp_leave(data):
 
     # Рассылаем актуальный список ВСЕМ клиентам, чтобы лобби обновлялось мгновенно
     socketio.emit('hockey_players_update', {'players': players_snapshot})
+    socketio.emit('pvp_players_update', {'players': players_snapshot})
     if removed:
         print(f"[Hockey] Игрок {user_id} вышел из лобби. Осталось в пуле: {len(HOCKEY_PLAYERS)}")
 
@@ -2532,6 +2534,7 @@ def handle_disconnect():
 
         if players_snapshot:
             socketio.emit('hockey_players_update', {'players': players_snapshot})
+            socketio.emit('pvp_players_update', {'players': players_snapshot})
         print(f"[Hockey] Игрок {hockey_disconnected['user_id']} отключился. "
               f"Осталось в пуле: {len(HOCKEY_PLAYERS)}")
 

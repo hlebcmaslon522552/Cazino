@@ -306,6 +306,10 @@ const reset = () => {
     socket.on('hockey_players_update', (data: { players: Player[] }) => {
       setPlayers(data.players);
     });
+    // ── Синхронизация PvP игроков ──
+    socket.on('pvp_players_update', (data: { players: Player[] }) => {
+      setPlayers(data.players);
+    });
     // ── Старт раунда (сервер шлёт игроков и фигуры) ──
     socket.on('hockey_started', (data: { players: Player[]; shapes: Shape[]; total_pot: number }) => {
       setPlayers(data.players);

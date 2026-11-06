@@ -58,6 +58,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
   // ── Синхронизация состояния при входе в игру (позднее подключение) ──
   useEffect(() => {
+    // Принудительный сброс состояния при монтировании
+    setMultiplier(1.00);
+    setGameState('waiting');
     (async () => {
       try {
         const res = await fetch(`${CONFIG.API_URL}/api/crash_state`);
