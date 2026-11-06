@@ -111,8 +111,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setHasCashedOut(false);
       hasCashedOutRef.current = false;
       setCashedOutAt(0);
-      setHasBet(false);
-      hasBetRef.current = false;
+      // НЕ сбрасываем hasBet — игрок мог уже поставить до получения crash_started.
+      // Сброс происходит в crash_ended и при пустом crash_players_update.
     });
 
     socket.on('crash_tick', (data: { multiplier: number }) => {
