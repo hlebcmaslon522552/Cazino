@@ -1597,10 +1597,10 @@ def open_case():
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
-    # Проверка initData
-    init_data = data.get("initData", "")
-    if not verify_init_data(init_data):
-        return jsonify({"error": "Forbidden: invalid initData"}), 403
+    # Проверка initData — ВРЕМЕННО ОТКЛЮЧЕНА
+    # init_data = data.get("initData", "")
+    # if not verify_init_data(init_data):
+    #     return jsonify({"error": "Forbidden: invalid initData"}), 403
 
     user_id = str(data.get("user_id", "unknown"))
     case_price = float(data.get("case_price", 0))

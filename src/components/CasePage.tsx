@@ -225,7 +225,10 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       console.log('FETCH:', openCaseUrl);
       const res = await fetch(openCaseUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Init-Data': window.Telegram?.WebApp?.initData || '',
+        },
         body: JSON.stringify({
           user_id: userId,
           case_id: caseData.id,
