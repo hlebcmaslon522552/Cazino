@@ -364,15 +364,15 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     const serverData: ServerSlot[] = [];
     try {
       const results = await Promise.all(
-        Array.from({ length: ballsCount }, () =>
+        Array.from({ length: ballsCount }, () => {
           const dropUrl = `${CONFIG.API_URL}/api/plinko_drop`;
           console.log('FETCH:', dropUrl);
-          fetch(dropUrl, {
+          return fetch(dropUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bet_amount: stake, rows }),
-          }).then(r => r.json())
-        )
+          }).then(r => r.json());
+        })
       );
       for (const res of results) {
         if (res && typeof res.slotIndex === 'number' && res.slotIndex >= 0 && res.slotIndex < multipliers.length) {
