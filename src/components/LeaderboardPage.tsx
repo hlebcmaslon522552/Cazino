@@ -11,7 +11,9 @@ export function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${CONFIG.API_URL}/api/leaderboard_turnover`, {
+    const lbUrl = `${CONFIG.API_URL}/api/leaderboard_turnover`;
+    console.log('FETCH:', lbUrl);
+    fetch(lbUrl, {
       headers: { 'ngrok-skip-browser-warning': 'true' },
     })
       .then(res => res.json())

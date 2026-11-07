@@ -20,7 +20,9 @@ export function ReferralPage({ onBack, onToast }: Props) {
 
   useEffect(() => {
     const userId = user?.id ?? '6267608438';
-    fetch(`${CONFIG.API_URL}/api/referral_stats?user_id=${userId}`)
+    const refUrl = `${CONFIG.API_URL}/api/referral_stats?user_id=${userId}`;
+    console.log('FETCH:', refUrl);
+    fetch(refUrl)
       .then(res => res.json())
       .then(data => {
         if (data.invited !== undefined) setInvited(data.invited);

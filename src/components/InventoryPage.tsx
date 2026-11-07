@@ -89,7 +89,9 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
       const userId = String(user?.id ?? '6267608438');
       // Отправляем item_id, чтобы сервер СРАЗУ удалил предмет из инвентаря
       // (иначе можно продавать один и тот же NFT бесконечно)
-      const res = await fetch(`${CONFIG.API_URL}/api/sell_nft`, {
+      const sellUrl = `${CONFIG.API_URL}/api/sell_nft`;
+      console.log('FETCH:', sellUrl);
+      const res = await fetch(sellUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +134,9 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
       const userId = String(user?.id ?? '6267608438');
       const username = user?.username || 'unknown';
 
-      const res = await fetch(`${CONFIG.API_URL}/api/withdraw_nft`, {
+      const withdrawUrl = `${CONFIG.API_URL}/api/withdraw_nft`;
+      console.log('FETCH:', withdrawUrl);
+      const res = await fetch(withdrawUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

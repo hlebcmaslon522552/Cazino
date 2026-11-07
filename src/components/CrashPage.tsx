@@ -105,7 +105,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     (async () => {
       try {
-        const res = await fetch(`${CONFIG.API_URL}/api/crash_state`);
+        const crashStateUrl = `${CONFIG.API_URL}/api/crash_state`;
+        console.log('FETCH:', crashStateUrl);
+        const res = await fetch(crashStateUrl);
         const data = await res.json();
 
         if (data.state === 'flying') {

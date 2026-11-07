@@ -292,7 +292,9 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             setLastWin({ id: b.id, multiplier: b.multiplier, win, won: true });
             onToast(`🎉 Выигрыш +${win.toFixed(2)} TON (${b.multiplier.toFixed(2)}x)`, 'success');
             // Записываем выигрыш в историю (для статистики max_win)
-            fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+            const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
+            console.log('FETCH:', betHistUrl);
+            fetch(betHistUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
               body: JSON.stringify({
@@ -363,7 +365,9 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     try {
       const results = await Promise.all(
         Array.from({ length: ballsCount }, () =>
-          fetch(`${CONFIG.API_URL}/api/plinko_drop`, {
+          const dropUrl = `${CONFIG.API_URL}/api/plinko_drop`;
+          console.log('FETCH:', dropUrl);
+          fetch(dropUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ bet_amount: stake, rows }),
@@ -392,7 +396,9 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
 
     // Отправляем оборот
     if (totalStake > 0) {
-      fetch(`${CONFIG.API_URL}/api/add_turnover`, {
+      const turnoverUrl = `${CONFIG.API_URL}/api/add_turnover`;
+      console.log('FETCH:', turnoverUrl);
+      fetch(turnoverUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
@@ -405,7 +411,9 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
 
     // Записываем ставку в историю
     if (totalStake > 0) {
-      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+      const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
+      console.log('FETCH:', betHistUrl);
+      fetch(betHistUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({

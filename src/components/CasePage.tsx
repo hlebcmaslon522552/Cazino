@@ -221,7 +221,9 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
 
     try {
       const userId = String(user?.id ?? '6267608438');
-      const res = await fetch(`${CONFIG.API_URL}/api/open_case`, {
+      const openCaseUrl = `${CONFIG.API_URL}/api/open_case`;
+      console.log('FETCH:', openCaseUrl);
+      const res = await fetch(openCaseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,7 +245,9 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
 
       // Отправляем оборот
       if (price > 0) {
-        fetch(`${CONFIG.API_URL}/api/add_turnover`, {
+        const turnoverUrl = `${CONFIG.API_URL}/api/add_turnover`;
+        console.log('FETCH:', turnoverUrl);
+        fetch(turnoverUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
           body: JSON.stringify({
@@ -346,7 +350,9 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     if (checkingSub.current) return subscribed;
     checkingSub.current = true;
     try {
-      const res = await fetch(`${CONFIG.API_URL}/api/check_subscription`, {
+      const subUrl = `${CONFIG.API_URL}/api/check_subscription`;
+      console.log('FETCH:', subUrl);
+      const res = await fetch(subUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({ user_id: String(user?.id ?? '6267608438') })

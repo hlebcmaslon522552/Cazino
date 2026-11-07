@@ -57,7 +57,9 @@ export function TopUpPage({ onNavigate, onToast, balance = 0, onUpdateBalance }:
     } else {
       if (numericAmount < 50) { onToast('Минимум 50 Stars', 'error'); return; }
       try {
-        const res = await fetch(`${CONFIG.API_URL}/api/create_invoice`, {
+        const invoiceUrl = `${CONFIG.API_URL}/api/create_invoice`;
+        console.log('FETCH:', invoiceUrl);
+        const res = await fetch(invoiceUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
           body: JSON.stringify({ user_id: userId, amount: Math.round(numericAmount) }),

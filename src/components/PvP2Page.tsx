@@ -274,7 +274,9 @@ const reset = () => {
         // Если sessionStorage пуст — пробуем API
         const uid = String(user?.id ?? '');
         if (!uid) return;
-        const res = await fetch(`${CONFIG.API_URL}/api/pvp_state?user_id=${encodeURIComponent(uid)}`);
+        const pvpStateUrl = `${CONFIG.API_URL}/api/pvp_state?user_id=${encodeURIComponent(uid)}`;
+        console.log('FETCH:', pvpStateUrl);
+        const res = await fetch(pvpStateUrl);
         const data = await res.json();
         if (data.in_pool && data.player) {
           setPhase('setup');
@@ -419,7 +421,9 @@ const reset = () => {
         onToast?.('🏆 Вы победили! +' + data.total_pot.toFixed(2) + ' TON', 'success');
         // Записываем выигрыш в историю (для статистики max_win)
         const winHistoryUserId = String(user?.id ?? data.winner_id);
-        fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+        const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
+        console.log('FETCH:', betHistUrl);
+        fetch(betHistUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
           body: JSON.stringify({
@@ -541,7 +545,9 @@ useEffect(() => {
       placedBetRef.current = bet;
       // Записываем ставку в историю
       const historyUserId = String(user?.id ?? uid);
-      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+      const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
+      console.log('FETCH:', betHistUrl);
+      fetch(betHistUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({

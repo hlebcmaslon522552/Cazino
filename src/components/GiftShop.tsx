@@ -53,7 +53,9 @@ export function GiftShop({ balance, onUpdateBalance, onToast }: GiftShopProps) {
       // Используем серверный эндпоинт /api/buy_nft,
       // который сам проверяет баланс, списывает TON и добавляет в инвентарь
       const userId = String(user?.id ?? '6267608438');
-      const res = await fetch(`${CONFIG.API_URL}/api/buy_nft`, {
+      const buyNftUrl = `${CONFIG.API_URL}/api/buy_nft`;
+      console.log('FETCH:', buyNftUrl);
+      const res = await fetch(buyNftUrl, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 

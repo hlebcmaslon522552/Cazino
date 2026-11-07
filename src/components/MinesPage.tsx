@@ -69,7 +69,9 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
 
     // Отправляем оборот
     if (stakePrice > 0) {
-      fetch(`${CONFIG.API_URL}/api/add_turnover`, {
+      const turnoverUrl = `${CONFIG.API_URL}/api/add_turnover`;
+      console.log('FETCH:', turnoverUrl);
+      fetch(turnoverUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
@@ -79,7 +81,9 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
         }),
       }).catch(() => {});
       // Записываем ставку в историю
-      fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+      const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
+      console.log('FETCH:', betHistUrl);
+      fetch(betHistUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
@@ -101,7 +105,9 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
     setCurrentMultiplier(1.0);
 
     try {
-      const res = await fetch(`${CONFIG.API_URL}/api/mines_start`, {
+      const minesStartUrl = `${CONFIG.API_URL}/api/mines_start`;
+      console.log('FETCH:', minesStartUrl);
+      const res = await fetch(minesStartUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({
