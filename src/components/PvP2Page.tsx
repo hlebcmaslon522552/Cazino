@@ -227,18 +227,14 @@ const reset = () => {
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = 0; }
   };
   // ── Сохранение состояния при сворачивании/уходе со страницы ──
+  // Сохраняем только betInput для удобства. hasJoined/placedBet НЕ сохраняем,
+  // т.к. при выходе из лобби (pvp_leave) ставка возвращается, и при возврате
+  // игрок должен сделать новую ставку вручную.
   useEffect(() => {
     const handleBeforeUnload = () => {
       try {
         const state = {
-          phase,
           betInput,
-          hasJoined,
-          placedBet: placedBetRef.current,
-          userId: userIdRef.current,
-          players,
-          totalPot,
-          waitSeconds,
         };
         sessionStorage.setItem('pvp2_state', JSON.stringify(state));
       } catch (e) {
@@ -247,57 +243,20 @@ const reset = () => {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [phase, betInput, hasJoined, players, totalPot, waitSeconds]);
+  }, [betInput]);
 
-  // ── Восстановление состояния при монтировании ──
+  // ── Восстановление betInput при монтировании ──
   useEffect(() => {
-    const restore = async () => {
-      try {
-        const saved = sessionStorage.getItem('pvp2_state');
-        if (saved) {
-          const state = JSON.parse(saved);
-          if (state.phase) setPhase(state.phase);
-          if (state.betInput) setBetInput(state.betInput);
-          if (state.hasJoined) {
-            setHasJoined(true);
-            hasJoinedRef.current = true;
-          }
-          if (state.placedBet) placedBetRef.current = state.placedBet;
-          if (state.userId) userIdRef.current = state.userId;
-          if (state.players) setPlayers(state.players);
-          if (state.totalPot) setTotalPot(state.totalPot);
-          if (state.waitSeconds) setWaitSeconds(state.waitSeconds);
-          sessionStorage.removeItem('pvp2_state');
-          return;
-        }
-
-        // Если sessionStorage пуст — пробуем API
-        const uid = String(user?.id ?? '');
-        if (!uid) return;
-        const pvpStateUrl = `${CONFIG.API_URL}/api/pvp_state?user_id=${encodeURIComponent(uid)}`;
-        console.log('FETCH:', pvpStateUrl);
-        const res = await fetch(pvpStateUrl);
-        const data = await res.json();
-        if (data.in_pool && data.player) {
-          setPhase('setup');
-          setHasJoined(true);
-          hasJoinedRef.current = true;
-          placedBetRef.current = data.player.bet;
-          userIdRef.current = data.player.user_id;
-          // Восстанавливаем территорию (shapes) для отображения в лобби
-          setShapes(generateShapesForPlayers([{
-            user_id: data.player.user_id,
-            username: data.player.username || user?.username || 'Игрок',
-            bet: data.player.bet,
-            color: '#a855f7',
-          }]));
-          onToast?.('Ставка восстановлена', 'info');
-        }
-      } catch (e) {
-        // ignore
+    try {
+      const saved = sessionStorage.getItem('pvp2_state');
+      if (saved) {
+        const state = JSON.parse(saved);
+        if (state.betInput) setBetInput(state.betInput);
+        sessionStorage.removeItem('pvp2_state');
       }
-    };
-    restore();
+    } catch (e) {
+      // ignore
+    }
   }, []);
 
   // При монтировании шайбы сразу ставим её в puckPos — без «вспышки» в углу (0,0).
@@ -450,18 +409,28 @@ const reset = () => {
     });
     socketRef.current = socket;
     return () => {
+      // При размонтировании компонента (уход со страницы) — отправляем pvp_leave,
+      // чтобы ставка вернулась на баланс, а не осталась висеть в пуле.
+      const uid = userIdRef.current || '';
+      if (uid && socket.connected) {
+        socket.emit('pvp_leave', { user_id: uid });
+      }
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       socket.disconnect();
     };
   }, []);
 
-  // ── Вкладка скрылась/вернулась: принудительно переподключаем сокет ─────
-  // Браузер может приостановить WS в фоновой вкладке. При возврате на вкладку
-  // гарантированно вызываем connect(), чтобы лобби снова получало события.
+  // ── Вкладка скрылась: выходим из лобби, ставка возвращается ────
+  // При возврате — переподключаем сокет, игрок сделает новую ставку вручную.
   useEffect(() => {
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && socketRef.current && !socketRef.current.connected) {
-        socketRef.current.connect();
+      const uid = userIdRef.current || '';
+      const s = socketRef.current;
+      if (document.hidden && uid && s?.connected) {
+        s.emit('pvp_leave', { user_id: uid });
+      }
+      if (!document.hidden && s && !s.connected) {
+        s.connect();
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);

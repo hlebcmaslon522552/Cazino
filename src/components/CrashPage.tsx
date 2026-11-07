@@ -287,6 +287,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const handleCashOut = (manualMultiplier?: number) => {
     if (!hasBetRef.current || hasCashedOutRef.current) return;
     const m = manualMultiplier ?? multiplier;
+    // Защита: не даём забрать, если множитель уже на хард-капе
+    if (m >= 93) return;
     const winAmount = finalBet * m;
     
     setCashedOutAt(m);
@@ -428,8 +430,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         {(hasBet || gameState !== 'waiting') && (
           <button
             onClick={() => handleCashOut()}
-            disabled={!hasBet || hasCashedOut || finalBet === 0}
-            className={`w-full font-black text-xl py-4 rounded-xl transition-all ${!hasBet || hasCashedOut || finalBet === 0 ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg'}`}
+            disabled={!hasBet || hasCashedOut || finalBet === 0 || multiplier >= 93 || gameState === 'crashed' || gameState === 'waiting'}
+            className={`w-full font-black text-xl py-4 rounded-xl transition-all ${!hasBet || hasCashedOut || finalBet === 0 || multiplier >= 93 || gameState === 'crashed' || gameState === 'waiting' ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black shadow-lg'}`}
           >
             {!hasBet ? 'Вы не делали ставку' : hasCashedOut ? 'Вы забрали' : `Забрать ${(finalBet * multiplier).toFixed(2)} TON`}
           </button>

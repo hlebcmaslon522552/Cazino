@@ -9,10 +9,10 @@ import { UpgraderPage } from './UpgraderPage';
 import { CaseShop, type CaseItem } from './CaseShop';
 import { CasePage } from './CasePage';
 import { MinesPage } from './MinesPage';
-import { PvPPage } from './PvPPage';
+// import { PvPPage } from './PvPPage';
 import { PlinkoPage } from './PlinkoPage';
 import { CrashPage } from './CrashPage';
-import { PvP2Page } from './PvP2Page';
+// import { PvP2Page } from './PvP2Page';
 import { ProfilePage } from './ProfilePage';
 import { InventoryPage } from './InventoryPage';
 import { TasksPage } from './TasksPage';
@@ -29,7 +29,7 @@ import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
 export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory' | 'bet_history' | 'tasks';
-export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
+export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'plinko' | 'crash';
 
 export function Root() {
   const [activeTab, setActiveTab] = useState<Tab>('game');
@@ -136,7 +136,7 @@ export function Root() {
             : <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />)}
           {gameScreen === 'cases' && <CaseShop onBack={() => setGameScreen('menu')} onOpenCase={openCase} />}
           {gameScreen === 'mines' && <MinesPage onBack={() => setGameScreen('menu')} onToast={showToast} balance={balance} onUpdateBalance={handleUpdateBalance} />}
-          {gameScreen === 'pvp' && <PvP2Page balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
+          {/* PvP скрыт (не рентабельно) — строки удалены из GamePage и закомментирован импорт/роут */}
           {gameScreen === 'plinko' && <PlinkoPage balance={balance} onUpdateBalance={handleUpdateBalance} onBack={() => setGameScreen('menu')} onToast={showToast} />}
           {gameScreen === 'crash' && <CrashPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />}
         </>

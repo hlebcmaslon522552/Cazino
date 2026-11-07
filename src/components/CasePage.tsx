@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle } from 'lucide-react';
 import { colors, spacing } from '../theme';
 import { Button } from './ui/Button';
@@ -676,7 +677,7 @@ return (
       )}
       </div>
 {/* ─── Модальное окно результата ─── */}
-      {showResult && wonItem && (
+      {showResult && wonItem && createPortal(
         <div
           onClick={closeResult}
           style={{
@@ -687,7 +688,6 @@ return (
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexDirection: 'column',
             padding: 20,
             animation: 'ug-fade 0.3s ease',
           }}
@@ -750,7 +750,7 @@ return (
               </Button>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
       {/* ─── Модальное окно предмета ─── */}

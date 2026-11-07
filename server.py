@@ -117,6 +117,7 @@ CRASH_START_TIME = 0.0
 CRASH_RATE = 0.2222           # 1x за 4.5 сек: multiplier = 1.0 + elapsed * CRASH_RATE
 CRASH_PLAYERS = []            # ставки текущего раунда: [{ user_id, username, bet, sid }]
 CRASH_LOCK = threading.Lock()
+MAX_CRASH_POINT = 93.0        # Жёсткий потолок краша (игрок не может забрать выше)
 
 # ── Hockey Game State (глобальные раунды, как Crash) ────────────────────
 HOCKEY_STATE = "waiting"       # 'waiting' | 'playing'
@@ -455,17 +456,36 @@ def update_task_progress(user_id, task_id, increment=1):
 
 
 def record_win(user_id, game_type, amount, bet_type="ton", item_name=""):
-    """Записывает выигрыш в историю ставок (kind='win')."""
+    """Записывает выигрыш в историю ставок (kind='win') и в оборот (turnover)."""
     if amount <= 0:
         return
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+
+        # 1. Запись в историю
         c.execute(
             "INSERT INTO bet_history (user_id, game_type, bet_type, amount, item_name, kind) VALUES (?, ?, ?, ?, ?, 'win')",
             (str(user_id), str(game_type), str(bet_type), float(amount), str(item_name)),
         )
+
+        # 2. Запись в оборот (для топа по обороту)
+        # Пытаемся получить username из таблицы users
+        real_username = "Unknown"
+        try:
+            c.execute("SELECT username FROM users WHERE id = ?", (str(user_id),))
+            row = c.fetchone()
+            if row and row[0]:
+                real_username = str(row[0])
+        except Exception:
+            pass
+
+        c.execute(
+            "INSERT INTO turnover (user_id, username, amount) VALUES (?, ?, ?)",
+            (str(user_id), real_username, float(amount))
+        )
+
         conn.commit()
     except Exception as e:
         print(f"[record_win] error: {e}", flush=True)
@@ -632,6 +652,10 @@ def generate_crash_point():
     if crash > 1000.0:
         crash = 1000.0
 
+    # Хард-кап: максимальный краш-поинт 93.0x (чтобы нельзя было залутать больше)
+    if crash > MAX_CRASH_POINT:
+        crash = MAX_CRASH_POINT
+
     crash = round(crash, 2)
     print(f"[Crash] Generated: {crash}x (1/(1-{r:.4f}))")
     return crash
@@ -665,16 +689,18 @@ def crash_game_loop():
 
             print(f"[SERVER] START. crash_point={CRASH_POINT}, start_time={CRASH_START_TIME}, rate={CRASH_RATE}")
             print(f"[CrashLoop] Раунд стартовал! Краш-поинт: {CRASH_POINT}x, rate: {CRASH_RATE}")
+            effective_crash = min(CRASH_POINT, MAX_CRASH_POINT)
             socketio.emit('crash_started', {
-                'crash_point': CRASH_POINT,
+                'crash_point': effective_crash,
                 'start_time': CRASH_START_TIME,
                 'rate': CRASH_RATE,
-                'time_to_crash': round((CRASH_POINT - 1.0) / CRASH_RATE, 2),
+                'time_to_crash': round((effective_crash - 1.0) / CRASH_RATE, 2),
             })
 
             # ── 3. Ожидание краша — тики каждые ~0.01x ──
             # Время до краша = (crash_point - 1.0) / rate (секунд)
-            crash_duration_ms = (CRASH_POINT - 1.0) / CRASH_RATE * 1000
+            actual_crash_point = min(CRASH_POINT, MAX_CRASH_POINT)
+            crash_duration_ms = (actual_crash_point - 1.0) / CRASH_RATE * 1000
             elapsed = 0.0
             last_tick = 0.0
             while elapsed < crash_duration_ms:
@@ -683,6 +709,10 @@ def crash_game_loop():
                     elapsed = (time.time() * 1000) - CRASH_START_TIME
                     current_multiplier = 1.0 + (elapsed / 1000) * CRASH_RATE
                 tick_val = round(current_multiplier, 2)
+                # Если множитель достиг хард-капа — принудительно завершаем раунд
+                if tick_val >= MAX_CRASH_POINT:
+                    print(f"[CrashLoop] Достигнут хард-кап {MAX_CRASH_POINT}x, принудительный краш!")
+                    break
                 # Отправляем только когда множитель перешагнул очередные 0.01x
                 if tick_val > last_tick:
                     last_tick = tick_val
@@ -2352,6 +2382,10 @@ def crash_state():
         if CRASH_STATE == "flying":
             elapsed = (time.time() * 1000) - CRASH_START_TIME
             result["multiplier"] = round(1.0 + (elapsed / 1000) * CRASH_RATE, 4)
+            # Если множитель превысил хард-кап — сообщаем как крашнутый раунд
+            if result["multiplier"] >= MAX_CRASH_POINT:
+                result["state"] = "waiting"
+                result["crash_point"] = MAX_CRASH_POINT
         return jsonify(result)
 
 
@@ -2577,7 +2611,7 @@ def leaderboard_turnover():
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("""
-            SELECT username, SUM(amount) as total
+            SELECT COALESCE(username, user_id) as name, SUM(amount) as total
             FROM turnover
             GROUP BY user_id
             ORDER BY total DESC
@@ -2586,7 +2620,7 @@ def leaderboard_turnover():
         rows = c.fetchall()
         leaderboard = [
             {
-                "username": row[0],
+                "username": row[0] or "Unknown",
                 "total": round(row[1], 2),
                 "prize": LEADERBOARD_PRIZES.get(i + 1, 0.0),
             }
@@ -3158,70 +3192,14 @@ def handle_hockey_bet(data):
 
 @socketio.on('connect')
 def handle_connect():
-    """Восстанавливает игрока в HOCKEY_PLAYERS при переподключении, если у него была
-    активная ставка (user_id передаётся query-параметром сокета)."""
-    user_id = request.args.get('user_id', '')
-    if not user_id or user_id not in ACTIVE_HOCKEY_BETS:
-        # Даже без user_id отправляем новому клиенту актуальный список игроков
-        with HOCKEY_LOCK:
-            players_snapshot = [
-                {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
-                for p in HOCKEY_PLAYERS
-            ]
-        emit('hockey_players_update', {'players': players_snapshot})
-        return
-
-    restored = False
+    """При подключении просто отправляем актуальный список игроков, не восстанавливая никого.
+    Игрок попадает в пул только через явное событие hockey_bet."""
     with HOCKEY_LOCK:
-        # Проверяем, есть ли игрок уже в пуле
-        found = False
-        for p in HOCKEY_PLAYERS:
-            if p['user_id'] == user_id:
-                p['sid'] = request.sid  # обновляем SID для точечных сообщений
-                found = True
-                break
-
-        if not found:
-            # Игрока нет в пуле — восстанавливаем из ACTIVE_HOCKEY_BETS
-            bet = ACTIVE_HOCKEY_BETS.get(user_id, 0)
-            if bet > 0:
-                # Достаём username из БД
-                username = 'Игрок'
-                conn = None
-                try:
-                    conn = sqlite3.connect(DB_PATH)
-                    c = conn.cursor()
-                    c.execute("SELECT username, first_name FROM users WHERE id = ?", (user_id,))
-                    row = c.fetchone()
-                    if row:
-                        username = row[0] or row[1] or 'Игрок'
-                except Exception as e:
-                    print(f"[Hockey] DB error fetching username for restore: {e}")
-                finally:
-                    if conn:
-                        conn.close()
-
-                HOCKEY_PLAYERS.append({
-                    'user_id': user_id,
-                    'username': username,
-                    'bet': bet,
-                    'sid': request.sid,
-                })
-                restored = True
-                print(f"[Hockey] Игрок {username} ({user_id}) восстановлен при реконнекте. Ставка: {bet} TON")
-
         players_snapshot = [
             {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
             for p in HOCKEY_PLAYERS
         ]
-
-    # Если игрок был восстановлен — шлём обновление всем
-    if restored:
-        socketio.emit('hockey_players_update', {'players': players_snapshot})
-        socketio.emit('pvp_players_update', {'players': players_snapshot})
-    else:
-        # Если просто переподключился — шлём новому клиенту актуальный список
-        emit('hockey_players_update', {'players': players_snapshot})
+    emit('hockey_players_update', {'players': players_snapshot})
 
 
 @socketio.on('pvp_leave')

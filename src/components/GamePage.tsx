@@ -2,7 +2,7 @@ import { colors, spacing } from '../theme';
 import { publicUrl } from '../helpers/publicUrl';
 
 interface Props {
-  onOpen: (screen: 'upgrader' | 'case' | 'mines' | 'pvp' | 'plinko' | 'crash') => void;
+  onOpen: (screen: 'upgrader' | 'case' | 'mines' | 'plinko' | 'crash') => void;
 }
 
 interface GameDef {
@@ -14,7 +14,7 @@ const GAMES: GameDef[] = [
   { id: 'upgrader', image: 'Up.png' },
   { id: 'case', image: 'Cases.png' },
   { id: 'mines', image: 'Mines.png' },
-  { id: 'pvp', image: 'PvP.png' },
+  // { id: 'pvp', image: 'PvP.png' }, // PvP скрыт (не рентабельно)
   { id: 'plinko', image: 'PLINKO.png' },
   { id: 'crash', image: 'Crash.png' },
 ];
