@@ -1,0 +1,749 @@
+diff --git a/server.py b/server.py
+index 5407de7..c2be043 100644
+--- a/server.py
++++ b/server.py
+@@ -137,6 +137,14 @@ FIELD_H = 300
+ 
+ 
+ # тФАтФА Leaderboard / Prizes Config тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
++# тФАтФА Daily Tasks Config тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
++DAILY_TASKS = [
++    {"id": "daily_login", "title": "╨Ч╨░╨╣╤В╨╕ ╨▓ ╨▒╨╛╤В╨░", "goal": 1, "reward": 0.1},
++    {"id": "daily_bet",   "title": "╨б╨┤╨╡╨╗╨░╤В╤М 1 ╤Б╤В╨░╨▓╨║╤Г", "goal": 1, "reward": 0.5},
++    {"id": "daily_win",   "title": "╨Т╤Л╨╕╨│╤А╨░╤В╤М 1 ╤А╨░╨╖", "goal": 1, "reward": 1.0},
++    {"id": "daily_crash", "title": "╨б╤Л╨│╤А╨░╤В╤М ╨▓ ╨Ъ╤А╨░╤И", "goal": 3, "reward": 0.3},
++]
++
+ LEADERBOARD_PRIZES = {
+     1: 500.0,
+     2: 250.0,
+@@ -291,6 +299,18 @@ def init_db():
+         )
+     """)
+ 
++    # 7. ╨в╨░╨▒╨╗╨╕╤Ж╨░ ╨╡╨╢╨╡╨┤╨╜╨╡╨▓╨╜╤Л╤Е ╨╖╨░╨┤╨░╨╜╨╕╨╣
++    c.execute("""
++        CREATE TABLE IF NOT EXISTS user_tasks (
++            user_id TEXT,
++            task_id TEXT,
++            progress INTEGER DEFAULT 0,
++            claimed BOOLEAN DEFAULT 0,
++            last_reset TEXT,
++            PRIMARY KEY (user_id, task_id)
++        )
++    """)
++
+     # ╨Ш╨╜╨╕╤Ж╨╕╨░╨╗╨╕╨╖╨░╤Ж╨╕╤П ╨▓╤А╨╡╨╝╨╡╨╜╨╕ ╨┐╨╛╤Б╨╗╨╡╨┤╨╜╨╡╨│╨╛ ╤Б╨▒╤А╨╛╤Б╨░
+     c.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('last_reset', datetime('now'))")
+ 
+@@ -342,6 +362,70 @@ def sanitize_turnover():
+ 
+ sanitize_turnover()
+ 
++
++# тФАтФА Daily Tasks Helpers тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
++
++def reset_user_tasks_if_new_day(user_id):
++    """╨б╨▒╤А╨░╤Б╤Л╨▓╨░╨╡╤В progress ╨╕ claimed ╨┤╨╗╤П ╨▓╤Б╨╡╤Е ╨╖╨░╨┤╨░╤З ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П, ╨╡╤Б╨╗╨╕ ╨╜╨░╤Б╤В╤Г╨┐╨╕╨╗ ╨╜╨╛╨▓╤Л╨╣ ╨┤╨╡╨╜╤М."""
++    today = datetime.utcnow().strftime("%Y-%m-%d")
++    conn = None
++    try:
++        conn = sqlite3.connect(DB_PATH)
++        c = conn.cursor()
++        # ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝ last_reset ╨┤╨╗╤П ╨╗╤О╨▒╨╛╨╣ ╨╖╨░╨┤╨░╤З╨╕ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П
++        c.execute("SELECT last_reset FROM user_tasks WHERE user_id = ? LIMIT 1", (user_id,))
++        row = c.fetchone()
++        last_reset = row[0] if row else None
++        if last_reset is None or last_reset != today:
++            # ╨Э╨╛╨▓╤Л╨╣ ╨┤╨╡╨╜╤М тАФ ╤Б╨▒╤А╨░╤Б╤Л╨▓╨░╨╡╨╝ ╨▓╤Б╨╡ ╨╖╨░╨┤╨░╤З╨╕ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П
++            for task in DAILY_TASKS:
++                c.execute(
++                    "INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
++                    (user_id, task["id"], today)
++                )
++            conn.commit()
++            print(f"[DailyTasks] ╨б╨▒╤А╨╛╤Б ╨╖╨░╨┤╨░╤З ╨┤╨╗╤П user={user_id} ╨╜╨░ ╨┤╨░╤В╤Г {today}", flush=True)
++        else:
++            # ╨г╨▒╨╡╨╢╨┤╨░╨╡╨╝╤Б╤П, ╤З╤В╨╛ ╨▓╤Б╨╡ ╨╖╨░╨┤╨░╤З╨╕ ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╤О╤В (╨┤╨╗╤П ╨╜╨╛╨▓╤Л╤Е ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╜╤Л╤Е ╨╖╨░╨┤╨░╤З)
++            for task in DAILY_TASKS:
++                c.execute(
++                    "INSERT OR IGNORE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
++                    (user_id, task["id"], today)
++                )
++            conn.commit()
++    except Exception as e:
++        print(f"[DailyTasks] reset_user_tasks_if_new_day error: {e}", flush=True)
++    finally:
++        if conn:
++            conn.close()
++    return today
++
++def update_task_progress(user_id, task_id, increment=1):
++    """╨г╨▓╨╡╨╗╨╕╤З╨╕╨▓╨░╨╡╤В ╨┐╤А╨╛╨│╤А╨╡╤Б╤Б ╨╖╨░╨┤╨░╤З╨╕ (╨╡╤Б╨╗╨╕ ╨╜╨╡ ╨╖╨░╨▒╤А╨░╨╜╨░ ╨╕ ╨╜╨╡ ╨╜╨╛╨▓╤Л╨╣ ╨┤╨╡╨╜╤М)."""
++    today = reset_user_tasks_if_new_day(user_id)
++    conn = None
++    try:
++        conn = sqlite3.connect(DB_PATH)
++        c = conn.cursor()
++        # ╨г╨▒╨╡╨╢╨┤╨░╨╡╨╝╤Б╤П, ╤З╤В╨╛ ╨╖╨░╨┤╨░╤З╨░ ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╨╡╤В
++        c.execute(
++            "INSERT OR IGNORE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
++            (user_id, task_id, today)
++        )
++        # ╨г╨▓╨╡╨╗╨╕╤З╨╕╨▓╨░╨╡╨╝ progress ╤В╨╛╨╗╤М╨║╨╛ ╨╡╤Б╨╗╨╕ ╨╜╨╡ claimed
++        c.execute(
++            "UPDATE user_tasks SET progress = progress + ? WHERE user_id = ? AND task_id = ? AND claimed = 0",
++            (increment, user_id, task_id)
++        )
++        conn.commit()
++        print(f"[DailyTasks] ╨Ю╨▒╨╜╨╛╨▓╨╗╤С╨╜ ╨┐╤А╨╛╨│╤А╨╡╤Б╤Б user={user_id} task={task_id} +{increment}", flush=True)
++    except Exception as e:
++        print(f"[DailyTasks] update_task_progress error: {e}", flush=True)
++    finally:
++        if conn:
++            conn.close()
++
++
+ def verify_init_data(init_data):
+     """╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╤В ╨┐╨╛╨┤╨┐╨╕╤Б╤М Telegram initData ╤Б ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╨╡╨╝ HMAC-SHA256.
+     
+@@ -813,6 +897,15 @@ def get_balance():
+ 
+     user_id = request.args.get("user_id", "6267608438")
+     print(f"REQUEST: /api/balance user_id={user_id}", flush=True)
++
++    # тФАтФА ╨Я╤А╨╛╨▓╨╡╤А╨║╨░/╤Б╨▒╤А╨╛╤Б ╨╡╨╢╨╡╨┤╨╜╨╡╨▓╨╜╤Л╤Е ╨╖╨░╨┤╨░╨╜╨╕╨╣ ╨┐╤А╨╕ ╨▓╤Е╨╛╨┤╨╡ тФАтФА
++    try:
++        reset_user_tasks_if_new_day(user_id)
++        # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_login (╨╖╨░╤Е╨╛╨┤ ╨▓ ╨▒╨╛╤В╨░) ╨┐╤А╨╕ ╨║╨░╨╢╨┤╨╛╨╝ ╨╖╨░╨┐╤А╨╛╤Б╨╡ ╨▒╨░╨╗╨░╨╜╤Б╨░
++        update_task_progress(user_id, "daily_login")
++    except Exception as e:
++        print(f"[get_balance] reset tasks error: {e}", flush=True)
++
+     conn = None
+     try:
+         conn = sqlite3.connect(DB_PATH)
+@@ -842,6 +935,133 @@ def get_balance():
+     return jsonify({"balance_ton": 15.0, "balance_stars": 0.0})
+ 
+ 
++# тФАтФА Daily Tasks API тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
++
++@app.route("/api/tasks", methods=["GET"])
++def get_tasks():
++    """╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В ╤Б╨┐╨╕╤Б╨╛╨║ ╨╖╨░╨┤╨░╨╜╨╕╨╣ ╤Б ╨┐╤А╨╛╨│╤А╨╡╤Б╤Б╨╛╨╝ ╨╕ ╤Д╨╗╨░╨│╨╛╨╝ claimed ╨┤╨╗╤П ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П."""
++    user_id = request.args.get("user_id", "6267608438")
++
++    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░/╤Б╨▒╤А╨╛╤Б ╨╜╨╛╨▓╨╛╨│╨╛ ╨┤╨╜╤П
++    try:
++        reset_user_tasks_if_new_day(user_id)
++    except Exception as e:
++        print(f"[get_tasks] reset error: {e}", flush=True)
++
++    tasks_response = []
++    conn = None
++    try:
++        conn = sqlite3.connect(DB_PATH)
++        c = conn.cursor()
++        for task in DAILY_TASKS:
++            c.execute(
++                "SELECT progress, claimed, last_reset FROM user_tasks WHERE user_id = ? AND task_id = ?",
++                (user_id, task["id"])
++            )
++            row = c.fetchone()
++            progress = row[0] if row else 0
++            claimed = bool(row[1]) if row else False
++            tasks_response.append({
++                "id": task["id"],
++                "title": task["title"],
++                "goal": task["goal"],
++                "reward": task["reward"],
++                "progress": progress,
++                "claimed": claimed,
++            })
++    except Exception as e:
++        print(f"[get_tasks] error: {e}", flush=True)
++        return jsonify({"error": "Internal server error"}), 500
++    finally:
++        if conn:
++            conn.close()
++
++    return jsonify({"tasks": tasks_response})
++
++
++@app.route("/api/tasks/claim", methods=["POST"])
++def claim_task_reward():
++    """╨Я╤А╨╕╨╜╨╕╨╝╨░╨╡╤В { user_id, task_id }, ╨┐╤А╨╛╨▓╨╡╤А╤П╨╡╤В ╤Г╤Б╨╗╨╛╨▓╨╕╨╡ ╨╕ ╨╜╨░╤З╨╕╤Б╨╗╤П╨╡╤В ╨╜╨░╨│╤А╨░╨┤╤Г."""
++    data = request.get_json(force=True, silent=True)
++    if not data:
++        return jsonify({"error": "Invalid JSON body"}), 400
++
++    user_id = str(data.get("user_id", ""))
++    task_id = str(data.get("task_id", ""))
++
++    if not user_id or not task_id:
++        return jsonify({"error": "user_id and task_id are required"}), 400
++
++    # ╨Я╤А╨╛╨▓╨╡╤А╤П╨╡╨╝, ╤З╤В╨╛ task_id ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╨╡╤В
++    task_config = None
++    for t in DAILY_TASKS:
++        if t["id"] == task_id:
++            task_config = t
++            break
++    if not task_config:
++        return jsonify({"error": f"Unknown task_id: {task_id}"}), 400
++
++    # ╨Я╤А╨╛╨▓╨╡╤А╨║╨░/╤Б╨▒╤А╨╛╤Б ╨╜╨╛╨▓╨╛╨│╨╛ ╨┤╨╜╤П
++    try:
++        reset_user_tasks_if_new_day(user_id)
++    except Exception as e:
++        print(f"[claim_task] reset error: {e}", flush=True)
++
++    conn = None
++    try:
++        conn = sqlite3.connect(DB_PATH)
++        c = conn.cursor()
++
++        # ╨з╨╕╤В╨░╨╡╨╝ ╤В╨╡╨║╤Г╤Й╨╕╨╣ ╨┐╤А╨╛╨│╤А╨╡╤Б╤Б
++        c.execute(
++            "SELECT progress, claimed FROM user_tasks WHERE user_id = ? AND task_id = ?",
++            (user_id, task_id)
++        )
++        row = c.fetchone()
++        if not row:
++            return jsonify({"error": "Task not found for user"}), 404
++
++        progress = row[0]
++        claimed = bool(row[1])
++
++        if claimed:
++            return jsonify({"error": "Reward already claimed"}), 400
++
++        if progress < task_config["goal"]:
++            return jsonify({"error": "Task not completed yet"}), 400
++
++        # ╨Э╨░╤З╨╕╤Б╨╗╤П╨╡╨╝ ╨╜╨░╨│╤А╨░╨┤╤Г
++        reward = task_config["reward"]
++        c.execute(
++            "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
++            (reward, user_id)
++        )
++        # ╨Я╨╛╨╝╨╡╤З╨░╨╡╨╝ ╨║╨░╨║ ╨╖╨░╨▒╤А╨░╨╜╨╜╨╛╨╡
++        c.execute(
++            "UPDATE user_tasks SET claimed = 1 WHERE user_id = ? AND task_id = ?",
++            (user_id, task_id)
++        )
++        conn.commit()
++
++        # ╨Я╨╛╨╗╤Г╤З╨░╨╡╨╝ ╨╜╨╛╨▓╤Л╨╣ ╨▒╨░╨╗╨░╨╜╤Б
++        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
++        new_balance = round(c.fetchone()[0], 4)
++
++        print(f"[DailyTasks] ╨Э╨░╨│╤А╨░╨┤╨░ ╨▓╤Л╨┤╨░╨╜╨░ user={user_id} task={task_id} reward={reward} TON", flush=True)
++
++        return jsonify({
++            "success": True,
++            "reward": reward,
++            "balance_ton": new_balance,
++        })
++    except Exception as e:
++        print(f"[claim_task] error: {e}", flush=True)
++        return jsonify({"error": "Internal server error"}), 500
++    finally:
++        if conn:
++            conn.close()
++
++
+ # тФАтФА Referral: ╤Г╤Б╤В╨░╨╜╨╛╨▓╨╕╤В╤М ╤А╨╡╤Д╨╡╤А╨╡╤А╨░ тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+ @app.route("/api/set_referrer", methods=["POST"])
+ def set_referrer():
+@@ -1188,6 +1408,11 @@ def play_game():
+ 
+     if game_type == "crash":
+         crash_point = generate_crash_point()
++        # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_bet (╤Б╤В╨░╨▓╨║╨░ ╨▓ ╨║╤А╨░╤И)
++        try:
++            update_task_progress(user_id, "daily_bet")
++        except Exception as e:
++            print(f"[play_game] task progress error: {e}", flush=True)
+         return jsonify({"crash_point": crash_point, "user_id": user_id})
+ 
+     elif game_type == "case":
+@@ -1228,6 +1453,12 @@ def play_game():
+             "user_id": user_id
+         })
+ 
++    # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_bet ╨┤╨╗╤П ╨▓╤Б╨╡╤Е ╨┐╤А╨╛╤З╨╕╤Е game_type ╤Б bet_amount
++    try:
++        update_task_progress(user_id, "daily_bet")
++    except Exception as e:
++        print(f"[play_game] task progress error: {e}", flush=True)
++
+     else:
+         return jsonify({"error": f"Unknown game_type: {game_type}"}), 400
+ 
+@@ -1275,6 +1506,15 @@ def plinko_drop():
+ 
+     win_amount = round(bet_amount * multiplier, 2)
+     print(f"[Plinko] Result: {multiplier}x, slotIndex={slot_index}, bet={bet_amount}, win={win_amount}")
++
++    # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_bet
++    user_id = str(data.get("user_id", ""))
++    if user_id:
++        try:
++            update_task_progress(user_id, "daily_bet")
++        except Exception as e:
++            print(f"[plinko_drop] task progress error: {e}", flush=True)
++
+     return jsonify({
+         "slotIndex": slot_index,
+         "multiplier": multiplier,
+@@ -1416,6 +1656,13 @@ def open_case():
+         return jsonify({"error": "Database error"}), 500
+ 
+     print(f"[Case] Paid case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}, case_id={case_id}")
++
++    # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_bet
++    try:
++        update_task_progress(user_id, "daily_bet")
++    except Exception as e:
++        print(f"[open_case] task progress error: {e}", flush=True)
++
+     return jsonify({"success": True, "item": {**item, "id": item_id}})
+ 
+ 
+@@ -2591,6 +2838,12 @@ def handle_crash_bet(data):
+     emit('crash_bet_result', {'success': True, 'bet': bet})
+     print(f"[Crash] ╨Я╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╡ ╤Б╤В╨░╨▓╨║╨╕ ╨╛╤В╨┐╤А╨░╨▓╨╗╨╡╨╜╨╛ {username} ({user_id})")
+ 
++    # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_crash (╤Б╤Л╨│╤А╨░╤В╤М ╨▓ ╨║╤А╨░╤И)
++    try:
++        update_task_progress(user_id, "daily_crash")
++    except Exception as e:
++        print(f"[Crash] task progress error: {e}", flush=True)
++
+     socketio.emit('crash_players_update', {'players': players_snapshot})
+     print(f"[Crash] ╨б╤В╨░╨▓╨║╨░ {username} ({user_id}): {bet} TON. ╨Ш╨│╤А╨╛╨║╨╛╨▓ ╨▓ ╨┐╤Г╨╗╨╡: {len(CRASH_PLAYERS)}")
+ 
+@@ -2681,6 +2934,12 @@ def handle_crash_cashout(data):
+     })
+     print(f"[CrashCashout] ╨г╤Б╨┐╨╡╤Е: {username} ({user_id}) ╨╖╨░╨▒╤А╨░╨╗ {win_amount:.2f} TON ╨┐╨╛ {multiplier}x")
+ 
++    # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_win
++    try:
++        update_task_progress(user_id, "daily_win")
++    except Exception as e:
++        print(f"[CrashCashout] task progress error: {e}", flush=True)
++
+ 
+ # тФАтФА Hockey WebSocket Handlers тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
+ @socketio.on('hockey_bet')
+@@ -2755,6 +3014,12 @@ def handle_hockey_bet(data):
+     emit('hockey_bet_result', {'success': True, 'bet': bet})
+     print(f"[Hockey] ╨б╤В╨░╨▓╨║╨░ {username} ({user_id}): {bet} TON. ╨Ш╨│╤А╨╛╨║╨╛╨▓ ╨▓ ╨┐╤Г╨╗╨╡: {len(HOCKEY_PLAYERS)}")
+ 
++    # ╨Ю╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╖╨░╨┤╨░╨╜╨╕╨╡ daily_bet
++    try:
++        update_task_progress(user_id, "daily_bet")
++    except Exception as e:
++        print(f"[Hockey] task progress error: {e}", flush=True)
++
+ 
+ @socketio.on('connect')
+ def handle_connect():
+diff --git a/src/api.ts b/src/api.ts
+index 6f87024..8309243 100644
+--- a/src/api.ts
++++ b/src/api.ts
+@@ -192,4 +192,72 @@ export const getFloorPrice = async (collectionName: string) => {
+     throw new Error(`getFloorPrice failed: ${res.status} ${res.statusText}`);
+   }
+   return res.json();
++};
++
++// тФАтФА Daily Tasks API тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА
++
++export interface DailyTask {
++  id: string;
++  title: string;
++  goal: number;
++  reward: number;
++  progress: number;
++  claimed: boolean;
++}
++
++export interface TasksResponse {
++  tasks: DailyTask[];
++}
++
++export const fetchTasks = async (userId: string): Promise<DailyTask[]> => {
++  const url = `${CONFIG.API_URL}/api/tasks?user_id=${userId}`;
++  console.log('FETCH:', url);
++  try {
++    const res = await fetch(url, {
++      headers: {
++        'Content-Type': 'application/json',
++        'ngrok-skip-browser-warning': 'true',
++      },
++    });
++    if (!res.ok) {
++      console.warn('fetchTasks failed:', res.status, res.statusText);
++      return [];
++    }
++    const data: TasksResponse = await res.json();
++    return data.tasks || [];
++  } catch (err) {
++    console.warn('fetchTasks error:', err);
++    return [];
++  }
++};
++
++export interface ClaimTaskResult {
++  success: boolean;
++  reward: number;
++  balance_ton: number;
++}
++
++export const claimTask = async (userId: string, taskId: string): Promise<ClaimTaskResult | null> => {
++  const url = `${CONFIG.API_URL}/api/tasks/claim`;
++  console.log('FETCH:', url);
++  try {
++    const res = await fetch(url, {
++      method: 'POST',
++      headers: {
++        'Content-Type': 'application/json',
++        'ngrok-skip-browser-warning': 'true',
++      },
++      body: JSON.stringify({ user_id: userId, task_id: taskId }),
++    });
++    if (!res.ok) {
++      const errData = await res.json().catch(() => ({}));
++      console.warn('claimTask failed:', res.status, errData);
++      return null;
++    }
++    const data: ClaimTaskResult = await res.json();
++    return data;
++  } catch (err) {
++    console.warn('claimTask error:', err);
++    return null;
++  }
+ };
+\ No newline at end of file
+diff --git a/src/components/BottomNav.tsx b/src/components/BottomNav.tsx
+index 23486a1..0655a30 100644
+--- a/src/components/BottomNav.tsx
++++ b/src/components/BottomNav.tsx
+@@ -1,7 +1,6 @@
+-import { ASSETS } from '../assets';
+-import { ShoppingBag, Swords, User, Trophy, Backpack } from 'lucide-react';
++import { Swords, User, Trophy, Backpack, ListChecks } from 'lucide-react';
+ 
+-type Tab = 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory';
++type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory' | 'bet_history' | 'tasks';
+ 
+ interface BottomNavProps {
+   activeTab: Tab;
+@@ -10,7 +9,7 @@ interface BottomNavProps {
+ 
+ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+   const tabs: { id: Tab; icon: React.ReactNode }[] = [
+-    { id: 'market',      icon: <ShoppingBag size={20} /> },
++    { id: 'tasks',       icon: <ListChecks size={20} /> },
+     { id: 'game',        icon: <Swords size={20} /> },
+     { id: 'inventory',   icon: <Backpack size={20} /> },
+     { id: 'leaderboard', icon: <Trophy size={20} /> },
+@@ -18,6 +17,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+   ];
+ 
+   const labelMap: Record<string, string> = {
++    tasks: '╨Ч╨░╨┤╨░╨╜╨╕╤П',
+     market: '╨Ь╨░╤А╨║╨╡╤В',
+     game: '╨Ш╨│╤А╤Л',
+     inventory: '╨Ш╨╜╨▓╨╡╨╜╤В╨░╤А╤М',
+diff --git a/src/components/Root.tsx b/src/components/Root.tsx
+index 6e1cda1..1bd698c 100644
+--- a/src/components/Root.tsx
++++ b/src/components/Root.tsx
+@@ -15,6 +15,7 @@ import { CrashPage } from './CrashPage';
+ import { PvP2Page } from './PvP2Page';
+ import { ProfilePage } from './ProfilePage';
+ import { InventoryPage } from './InventoryPage';
++import { TasksPage } from './TasksPage';
+ import { GiftShop } from './GiftShop';
+ import { TopUpPage } from './TopUpPage';
+ import { NewsPage } from './NewsPage';
+@@ -27,7 +28,7 @@ import { publicUrl } from '../helpers/publicUrl';
+ import { useTelegram } from '../hooks/useTelegram';
+ import { CONFIG } from '../config';
+ 
+-export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory' | 'bet_history';
++export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory' | 'bet_history' | 'tasks';
+ export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
+ 
+ export function Root() {
+@@ -143,6 +144,9 @@ export function Root() {
+       {activeTab === 'inventory' && (
+         <InventoryPage onToast={showToast} onBalanceChange={refreshBalance} />
+       )}
++      {activeTab === 'tasks' && (
++        <TasksPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />
++      )}
+       {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} balance={balance} />}
+       {activeTab === 'market' && (
+         <GiftShop balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />
+diff --git a/src/components/TasksPage.tsx b/src/components/TasksPage.tsx
+new file mode 100644
+index 0000000..a4d2a9c
+--- /dev/null
++++ b/src/components/TasksPage.tsx
+@@ -0,0 +1,250 @@
++import { useState, useEffect, useCallback } from 'react';
++import { useTelegram } from '../hooks/useTelegram';
++import { fetchTasks, claimTask, type DailyTask } from '../api';
++import { colors, spacing, radius, gradients } from '../theme';
++import { Clock, Gift, Zap, Trophy, Target, Gamepad2 } from 'lucide-react';
++
++const TASK_ICONS: Record<string, React.ReactNode> = {
++  daily_login: <Zap size={22} />,
++  daily_bet: <Gamepad2 size={22} />,
++  daily_win: <Trophy size={22} />,
++  daily_crash: <Target size={22} />,
++};
++
++const TASK_COLORS: Record<string, string> = {
++  daily_login: '#a855f7',
++  daily_bet: '#3b82f6',
++  daily_win: '#22c55e',
++  daily_crash: '#ef4444',
++};
++
++interface Props {
++  balance: number;
++  onUpdateBalance: (amount: number) => void;
++  onToast?: (msg: string) => void;
++}
++
++export function TasksPage({ balance, onUpdateBalance, onToast }: Props) {
++  const { user } = useTelegram();
++  const userId = String(user?.id ?? '6267608438');
++  const [tasks, setTasks] = useState<DailyTask[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [claimingId, setClaimingId] = useState<string | null>(null);
++  const [timeLeft, setTimeLeft] = useState('');
++
++  // ╨а╨░╤Б╤З╤С╤В ╨▓╤А╨╡╨╝╨╡╨╜╨╕ ╨┤╨╛ ╤Б╨╗╨╡╨┤╤Г╤О╤Й╨╡╨│╨╛ ╤Б╨▒╤А╨╛╤Б╨░ (00:00 UTC)
++  const updateTimer = useCallback(() => {
++    const now = new Date();
++    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
++    const diffMs = tomorrow.getTime() - now.getTime();
++    const hours = Math.floor(diffMs / 3600000);
++    const minutes = Math.floor((diffMs % 3600000) / 60000);
++    setTimeLeft(`${hours}╤З ${minutes}╨╝`);
++  }, []);
++
++  useEffect(() => {
++    updateTimer();
++    const interval = setInterval(updateTimer, 30000);
++    return () => clearInterval(interval);
++  }, [updateTimer]);
++
++  const loadTasks = useCallback(() => {
++    setLoading(true);
++    fetchTasks(userId).then((data) => {
++      setTasks(data);
++      setLoading(false);
++    });
++  }, [userId]);
++
++  useEffect(() => {
++    loadTasks();
++  }, [loadTasks, balance]);
++
++  const handleClaim = async (taskId: string) => {
++    setClaimingId(taskId);
++    const result = await claimTask(userId, taskId);
++    setClaimingId(null);
++    if (result && result.success) {
++      onUpdateBalance(result.balance_ton - balance);
++      onToast?.('ЁЯОЙ ╨Э╨░╨│╤А╨░╨┤╨░ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨░!');
++      loadTasks();
++    } else {
++      onToast?.('тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨┐╤А╨╕ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╕╨╕ ╨╜╨░╨│╤А╨░╨┤╤Л');
++    }
++  };
++
++
++
++  return (
++    <div style={{ padding: spacing.md, color: colors.text, paddingBottom: 140 }}>
++      {/* ╨Ч╨░╨│╨╛╨╗╨╛╨▓╨╛╨║ */}
++      <div style={{ marginBottom: spacing.lg }}>
++        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 'bold', letterSpacing: 1 }}>
++          ╨Х╨╢╨╡╨┤╨╜╨╡╨▓╨╜╤Л╨╡ ╨╖╨░╨┤╨░╨╜╨╕╤П
++        </h2>
++        <div style={{
++          display: 'flex',
++          alignItems: 'center',
++          gap: 6,
++          marginTop: 8,
++          color: colors.textMuted,
++          fontSize: 13,
++        }}>
++          <Clock size={14} />
++          <span>╨Ф╨╛ ╤Б╨▒╤А╨╛╤Б╨░: {timeLeft}</span>
++        </div>
++      </div>
++
++      {loading ? (
++        <div style={{ textAlign: 'center', padding: 40, color: colors.textMuted }}>
++          ╨Ч╨░╨│╤А╤Г╨╖╨║╨░ ╨╖╨░╨┤╨░╨╜╨╕╨╣...
++        </div>
++      ) : tasks.length === 0 ? (
++        <div style={{ textAlign: 'center', padding: 40, color: colors.textMuted }}>
++          ╨Э╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨╜╤Л╤Е ╨╖╨░╨┤╨░╨╜╨╕╨╣
++        </div>
++      ) : (
++        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
++          {tasks.map((task) => {
++            const isCompleted = task.progress >= task.goal;
++            const isClaimed = task.claimed;
++            const progressPercent = Math.min((task.progress / task.goal) * 100, 100);
++            const taskColor = TASK_COLORS[task.id] || colors.primary;
++
++
++            return (
++              <div
++                key={task.id}
++                style={{
++                  background: colors.bgCard,
++                  borderRadius: radius.md,
++                  padding: '14px 16px',
++                  border: `1px solid ${isClaimed ? 'rgba(34,197,94,0.2)' : isCompleted ? `${taskColor}44` : colors.border}`,
++                  transition: 'all 0.2s',
++                  opacity: isClaimed ? 0.7 : 1,
++                }}
++              >
++                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
++                  {/* ╨Ш╨║╨╛╨╜╨║╨░ */}
++                  <div style={{
++                    width: 42,
++                    height: 42,
++                    borderRadius: '50%',
++                    background: `${taskColor}22`,
++                    display: 'flex',
++                    alignItems: 'center',
++                    justifyContent: 'center',
++                    color: taskColor,
++                    flexShrink: 0,
++                  }}>
++                    {TASK_ICONS[task.id] || <Gift size={22} />}
++                  </div>
++
++                  {/* ╨Э╨░╨╖╨▓╨░╨╜╨╕╨╡ ╨╕ ╨┐╤А╨╛╨│╤А╨╡╤Б╤Б */}
++                  <div style={{ flex: 1, minWidth: 0 }}>
++                    <div style={{
++                      fontWeight: 'bold',
++                      fontSize: 14,
++                      marginBottom: 2,
++                      display: 'flex',
++                      alignItems: 'center',
++                      gap: 6,
++                    }}>
++                      {task.title}
++                      {isClaimed && <span style={{ fontSize: 12 }}>тЬЕ</span>}
++                    </div>
++
++                    {/* ╨Я╤А╨╛╨│╤А╨╡╤Б╤Б-╨▒╨░╤А */}
++                    <div style={{
++                      width: '100%',
++                      height: 6,
++                      background: 'rgba(255,255,255,0.08)',
++                      borderRadius: 3,
++                      overflow: 'hidden',
++                      marginTop: 6,
++                      marginBottom: 4,
++                    }}>
++                      <div style={{
++                        width: `${progressPercent}%`,
++                        height: '100%',
++                        background: isClaimed
++                          ? 'linear-gradient(90deg, #22c55e, #16a34a)'
++                          : `linear-gradient(90deg, ${taskColor}, ${taskColor}aa)`,
++                        borderRadius: 3,
++                        transition: 'width 0.5s ease',
++                      }} />
++                    </div>
++
++                    <div style={{
++                      display: 'flex',
++                      justifyContent: 'space-between',
++                      alignItems: 'center',
++                      fontSize: 12,
++                      color: colors.textMuted,
++                    }}>
++                      <span>{task.progress}/{task.goal}</span>
++                      <span>+{task.reward.toFixed(1)} TON</span>
++                    </div>
++                  </div>
++
++                  {/* ╨Ъ╨╜╨╛╨┐╨║╨░/╤Б╤В╨░╤В╤Г╤Б */}
++                  <div style={{ flexShrink: 0 }}>
++                    {isClaimed ? (
++                      <div style={{
++                        fontSize: 11,
++                        color: '#22c55e',
++                        fontWeight: 'bold',
++                        textAlign: 'center',
++                      }}>
++                        ╨Я╨╛╨╗╤Г╤З╨╡╨╜╨╛
++                      </div>
++                    ) : isCompleted ? (
++                      <button
++                        onClick={() => handleClaim(task.id)}
++                        disabled={claimingId === task.id}
++                        style={{
++                          padding: '8px 14px',
++                          border: 'none',
++                          borderRadius: radius.pill,
++                          background: gradients.primary,
++                          color: '#fff',
++                          fontWeight: 'bold',
++                          fontSize: 12,
++                          cursor: 'pointer',
++                          transition: 'transform 0.1s',
++                          opacity: claimingId === task.id ? 0.6 : 1,
++                        }}
++                        onMouseDown={(e) => {
++                          (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)';
++                        }}
++                        onMouseUp={(e) => {
++                          (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
++                        }}
++                      >
++                        {claimingId === task.id ? '...' : '╨Ч╨░╨▒╤А╨░╤В╤М'}
++                      </button>
++                    ) : (
++                      <div style={{
++                        fontSize: 11,
++                        color: colors.textDim,
++                        fontWeight: 'bold',
++                        textAlign: 'center',
++                      }}>
++                        ╨Т ╨┐╤А╨╛╤Ж╨╡╤Б╤Б╨╡
++                      </div>
++                    )}
++                  </div>
++                </div>
++              </div>
++            );
++          })}
++        </div>
++      )}
++
++      {/* ╨Я╨╛╨┤╨┐╨╕╤Б╤М */}
++      <div style={{ textAlign: 'center', color: '#666', fontSize: 12, marginTop: 32, marginBottom: 16 }}>
++        ╨Ч╨░╨┤╨░╨╜╨╕╤П ╨╛╨▒╨╜╨╛╨▓╨╗╤П╤О╤В╤Б╤П ╨║╨░╨╢╨┤╤Л╨╣ ╨┤╨╡╨╜╤М ╨▓ 00:00 UTC
++      </div>
++    </div>
++  );
++}

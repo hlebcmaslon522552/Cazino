@@ -4,7 +4,7 @@
     "name": "Resistance Dogs",
     "image": "/nft_images/resistance_dog.webp",
     "collection": "Resistance Dogs",
-    "floor": 517.58,
+    "floor": 569,
     "rarity": "Common"
   },
   {
@@ -12,7 +12,7 @@
     "name": "Lucky Lockets",
     "image": "/nft_images/lucky_locket.webp",
     "collection": "Lucky Lockets",
-    "floor": 14.77,
+    "floor": 17,
     "rarity": "Common"
   },
   {
@@ -20,7 +20,7 @@
     "name": "Mirage Lamps",
     "image": "/nft_images/mirage_lamp.webp",
     "collection": "Mirage Lamps",
-    "floor": 4.17,
+    "floor": 5,
     "rarity": "Common"
   },
   {
@@ -28,7 +28,7 @@
     "name": "Fine Pens",
     "image": "/nft_images/fine_pen.webp",
     "collection": "Fine Pens",
-    "floor": 8.3,
+    "floor": 9,
     "rarity": "Common"
   },
   {
@@ -36,315 +36,315 @@
     "name": "Algorithm Cup",
     "image": "/nft_images/algorithm_cup.webp",
     "collection": "Algorithm Cup",
-    "floor": 1326.0
+    "floor": 3450
   },
   {
     "id": "artisan_brick",
     "name": "Artisan Brick",
     "image": "/nft_images/artisan_brick.webp",
     "collection": "Artisan Brick",
-    "floor": 71.91
+    "floor": 83
   },
   {
     "id": "astral_shard",
     "name": "Astral Shard",
     "image": "/nft_images/astral_shard.webp",
     "collection": "Astral Shard",
-    "floor": 120.819
+    "floor": 148
   },
   {
     "id": "berry_box",
     "name": "Berry Box",
     "image": "/nft_images/berry_box.webp",
     "collection": "Berry Box",
-    "floor": 121.613
+    "floor": 10
   },
   {
     "id": "big_year",
     "name": "Big Year",
     "image": "/nft_images/big_year.webp",
     "collection": "Big Year",
-    "floor": 3.8862
+    "floor": 5
   },
   {
     "id": "bling_binky",
     "name": "Bling Binky",
     "image": "/nft_images/bling_binky.webp",
     "collection": "Bling Binky",
-    "floor": 27.4074
+    "floor": 30
   },
   {
     "id": "bonded_ring",
     "name": "Bonded Ring",
     "image": "/nft_images/bonded_ring.webp",
     "collection": "Bonded Ring",
-    "floor": 43.86
+    "floor": 49
   },
   {
     "id": "bow_tie",
     "name": "Bow Tie",
     "image": "/nft_images/bow_tie.webp",
     "collection": "Bow Tie",
-    "floor": 5.814
+    "floor": 7
   },
   {
     "id": "bunny_muffin",
     "name": "Bunny Muffin",
     "image": "/nft_images/bunny_muffin.webp",
     "collection": "Bunny Muffin",
-    "floor": 133.617
+    "floor": 9
   },
   {
     "id": "candy_cane",
     "name": "Candy Cane",
     "image": "/nft_images/candy_cane.webp",
     "collection": "Candy Cane",
-    "floor": 3.8862
+    "floor": 5
   },
   {
     "id": "chill_flame",
     "name": "Chill Flame",
     "image": "/nft_images/chill_flame.webp",
     "collection": "Chill Flame",
-    "floor": 3.876
+    "floor": 5
   },
   {
     "id": "clover_pin",
     "name": "Clover Pin",
     "image": "/nft_images/clover_pin.webp",
     "collection": "Clover Pin",
-    "floor": 5.049
+    "floor": 6
   },
   {
     "id": "cookie_heart",
     "name": "Cookie Heart",
     "image": "/nft_images/cookie_heart.webp",
     "collection": "Cookie Heart",
-    "floor": 5.0459
+    "floor": 6
   },
   {
     "id": "crystal_ball",
     "name": "Crystal Ball",
     "image": "/nft_images/crystal_ball.webp",
     "collection": "Crystal Ball",
-    "floor": 89.474
+    "floor": 15
   },
   {
     "id": "cupid_charm",
     "name": "Cupid Charm",
     "image": "/nft_images/cupid_charm.webp",
     "collection": "Cupid Charm",
-    "floor": 22.8582
+    "floor": 27
   },
   {
     "id": "desk_calendar",
     "name": "Desk Calendar",
     "image": "/nft_images/desk_calendar.webp",
     "collection": "Desk Calendar",
-    "floor": 38.367
+    "floor": 7
   },
   {
     "id": "diamond_ring",
     "name": "Diamond Ring",
     "image": "/nft_images/diamond_ring.webp",
     "collection": "Diamond Ring",
-    "floor": 16.176
+    "floor": 35
   },
   {
     "id": "durovs_cap",
     "name": "Durovs Cap",
     "image": "/nft_images/durovs_cap.webp",
     "collection": "Durovs Cap",
-    "floor": 420.24
+    "floor": 463
   },
   {
     "id": "durovs_glasses",
     "name": "Durovs Glasses",
     "image": "/nft_images/durovs_glasses.webp",
     "collection": "Durovs Glasses",
-    "floor": 138.822
+    "floor": 148
   },
   {
     "id": "easter_egg",
     "name": "Easter Egg",
     "image": "/nft_images/easter_egg.webp",
     "collection": "Easter Egg",
-    "floor": 4.1718
+    "floor": 5
   },
   {
     "id": "electric_skull",
     "name": "Electric Skull",
     "image": "/nft_images/electric_skull.webp",
     "collection": "Electric Skull",
-    "floor": 69.279
+    "floor": 35
   },
   {
     "id": "eternal_candle",
     "name": "Eternal Candle",
     "image": "/nft_images/eternal_candle.webp",
     "collection": "Eternal Candle",
-    "floor": 141.615
+    "floor": 7
   },
   {
     "id": "eternal_rose",
     "name": "Eternal Rose",
     "image": "/nft_images/eternal_rose.webp",
     "collection": "Eternal Rose",
-    "floor": 78.565
+    "floor": 35
   },
   {
     "id": "evil_eye",
     "name": "Evil Eye",
     "image": "/nft_images/evil_eye.webp",
     "collection": "Evil Eye",
-    "floor": 73.357
+    "floor": 13
   },
   {
     "id": "faith_amulet",
     "name": "Faith Amulet",
     "image": "/nft_images/faith_amulet.webp",
     "collection": "Faith Amulet",
-    "floor": 5.712
+    "floor": 7
   },
   {
     "id": "flying_broom",
     "name": "Flying Broom",
     "image": "/nft_images/flying_broom.webp",
     "collection": "Flying Broom",
-    "floor": 39.605
+    "floor": 15
   },
   {
     "id": "fresh_socks",
     "name": "Fresh Socks",
     "image": "/nft_images/fresh_socks.webp",
     "collection": "Fresh Socks",
-    "floor": 4.488
+    "floor": 6
   },
   {
     "id": "gem_signet",
     "name": "Gem Signet",
     "image": "/nft_images/gem_signet.webp",
     "collection": "Gem Signet",
-    "floor": 35.583
+    "floor": 73
   },
   {
     "id": "genie_lamp",
     "name": "Genie Lamp",
     "image": "/nft_images/genie_lamp.webp",
     "collection": "Genie Lamp",
-    "floor": 38.7294
+    "floor": 40
   },
   {
     "id": "ginger_cookie",
     "name": "Ginger Cookie",
     "image": "/nft_images/ginger_cookie.webp",
     "collection": "Ginger Cookie",
-    "floor": 140.717
+    "floor": 6
   },
   {
     "id": "hanging_star",
     "name": "Hanging Star",
     "image": "/nft_images/hanging_star.webp",
     "collection": "Hanging Star",
-    "floor": 92.128
+    "floor": 11
   },
   {
     "id": "happy_brownie",
     "name": "Happy Brownie",
     "image": "/nft_images/happy_brownie.webp",
     "collection": "Happy Brownie",
-    "floor": 4.2386
+    "floor": 5
   },
   {
     "id": "heart_locket",
     "name": "Heart Locket",
     "image": "/nft_images/heart_locket.webp",
     "collection": "Heart Locket",
-    "floor": 15.887
+    "floor": 1700
   },
   {
     "id": "heroic_helmet",
     "name": "Heroic Helmet",
     "image": "/nft_images/heroic_helmet.webp",
     "collection": "Heroic Helmet",
-    "floor": 176.8476
+    "floor": 231
   },
   {
     "id": "hex_pot",
     "name": "Hex Pot",
     "image": "/nft_images/hex_pot.webp",
     "collection": "Hex Pot",
-    "floor": 94.231
+    "floor": 6
   },
   {
     "id": "holiday_drink",
     "name": "Holiday Drink",
     "image": "/nft_images/holiday_drink.webp",
     "collection": "Holiday Drink",
-    "floor": 4.488
+    "floor": 6
   },
   {
     "id": "homemade_cake",
     "name": "Homemade Cake",
     "image": "/nft_images/homemade_cake.webp",
     "collection": "Homemade Cake",
-    "floor": 21.019
+    "floor": 6
   },
   {
     "id": "hypno_lollipop",
     "name": "Hypno Lollipop",
     "image": "/nft_images/hypno_lollipop.webp",
     "collection": "Hypno Lollipop",
-    "floor": 3.344
+    "floor": 6
   },
   {
     "id": "ice_cream",
     "name": "Ice Cream",
     "image": "/nft_images/ice_cream.webp",
     "collection": "Ice Cream",
-    "floor": 3.9056
+    "floor": 5
   },
   {
     "id": "input_key",
     "name": "Input Key",
     "image": "/nft_images/input_key.webp",
     "collection": "Input Key",
-    "floor": 6.273
+    "floor": 7
   },
   {
     "id": "instant_ramen",
     "name": "Instant Ramen",
     "image": "/nft_images/instant_ramen.webp",
     "collection": "Instant Ramen",
-    "floor": 85.805
+    "floor": 5
   },
   {
     "id": "intelligence_cup",
     "name": "Intelligence Cup",
     "image": "/nft_images/intelligence_cup.webp",
     "collection": "Intelligence Cup",
-    "floor": 1200.03
+    "floor": 3099
   },
   {
     "id": "ion_gem",
     "name": "Ion Gem",
     "image": "/nft_images/ion_gem.webp",
     "collection": "Ion Gem",
-    "floor": 9.549
+    "floor": 85
   },
   {
     "id": "ionic_dryer",
     "name": "Ionic Dryer",
     "image": "/nft_images/ionic_dryer.webp",
     "collection": "Ionic Dryer",
-    "floor": 15.3
+    "floor": 18
   },
   {
     "id": "jack_in_the_box",
     "name": "Jack In The Box",
     "image": "/nft_images/jack_in_the_box.webp",
     "collection": "Jack In The Box",
-    "floor": 4.9776
+    "floor": 6
   },
   {
     "id": "jackinthebox",
@@ -358,510 +358,510 @@
     "name": "Jelly Bunny",
     "image": "/nft_images/jelly_bunny.webp",
     "collection": "Jelly Bunny",
-    "floor": 13.015
+    "floor": 10
   },
   {
     "id": "jester_hat",
     "name": "Jester Hat",
     "image": "/nft_images/jester_hat.webp",
     "collection": "Jester Hat",
-    "floor": 28.643
+    "floor": 5
   },
   {
     "id": "jingle_bells",
     "name": "Jingle Bells",
     "image": "/nft_images/jingle_bells.webp",
     "collection": "Jingle Bells",
-    "floor": 10.7712
+    "floor": 11
   },
   {
     "id": "jolly_chimp",
     "name": "Jolly Chimp",
     "image": "/nft_images/jolly_chimp.webp",
     "collection": "Jolly Chimp",
-    "floor": 7.446
+    "floor": 9
   },
   {
     "id": "joyful_bundle",
     "name": "Joyful Bundle",
     "image": "/nft_images/joyful_bundle.webp",
     "collection": "Joyful Bundle",
-    "floor": 7.9356
+    "floor": 11
   },
   {
     "id": "khabibs_papakha",
     "name": "Khabibs Papakha",
     "image": "/nft_images/khabibs_papakha.webp",
     "collection": "Khabibs Papakha",
-    "floor": 70.277
+    "floor": 29
   },
   {
     "id": "kissed_frog",
     "name": "Kissed Frog",
     "image": "/nft_images/kissed_frog.webp",
     "collection": "Kissed Frog",
-    "floor": 26.451
+    "floor": 66
   },
   {
     "id": "liberty_figure",
     "name": "Liberty Figure",
     "image": "/nft_images/liberty_figure.webp",
     "collection": "Liberty Figure",
-    "floor": 5.1102
+    "floor": 6
   },
   {
     "id": "light_sword",
     "name": "Light Sword",
     "image": "/nft_images/light_sword.webp",
     "collection": "Light Sword",
-    "floor": 6.4083
+    "floor": 7
   },
   {
     "id": "lol_pop",
     "name": "Lol Pop",
     "image": "/nft_images/lol_pop.webp",
     "collection": "Lol Pop",
-    "floor": 93.762
+    "floor": 5
   },
   {
     "id": "loot_bag",
     "name": "Loot Bag",
     "image": "/nft_images/loot_bag.webp",
     "collection": "Loot Bag",
-    "floor": 136.4352
+    "floor": 150
   },
   {
     "id": "love_candle",
     "name": "Love Candle",
     "image": "/nft_images/love_candle.webp",
     "collection": "Love Candle",
-    "floor": 130.66
+    "floor": 13
   },
   {
     "id": "love_potion",
     "name": "Love Potion",
     "image": "/nft_images/love_potion.webp",
     "collection": "Love Potion",
-    "floor": 14.79
+    "floor": 17
   },
   {
     "id": "low_rider",
     "name": "Low Rider",
     "image": "/nft_images/low_rider.webp",
     "collection": "Low Rider",
-    "floor": 60.9858
+    "floor": 70
   },
   {
     "id": "lunar_snake",
     "name": "Lunar Snake",
     "image": "/nft_images/lunar_snake.webp",
     "collection": "Lunar Snake",
-    "floor": 3.876
+    "floor": 5
   },
   {
     "id": "lush_bouquet",
     "name": "Lush Bouquet",
     "image": "/nft_images/lush_bouquet.webp",
     "collection": "Lush Bouquet",
-    "floor": 5.8752
+    "floor": 7
   },
   {
     "id": "mad_pumpkin",
     "name": "Mad Pumpkin",
     "image": "/nft_images/mad_pumpkin.webp",
     "collection": "Mad Pumpkin",
-    "floor": 135.868
+    "floor": 19
   },
   {
     "id": "magic_potion",
     "name": "Magic Potion",
     "image": "/nft_images/magic_potion.webp",
     "collection": "Magic Potion",
-    "floor": 125.745
+    "floor": 75
   },
   {
     "id": "mighty_arm",
     "name": "Mighty Arm",
     "image": "/nft_images/mighty_arm.webp",
     "collection": "Mighty Arm",
-    "floor": 127.4592
+    "floor": 150
   },
   {
     "id": "mini_oscar",
     "name": "Mini Oscar",
     "image": "/nft_images/mini_oscar.webp",
     "collection": "Mini Oscar",
-    "floor": 17.389
+    "floor": 115
   },
   {
     "id": "money_pot",
     "name": "Money Pot",
     "image": "/nft_images/money_pot.webp",
     "collection": "Money Pot",
-    "floor": 5.2938
+    "floor": 6
   },
   {
     "id": "mood_pack",
     "name": "Mood Pack",
     "image": "/nft_images/mood_pack.webp",
     "collection": "Mood Pack",
-    "floor": 89.626
+    "floor": 5
   },
   {
     "id": "moon_pendant",
     "name": "Moon Pendant",
     "image": "/nft_images/moon_pendant.webp",
     "collection": "Moon Pendant",
-    "floor": 6.3444
+    "floor": 7
   },
   {
     "id": "mousse_cake",
     "name": "Mousse Cake",
     "image": "/nft_images/mousse_cake.webp",
     "collection": "Mousse Cake",
-    "floor": 5.202
+    "floor": 6
   },
   {
     "id": "nail_bracelet",
     "name": "Nail Bracelet",
     "image": "/nft_images/nail_bracelet.webp",
     "collection": "Nail Bracelet",
-    "floor": 4.227
+    "floor": 149
   },
   {
     "id": "neko_helmet",
     "name": "Neko Helmet",
     "image": "/nft_images/neko_helmet.webp",
     "collection": "Neko Helmet",
-    "floor": 39.27
+    "floor": 45
   },
   {
     "id": "party_sparkler",
     "name": "Party Sparkler",
     "image": "/nft_images/party_sparkler.webp",
     "collection": "Party Sparkler",
-    "floor": 4.896
+    "floor": 6
   },
   {
     "id": "perfume_bottle",
     "name": "Perfume Bottle",
     "image": "/nft_images/perfume_bottle.webp",
     "collection": "Perfume Bottle",
-    "floor": 83.1096
+    "floor": 95
   },
   {
     "id": "pet_snake",
     "name": "Pet Snake",
     "image": "/nft_images/pet_snake.webp",
     "collection": "Pet Snake",
-    "floor": 4.0086
+    "floor": 5
   },
   {
     "id": "plush_pepe",
     "name": "Plush Pepe",
     "image": "/nft_images/plush_pepe.webp",
     "collection": "Plush Pepe",
-    "floor": 7140.0
+    "floor": 7950
   },
   {
     "id": "pool_float",
     "name": "Pool Float",
     "image": "/nft_images/pool_float.webp",
     "collection": "Pool Float",
-    "floor": 3.8964
+    "floor": 5
   },
   {
     "id": "precious_peach",
     "name": "Precious Peach",
     "image": "/nft_images/precious_peach.webp",
     "collection": "Precious Peach",
-    "floor": 259.5798
+    "floor": 295
   },
   {
     "id": "pretty_posy",
     "name": "Pretty Posy",
     "image": "/nft_images/pretty_posy.webp",
     "collection": "Pretty Posy",
-    "floor": 5.304
+    "floor": 7
   },
   {
     "id": "rare_bird",
     "name": "Rare Bird",
     "image": "/nft_images/rare_bird.webp",
     "collection": "Rare Bird",
-    "floor": 29.4678
+    "floor": 33
   },
   {
     "id": "record_player",
     "name": "Record Player",
     "image": "/nft_images/record_player.webp",
     "collection": "Record Player",
-    "floor": 133.747
+    "floor": 14
   },
   {
     "id": "restless_jar",
     "name": "Restless Jar",
     "image": "/nft_images/restless_jar.webp",
     "collection": "Restless Jar",
-    "floor": 5.2326
+    "floor": 6
   },
   {
     "id": "sakura_flower",
     "name": "Sakura Flower",
     "image": "/nft_images/sakura_flower.webp",
     "collection": "Sakura Flower",
-    "floor": 111.428
+    "floor": 12
   },
   {
     "id": "santa_hat",
     "name": "Santa Hat",
     "image": "/nft_images/santa_hat.webp",
     "collection": "Santa Hat",
-    "floor": 6.0894
+    "floor": 7
   },
   {
     "id": "scared_cat",
     "name": "Scared Cat",
     "image": "/nft_images/scared_cat.webp",
     "collection": "Scared Cat",
-    "floor": 274.3698
+    "floor": 299
   },
   {
     "id": "sharp_tongue",
     "name": "Sharp Tongue",
     "image": "/nft_images/sharp_tongue.webp",
     "collection": "Sharp Tongue",
-    "floor": 41.867
+    "floor": 59
   },
   {
     "id": "signet_ring",
     "name": "Signet Ring",
     "image": "/nft_images/signet_ring.webp",
     "collection": "Signet Ring",
-    "floor": 36.006
+    "floor": 38
   },
   {
     "id": "skull_flower",
     "name": "Skull Flower",
     "image": "/nft_images/skull_flower.webp",
     "collection": "Skull Flower",
-    "floor": 123.907
+    "floor": 13
   },
   {
     "id": "sky_stilettos",
     "name": "Sky Stilettos",
     "image": "/nft_images/sky_stilettos.webp",
     "collection": "Sky Stilettos",
-    "floor": 18.36
+    "floor": 20
   },
   {
     "id": "sleigh_bell",
     "name": "Sleigh Bell",
     "image": "/nft_images/sleigh_bell.webp",
     "collection": "Sleigh Bell",
-    "floor": 32.503
+    "floor": 12
   },
   {
     "id": "snake_box",
     "name": "Snake Box",
     "image": "/nft_images/snake_box.webp",
     "collection": "Snake Box",
-    "floor": 3.876
+    "floor": 5
   },
   {
     "id": "snoop_cigar",
     "name": "Snoop Cigar",
     "image": "/nft_images/snoop_cigar.webp",
     "collection": "Snoop Cigar",
-    "floor": 15.0756
+    "floor": 20
   },
   {
     "id": "snoop_dogg",
     "name": "Snoop Dogg",
     "image": "/nft_images/snoop_dogg.webp",
     "collection": "Snoop Dogg",
-    "floor": 5.406
+    "floor": 6
   },
   {
     "id": "snow_globe",
     "name": "Snow Globe",
     "image": "/nft_images/snow_globe.webp",
     "collection": "Snow Globe",
-    "floor": 6.426
+    "floor": 8
   },
   {
     "id": "snow_mittens",
     "name": "Snow Mittens",
     "image": "/nft_images/snow_mittens.webp",
     "collection": "Snow Mittens",
-    "floor": 12.213
+    "floor": 10
   },
   {
     "id": "spiced_wine",
     "name": "Spiced Wine",
     "image": "/nft_images/spiced_wine.webp",
     "collection": "Spiced Wine",
-    "floor": 54.905
+    "floor": 6
   },
   {
     "id": "spring_basket",
     "name": "Spring Basket",
     "image": "/nft_images/spring_basket.webp",
     "collection": "Spring Basket",
-    "floor": 5.5998
+    "floor": 7
   },
   {
     "id": "spy_agaric",
     "name": "Spy Agaric",
     "image": "/nft_images/spy_agaric.webp",
     "collection": "Spy Agaric",
-    "floor": 43.503
+    "floor": 7
   },
   {
     "id": "star_notepad",
     "name": "Star Notepad",
     "image": "/nft_images/star_notepad.webp",
     "collection": "Star Notepad",
-    "floor": 40.479
+    "floor": 6
   },
   {
     "id": "stellar_rocket",
     "name": "Stellar Rocket",
     "image": "/nft_images/stellar_rocket.webp",
     "collection": "Stellar Rocket",
-    "floor": 5.406
+    "floor": 6
   },
   {
     "id": "surge_board",
     "name": "Surge Board",
     "image": "/nft_images/surge_board.webp",
     "collection": "Surge Board",
-    "floor": 6.7111
+    "floor": 8
   },
   {
     "id": "swag_bag",
     "name": "Swag Bag",
     "image": "/nft_images/swag_bag.webp",
     "collection": "Swag Bag",
-    "floor": 5.1973
+    "floor": 6
   },
   {
     "id": "swiss_watch",
     "name": "Swiss Watch",
     "image": "/nft_images/swiss_watch.webp",
     "collection": "Swiss Watch",
-    "floor": 56.0694
+    "floor": 75
   },
   {
     "id": "tama_gadget",
     "name": "Tama Gadget",
     "image": "/nft_images/tama_gadget.webp",
     "collection": "Tama Gadget",
-    "floor": 4.1004
+    "floor": 5
   },
   {
     "id": "timeless_book",
     "name": "Timeless Book",
     "image": "/nft_images/timeless_book.webp",
     "collection": "Timeless Book",
-    "floor": 4.4505
+    "floor": 5
   },
   {
     "id": "top_hat",
     "name": "Top Hat",
     "image": "/nft_images/top_hat.webp",
     "collection": "Top Hat",
-    "floor": 10.5978
+    "floor": 12
   },
   {
     "id": "toy_bear",
     "name": "Toy Bear",
     "image": "/nft_images/toy_bear.webp",
     "collection": "Toy Bear",
-    "floor": 34.5984
+    "floor": 39
   },
   {
     "id": "trapped_heart",
     "name": "Trapped Heart",
     "image": "/nft_images/trapped_heart.webp",
     "collection": "Trapped Heart",
-    "floor": 59.261
+    "floor": 18
   },
   {
     "id": "ufc_strike",
     "name": "Ufc Strike",
     "image": "/nft_images/ufc_strike.webp",
     "collection": "Ufc Strike",
-    "floor": 15.9834
+    "floor": 20
   },
   {
     "id": "valentine_box",
     "name": "Valentine Box",
     "image": "/nft_images/valentine_box.webp",
     "collection": "Valentine Box",
-    "floor": 12.75
+    "floor": 14
   },
   {
     "id": "vice_cream",
     "name": "Vice Cream",
     "image": "/nft_images/vice_cream.webp",
     "collection": "Vice Cream",
-    "floor": 3.876
+    "floor": 5
   },
   {
     "id": "victory_medal",
     "name": "Victory Medal",
     "image": "/nft_images/victory_medal.webp",
     "collection": "Victory Medal",
-    "floor": 4.6104
+    "floor": 6
   },
   {
     "id": "vintage_cigar",
     "name": "Vintage Cigar",
     "image": "/nft_images/vintage_cigar.webp",
     "collection": "Vintage Cigar",
-    "floor": 38.7192
+    "floor": 46
   },
   {
     "id": "voodoo_doll",
     "name": "Voodoo Doll",
     "image": "/nft_images/voodoo_doll.webp",
     "collection": "Voodoo Doll",
-    "floor": 149.653
+    "floor": 43
   },
   {
     "id": "westside_sign",
     "name": "Westside Sign",
     "image": "/nft_images/westside_sign.webp",
     "collection": "Westside Sign",
-    "floor": 109.9764
+    "floor": 149
   },
   {
     "id": "whip_cupcake",
     "name": "Whip Cupcake",
     "image": "/nft_images/whip_cupcake.webp",
     "collection": "Whip Cupcake",
-    "floor": 3.876
+    "floor": 5
   },
   {
     "id": "winter_wreath",
     "name": "Winter Wreath",
     "image": "/nft_images/winter_wreath.webp",
     "collection": "Winter Wreath",
-    "floor": 81.264
+    "floor": 6
   },
   {
     "id": "witch_hat",
     "name": "Witch Hat",
     "image": "/nft_images/witch_hat.webp",
     "collection": "Witch Hat",
-    "floor": 96.302
+    "floor": 9
   },
   {
     "id": "xmas_stocking",
     "name": "Xmas Stocking",
     "image": "/nft_images/xmas_stocking.webp",
     "collection": "Xmas Stocking",
-    "floor": 3.876
+    "floor": 5
   }
 ]
