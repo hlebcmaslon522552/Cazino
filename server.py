@@ -687,7 +687,19 @@ def crash_game_loop():
                                     (win_amount, p['user_id'])
                                 )
                                 conn2.commit()
+                                # Получаем новый баланс
+                                c2.execute("SELECT balance_ton FROM users WHERE id = ?", (p['user_id'],))
+                                new_bal = c2.fetchone()[0]
                                 conn2.close()
+
+                                # Отправляем результат конкретному клиенту
+                                socketio.emit('crash_cashout_result', {
+                                    'success': True,
+                                    'win_amount': round(win_amount, 2),
+                                    'multiplier': p['auto_cashout'],
+                                    'new_balance': round(new_bal, 2),
+                                }, to=p['sid'])
+                                print(f"[AutoCashout] Отправлен результат клиенту {p['user_id']} (sid={p['sid']})")
                             except Exception as db_err:
                                 print(f"[AutoCashout] DB error: {db_err}")
                             print(f"[AutoCashout] Игрок {p['user_id']} ({p['username']}) забрал на {p['auto_cashout']}x, выигрыш {win_amount:.2f} TON")
