@@ -3461,7 +3461,7 @@ def hockey_game_loop():
                             print(f"[Hockey] ПОБЕДИТЕЛЬ {winner['username']} ({winner['user_id']}): "
                                   f"баланс ПОСЛЕ={balance_after}")
                             winner_conn.commit()
-                                record_win(winner['user_id'], 'hockey', prize)
+                            record_win(winner['user_id'], 'hockey', prize)
                         except Exception as db_err:
                             print(f"[Hockey] DB error crediting winner: {db_err}")
                             if winner_conn:
