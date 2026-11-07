@@ -16,9 +16,9 @@ interface Case {
 
 const CASES: Case[] = [
   { id: 1, title: 'Villian Box',  price: 12.0, image: '/GOLD.png' },
-  { id: 2, title: "Animal's Box", price: 8.0,  image: '/CASE_COPPER.png' },
+  { id: 2, title: "Animal's Box", price: 7.77, image: '/CASE_COPPER.png' },
   { id: 3, title: 'Lovely',       price: 11.0, image: '/Silver.png' },
-  { id: 4, title: 'Bloom',        price: 6.0,  image: '/CaseWOOD.png' },
+  { id: 4, title: 'Bloom',        price: 1.0,  image: '/CaseWOOD.png' },
 ];
 
 export function CasesPage({ onBack, onToast }: Props) {

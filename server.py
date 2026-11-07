@@ -486,17 +486,31 @@ def verify_init_data(init_data):
 
 # ── Пулы предметов для кейсов (по ID кейса) ───────────────────────────
 CASE_WOOD_POOL = [
-    {"name": "Bow Tie", "image": "/nft_images/bow_tie.webp", "rarity": "common", "chance": 40, "price": 5.814},
-    {"name": "Fresh Socks", "image": "/nft_images/fresh_socks.webp", "rarity": "uncommon", "chance": 30, "price": 4.488},
-    {"name": "Candy Cane", "image": "/nft_images/candy_cane.webp", "rarity": "uncommon", "chance": 20, "price": 3.8862},
-    {"name": "Snow Globe", "image": "/nft_images/snow_globe.webp", "rarity": "rare", "chance": 10, "price": 6.426},
+    {"name": "0.1 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 35, "price": 0.1},
+    {"name": "0.2 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 25, "price": 0.2},
+    {"name": "0.3 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 15, "price": 0.3},
+    {"name": "0.5 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 10, "price": 0.5},
+    {"name": "0.8 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 5, "price": 0.8},
+    {"name": "Big Year", "image": "/nft_images/big_year.webp", "rarity": "uncommon", "chance": 4, "price": 5.0},
+    {"name": "Candy Cane", "image": "/nft_images/candy_cane.webp", "rarity": "rare", "chance": 3, "price": 5.0},
+    {"name": "Happy Brownie", "image": "/nft_images/happy_brownie.webp", "rarity": "rare", "chance": 1.5, "price": 5.0},
+    {"name": "Fresh Socks", "image": "/nft_images/fresh_socks.webp", "rarity": "rare", "chance": 1, "price": 6.0},
+    {"name": "Bow Tie", "image": "/nft_images/bow_tie.webp", "rarity": "epic", "chance": 0.5, "price": 7.0},
 ]
 
 CASE_COPPER_POOL = [
-    {"name": "Swiss Watch", "image": "/nft_images/swiss_watch.webp", "rarity": "rare", "chance": 30, "price": 56.0694},
-    {"name": "Signet Ring", "image": "/nft_images/signet_ring.webp", "rarity": "rare", "chance": 30, "price": 36.006},
-    {"name": "Valentine Box", "image": "/nft_images/valentine_box.webp", "rarity": "uncommon", "chance": 20, "price": 12.75},
-    {"name": "Jingle Bells", "image": "/nft_images/jingle_bells.webp", "rarity": "uncommon", "chance": 20, "price": 10.7712},
+    {"name": "1.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 30, "price": 1.0},
+    {"name": "2.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 20, "price": 2.0},
+    {"name": "3.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 15, "price": 3.0},
+    {"name": "5.0 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 10, "price": 5.0},
+    {"name": "7.0 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 5, "price": 7.0},
+    {"name": "Mirage Lamps", "image": "/nft_images/mirage_lamp.webp", "rarity": "uncommon", "chance": 5, "price": 5.0},
+    {"name": "Love Potion", "image": "/nft_images/love_potion.webp", "rarity": "rare", "chance": 4, "price": 17.0},
+    {"name": "Jingle Bells", "image": "/nft_images/jingle_bells.webp", "rarity": "rare", "chance": 4, "price": 11.0},
+    {"name": "Valentine Box", "image": "/nft_images/valentine_box.webp", "rarity": "epic", "chance": 3, "price": 14.0},
+    {"name": "Signet Ring", "image": "/nft_images/signet_ring.webp", "rarity": "epic", "chance": 2, "price": 38.0},
+    {"name": "Gem Signet", "image": "/nft_images/gem_signet.webp", "rarity": "epic", "chance": 2, "price": 73.0},
+    {"name": "Swiss Watch", "image": "/nft_images/swiss_watch.webp", "rarity": "legendary", "chance": 0.1, "price": 75.0},
 ]
 
 CASE_SILVER_POOL = [
