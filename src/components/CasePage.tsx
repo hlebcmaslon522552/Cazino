@@ -31,51 +31,6 @@ interface DropItem {
   type?: string; // 'ton' — TON-приз: начисляется на баланс, а не в инвентарь
 }
 
-/* Пулы предметов по кейсам — синхронизированы с server.py */
-const CASE_POOLS: Record<string, DropItem[]> = {
-  case_wood: [
-    { name: 'Bow Tie', image: '/nft_images/bow_tie.webp', rarity: 'common', chance: 40, price: 5.814 },
-    { name: 'Fresh Socks', image: '/nft_images/fresh_socks.webp', rarity: 'uncommon', chance: 30, price: 4.488 },
-    { name: 'Candy Cane', image: '/nft_images/candy_cane.webp', rarity: 'uncommon', chance: 20, price: 3.8862 },
-    { name: 'Snow Globe', image: '/nft_images/snow_globe.webp', rarity: 'rare', chance: 10, price: 6.426 },
-  ],
-  case_copper: [
-    { name: 'Swiss Watch', image: '/nft_images/swiss_watch.webp', rarity: 'rare', chance: 30, price: 56.0694 },
-    { name: 'Signet Ring', image: '/nft_images/signet_ring.webp', rarity: 'rare', chance: 30, price: 36.006 },
-    { name: 'Valentine Box', image: '/nft_images/valentine_box.webp', rarity: 'uncommon', chance: 20, price: 12.75 },
-    { name: 'Jingle Bells', image: '/nft_images/jingle_bells.webp', rarity: 'uncommon', chance: 20, price: 10.7712 },
-  ],
-  case_silver: [
-    { name: 'Astral Shard', image: '/nft_images/astral_shard.webp', rarity: 'epic', chance: 10, price: 120.819 },
-    { name: 'Genie Lamp', image: '/nft_images/genie_lamp.webp', rarity: 'rare', chance: 20, price: 38.7294 },
-    { name: 'Toy Bear', image: '/nft_images/toy_bear.webp', rarity: 'rare', chance: 30, price: 34.5984 },
-    { name: 'Love Potion', image: '/nft_images/love_potion.webp', rarity: 'uncommon', chance: 40, price: 14.79 },
-  ],
-  case_gold: [
-    { name: 'Heart Locket', image: '/nft_images/heart_locket.webp', rarity: 'legendary', chance: 1, price: 1249.4897 },
-    { name: 'Precious Peach', image: '/nft_images/precious_peach.webp', rarity: 'epic', chance: 4, price: 259.5798 },
-    { name: 'Durovs Cap', image: '/nft_images/durovs_cap.webp', rarity: 'rare', chance: 15, price: 420.24 },
-    { name: 'Mighty Arm', image: '/nft_images/mighty_arm.webp', rarity: 'rare', chance: 30, price: 127.4592 },
-    { name: 'Perfume Bottle', image: '/nft_images/perfume_bottle.webp', rarity: 'uncommon', chance: 50, price: 83.1096 },
-  ],
-  case_free: [
-    { name: '0.01 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 55, price: 0.01 },
-    { name: '0.1 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 20, price: 0.1 },
-    { name: '0.2 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 10, price: 0.2 },
-    { name: '0.3 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 7, price: 0.3 },
-    { name: '0.5 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 5, price: 0.5 },
-    { name: '1 TON', image: '/TON.png', rarity: 'common', type: 'ton', chance: 2.99, price: 1 },
-    { name: 'Big Year', image: '/nft_images/big_year.webp', rarity: 'legendary', type: 'item', chance: 0.01, price: 3.89 },
-  ],
-};
-
-const DEFAULT_POOL: DropItem[] = CASE_POOLS['case_wood'];
-
-/* ─── Источник пула — только обновлённые статические массивы (никакого localStorage/старого кода) ─── */
-function loadPool(caseId: string): DropItem[] {
-  return CASE_POOLS[caseId] ?? DEFAULT_POOL;
-}
-
 /* ─── Форматирование шанса из пула ─── */
 const formatChance = (chance: number): string => `${+chance.toFixed(2)}%`;
 
@@ -116,7 +71,8 @@ const stripItemCenter = (index: number): number =>
 export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }: Props) {
   const { haptic, vibrate, user } = useTelegram();
 
-  const pool = loadPool(caseData.id);
+  const [pool, setPool] = useState<DropItem[]>([]);
+  const [isLoadingPool, setIsLoadingPool] = useState(true);
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [wonItem, setWonItem] = useState<DropItem | null>(null);
@@ -140,6 +96,30 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
     };
   }, []);
+
+  /* ─── Загрузка пула предметов с сервера ─── */
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingPool(true);
+    fetch(`${CONFIG.API_URL}/api/get_case_pool?case_id=${caseData.id}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load pool');
+        return res.json();
+      })
+      .then(data => {
+        if (isMounted && Array.isArray(data)) {
+          setPool(data);
+        }
+      })
+      .catch(err => {
+        console.error('[CasePage] pool load error:', err);
+        onToast?.('Ошибка загрузки предметов', 'error');
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingPool(false);
+      });
+    return () => { isMounted = false; };
+  }, [caseData.id]);
 
   /* ─── Поиск самого дорогого предмета в пуле ─── */
   const getMostExpensive = (): DropItem => {
@@ -407,7 +387,7 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
   };
 
 return (
-    <div style={{ padding: spacing.md, color: colors.text, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', padding: spacing.md, color: colors.text, overflow: 'hidden' }}>
       {/* ─── Кнопка "Назад" ─── */}
       <Button variant="ghost" size="sm" onClick={onBack}>
         ← Назад
@@ -426,6 +406,7 @@ return (
       </div>
 
       {/* ─── РУЛЕТКА ─── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <div
         style={{
           marginTop: spacing.md,
@@ -594,6 +575,7 @@ return (
               : `🎰 Открыть кейс (${caseData.price.toFixed(2)} TON)`}
         </Button>
       </div>
+      </div>
 
       {/* ─── Возможные предметы ─── */}
       <div
@@ -606,8 +588,18 @@ return (
         }}
       >
         <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 8 }}>
-          Возможные предметы ({pool.length} шт.):
+          Возможные предметы {!isLoadingPool ? `(${pool.length} шт.)` : ''}:
         </div>
+        {isLoadingPool ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: colors.textMuted, fontSize: 14 }}>
+            Загрузка предметов...
+          </div>
+        ) : pool.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: colors.textMuted, fontSize: 14 }}>
+            Нет предметов
+          </div>
+        ) : (
+          <>
         {/* Сетка карточек как в Маркете: grid-cols-2 (2 равные колонки), gap-2 — равномерное распределение */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {pool.map((p, i) => (
@@ -680,6 +672,8 @@ return (
             </div>
           ))}
         </div>
+      </>
+      )}
       </div>
 {/* ─── Модальное окно результата ─── */}
       {showResult && wonItem && (
@@ -710,7 +704,7 @@ return (
               border: `2px solid ${rarityColor(wonItem.rarity)}`,
             }}
           >
-            <div style={{ fontSize: 40, marginBottom: 8 }}>🎉</div>
+            <div style={{ marginBottom: 8 }} />
             <div style={{ fontSize: 13, color: colors.textMuted, marginBottom: 4 }}>
               Вы выиграли
             </div>

@@ -1889,6 +1889,16 @@ def get_floor():
     return jsonify({"error": "Collection not found"}), 404
 
 
+# ── Get Case Pool ───────────────────────────────────────────────────────────
+@app.route("/api/get_case_pool", methods=["GET"])
+def get_case_pool():
+    """Возвращает реальный пул предметов для кейса (используется для UI витрины)."""
+    case_id = request.args.get("case_id", "").strip()
+    if not case_id or case_id not in CASE_POOLS:
+        return jsonify({"error": "Case not found"}), 404
+    return jsonify(CASE_POOLS[case_id])
+
+
 # ── Auto-update NFT floors ─────────────────────────────────────────────────
 def update_nft_floors():
     """Читает my_nfts.json, для каждого NFT запрашивает актуальную floor-цену
