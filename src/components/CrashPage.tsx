@@ -162,10 +162,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     socket.on('crash_tick', (data: { multiplier: number }) => {
       setMultiplier(data.multiplier);
-      // Авто-сбор
-      if (autoCashoutRef.current !== null && !hasCashedOutRef.current && data.multiplier >= autoCashoutRef.current) {
-        handleCashOut(data.multiplier);
-      }
     });
 
     socket.on('crash_ended', (data: { crash_point?: number }) => {
@@ -282,6 +278,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       user_id: String(user?.id ?? 'unknown'),
       username: user?.first_name || 'Игрок',
       bet: finalBet,
+      auto_cashout: autoCashoutRef.current,
     });
     onToast?.('Ставка принята!', 'success');
   };

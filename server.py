@@ -515,6 +515,44 @@ def crash_game_loop():
                     last_tick = tick_val
                     socketio.emit('crash_tick', {'multiplier': tick_val})
 
+                # ── Авто-сбор (серверный) ──
+                auto_cashed_any = False
+                with CRASH_LOCK:
+                    for p in CRASH_PLAYERS:
+                        if (p.get('auto_cashout') is not None
+                                and not p.get('cashed_out', False)
+                                and tick_val >= p['auto_cashout']):
+                            p['cashed_out'] = True
+                            p['multiplier'] = p['auto_cashout']
+                            win_amount = p['bet'] * p['auto_cashout']
+                            # Начисляем выигрыш в БД
+                            try:
+                                conn2 = sqlite3.connect(DB_PATH)
+                                c2 = conn2.cursor()
+                                c2.execute(
+                                    "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+                                    (win_amount, p['user_id'])
+                                )
+                                conn2.commit()
+                                conn2.close()
+                            except Exception as db_err:
+                                print(f"[AutoCashout] DB error: {db_err}")
+                            print(f"[AutoCashout] Игрок {p['user_id']} ({p['username']}) забрал на {p['auto_cashout']}x, выигрыш {win_amount:.2f} TON")
+                            auto_cashed_any = True
+                if auto_cashed_any:
+                    with CRASH_LOCK:
+                        ac_players_snapshot = [
+                            {
+                                'user_id': p['user_id'],
+                                'username': p['username'],
+                                'bet': p['bet'],
+                                'multiplier': p.get('multiplier'),
+                                'cashed_out': p.get('cashed_out', False),
+                            }
+                            for p in CRASH_PLAYERS
+                        ]
+                    socketio.emit('crash_players_update', {'players': ac_players_snapshot})
+
             # ── 4. Краш ──
             with CRASH_LOCK:
                 CRASH_STATE = "waiting"
@@ -2386,12 +2424,18 @@ def handle_spin_pvp(data):
 # ── Crash WebSocket Handlers ───────────────────────────────────────────
 @socketio.on('crash_bet')
 def handle_crash_bet(data):
-    # Принимает { user_id, username, bet }. Добавляет игрока в CRASH_PLAYERS
+    # Принимает { user_id, username, bet, auto_cashout }. Добавляет игрока в CRASH_PLAYERS
     # и рассылает всем обновлённый список ставок.
     global CRASH_PLAYERS
     user_id = str(data.get('user_id', ''))
     username = str(data.get('username', 'Игрок'))
     bet = float(data.get('bet', 0))
+    auto_cashout = data.get('auto_cashout', None)
+    if auto_cashout is not None:
+        try:
+            auto_cashout = float(auto_cashout)
+        except (ValueError, TypeError):
+            auto_cashout = None
 
     if not user_id or bet <= 0:
         emit('crash_error', {'error': 'Invalid bet data'})
@@ -2405,6 +2449,9 @@ def handle_crash_bet(data):
             'username': username,
             'bet': bet,
             'sid': request.sid,
+            'auto_cashout': auto_cashout,
+            'cashed_out': False,
+            'multiplier': None,
         })
         players_snapshot = [
             {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet']}
