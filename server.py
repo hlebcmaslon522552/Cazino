@@ -454,6 +454,26 @@ def update_task_progress(user_id, task_id, increment=1):
             conn.close()
 
 
+def record_win(user_id, game_type, amount, bet_type="ton", item_name=""):
+    """Записывает выигрыш в историю ставок (kind='win')."""
+    if amount <= 0:
+        return
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO bet_history (user_id, game_type, bet_type, amount, item_name, kind) VALUES (?, ?, ?, ?, ?, 'win')",
+            (str(user_id), str(game_type), str(bet_type), float(amount), str(item_name)),
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[record_win] error: {e}", flush=True)
+    finally:
+        if conn:
+            conn.close()
+
+
 def verify_init_data(init_data):
     """Проверяет подпись Telegram initData с использованием HMAC-SHA256.
     
@@ -700,6 +720,7 @@ def crash_game_loop():
                                     'new_balance': round(new_bal, 2),
                                 }, to=p['sid'])
                                 print(f"[AutoCashout] Отправлен результат клиенту {p['user_id']} (sid={p['sid']})")
+                                record_win(p['user_id'], 'crash', win_amount)
                             except Exception as db_err:
                                 print(f"[AutoCashout] DB error: {db_err}")
                             print(f"[AutoCashout] Игрок {p['user_id']} ({p['username']}) забрал на {p['auto_cashout']}x, выигрыш {win_amount:.2f} TON")
@@ -1456,6 +1477,7 @@ def play_game():
                     (user_id, item_id, target_name, target_image, end_price)
                 )
                 conn.commit()
+                record_win(user_id, 'upgrade', end_price, bet_type='nft', item_name=target_name)
             except Exception as e:
                 print(f"[play_game upgrade] db error: {e}")
                 return jsonify({"error": "Database error"}), 500
@@ -1595,6 +1617,9 @@ def plinko_drop():
         except Exception as e:
             print(f"[plinko_drop] task progress error: {e}", flush=True)
 
+    if win_amount > 0:
+        record_win(user_id, 'plinko', win_amount)
+
     return jsonify({
         "slotIndex": slot_index,
         "multiplier": multiplier,
@@ -1647,6 +1672,7 @@ def open_case():
                     "INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, ?)",
                     (user_id, item["price"])
                 )
+                record_win(user_id, 'case', item['price'], item_name=item.get('name', ''))
             else:
                 # Добавляем предмет в инвентарь
                 c.execute(
@@ -1722,6 +1748,7 @@ def open_case():
                 "UPDATE users SET balance_ton = ? WHERE id = ?",
                 (new_balance, user_id)
             )
+            record_win(user_id, 'case', item['price'], item_name=item.get('name', ''))
         else:
             # Добавляем предмет в отдельную таблицу инвентаря
             c.execute(
@@ -3038,6 +3065,7 @@ def handle_crash_cashout(data):
         'new_balance': round(balance_after, 2),
     })
     print(f"[CrashCashout] Успех: {username} ({user_id}) забрал {win_amount:.2f} TON по {multiplier}x")
+    record_win(user_id, 'crash', win_amount)
 
     # Обновляем задание daily_crash_win_5x (выигрыш x5+ со ставкой от 5 TON)
     try:
@@ -3433,6 +3461,7 @@ def hockey_game_loop():
                             print(f"[Hockey] ПОБЕДИТЕЛЬ {winner['username']} ({winner['user_id']}): "
                                   f"баланс ПОСЛЕ={balance_after}")
                             winner_conn.commit()
+                                record_win(winner['user_id'], 'hockey', prize)
                         except Exception as db_err:
                             print(f"[Hockey] DB error crediting winner: {db_err}")
                             if winner_conn:
