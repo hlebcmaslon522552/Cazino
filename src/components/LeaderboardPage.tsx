@@ -4,6 +4,7 @@ import { CONFIG } from '../config';
 interface LeaderboardEntry {
   username: string;
   total: number;
+  prize?: number;
 }
 
 export function LeaderboardPage() {
@@ -141,17 +142,54 @@ export function LeaderboardPage() {
                   {entry.username || 'Unknown'}
                 </div>
 
-                {/* Total */}
+                {/* Total + Prize */}
                 <div style={{
-                  fontSize: 14,
-                  fontWeight: 'bold',
-                  color: isPodium ? '#fbbf24' : '#fbbf24',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 8,
                 }}>
-                  {entry.total.toFixed(1)}
-                  <span style={{ fontSize: 11, color: '#9ca3af' }}>TON</span>
+                  <div style={{
+                    fontSize: 14,
+                    fontWeight: 'bold',
+                    color: '#fbbf24',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}>
+                    {entry.total.toFixed(1)}
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>TON</span>
+                  </div>
+
+                  {(entry.prize ?? 0) > 0 && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 8px',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: 'bold',
+                      whiteSpace: 'nowrap',
+                      ...(rank === 1
+                        ? {
+                            background: '#eab308',
+                            color: '#000',
+                          }
+                        : rank === 2
+                          ? {
+                              background: 'rgba(192,192,192,0.25)',
+                              color: '#d1d5db',
+                            }
+                          : {
+                              background: 'rgba(255,215,0,0.15)',
+                              color: '#fbbf24',
+                            }
+                      ),
+                    }}>
+                      <span>{rank === 1 ? '🏆' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '💎'}</span>
+                      +{entry.prize!.toFixed(1)} TON
+                    </div>
+                  )}
                 </div>
               </div>
             );

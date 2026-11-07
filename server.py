@@ -2213,7 +2213,14 @@ def leaderboard_turnover():
             LIMIT 15
         """)
         rows = c.fetchall()
-        leaderboard = [{"username": row[0], "total": round(row[1], 2)} for row in rows]
+        leaderboard = [
+            {
+                "username": row[0],
+                "total": round(row[1], 2),
+                "prize": LEADERBOARD_PRIZES.get(i + 1, 0.0),
+            }
+            for i, row in enumerate(rows)
+        ]
         return jsonify(leaderboard)
     except Exception as e:
         print(f"[leaderboard_turnover] error: {e}")
