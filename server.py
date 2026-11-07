@@ -30,7 +30,7 @@ for _stream in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='dist', static_url_path='')
 
 # ── CORS ────────────────────────────────────────────────────────────────
 # flask-cors обрабатывает CORS-заголовки, включая preflight (OPTIONS).
@@ -81,9 +81,11 @@ def _handle_preflight(subpath):
 
 
 @app.errorhandler(404)
-def _handle_not_found(_error):
-    # Отдаём JSON вместо HTML-страницы Flask, чтобы фронтенд не падал
-    # на res.json() и в логе было видно, какой именно путь не найден.
+def handle_404(e):
+    # Для путей, не начинающихся с /api/, отдаём index.html (React Router)
+    if not request.path.startswith('/api/'):
+        return app.send_static_file('index.html')
+    # Для /api/* — JSON
     print(f"[404] Нет такого эндпоинта: {request.method} {request.path}", flush=True)
     return jsonify({
         "error": "Not found",
@@ -2944,6 +2946,12 @@ nft_update_thread = threading.Thread(target=update_floors_loop, daemon=True)
 nft_update_thread.start()
 print("[Server] Фоновый поток обновления floor-цен запущен.")
 
+
+
+# ── Serve React frontend ─────────────────────────────────────────────
+@app.route('/')
+def serve_index():
+    return app.send_static_file('index.html')
 
 
 if __name__ == "__main__":
