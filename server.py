@@ -514,18 +514,37 @@ CASE_COPPER_POOL = [
 ]
 
 CASE_SILVER_POOL = [
-    {"name": "Astral Shard", "image": "/nft_images/astral_shard.webp", "rarity": "epic", "chance": 10, "price": 120.819},
-    {"name": "Genie Lamp", "image": "/nft_images/genie_lamp.webp", "rarity": "rare", "chance": 20, "price": 38.7294},
-    {"name": "Toy Bear", "image": "/nft_images/toy_bear.webp", "rarity": "rare", "chance": 30, "price": 34.5984},
-    {"name": "Love Potion", "image": "/nft_images/love_potion.webp", "rarity": "uncommon", "chance": 40, "price": 14.79},
+    {"name": "5.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 30, "price": 5.0},
+    {"name": "10.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 20, "price": 10.0},
+    {"name": "15.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 15, "price": 15.0},
+    {"name": "25.0 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 10, "price": 25.0},
+    {"name": "40.0 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 5, "price": 40.0},
+    {"name": "Neko Helmet", "image": "/nft_images/neko_helmet.webp", "rarity": "uncommon", "chance": 4, "price": 45.0},
+    {"name": "Love Candle", "image": "/nft_images/love_candle.webp", "rarity": "rare", "chance": 3, "price": 13.0},
+    {"name": "Toy Bear", "image": "/nft_images/toy_bear.webp", "rarity": "rare", "chance": 3, "price": 39.0},
+    {"name": "Genie Lamp", "image": "/nft_images/genie_lamp.webp", "rarity": "epic", "chance": 2, "price": 40.0},
+    {"name": "Magic Potion", "image": "/nft_images/magic_potion.webp", "rarity": "epic", "chance": 1.5, "price": 75.0},
+    {"name": "Artisan Brick", "image": "/nft_images/artisan_brick.webp", "rarity": "epic", "chance": 1, "price": 83.0},
+    {"name": "Mini Oscar", "image": "/nft_images/mini_oscar.webp", "rarity": "legendary", "chance": 0.5, "price": 115.0},
+    {"name": "Mighty Arm", "image": "/nft_images/mighty_arm.webp", "rarity": "mythic", "chance": 0.1, "price": 150.0},
 ]
 
 CASE_GOLD_POOL = [
-    {"name": "Heart Locket", "image": "/nft_images/heart_locket.webp", "rarity": "legendary", "chance": 1, "price": 1249.4897},
-    {"name": "Precious Peach", "image": "/nft_images/precious_peach.webp", "rarity": "epic", "chance": 4, "price": 259.5798},
-    {"name": "Durovs Cap", "image": "/nft_images/durovs_cap.webp", "rarity": "rare", "chance": 15, "price": 420.24},
-    {"name": "Mighty Arm", "image": "/nft_images/mighty_arm.webp", "rarity": "rare", "chance": 30, "price": 127.4592},
-    {"name": "Perfume Bottle", "image": "/nft_images/perfume_bottle.webp", "rarity": "uncommon", "chance": 50, "price": 83.1096},
+    {"name": "20.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 25, "price": 20.0},
+    {"name": "50.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 20, "price": 50.0},
+    {"name": "80.0 TON", "image": "/TON.png", "type": "ton", "rarity": "common", "chance": 15, "price": 80.0},
+    {"name": "120.0 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 10, "price": 120.0},
+    {"name": "180.0 TON", "image": "/TON.png", "type": "ton", "rarity": "uncommon", "chance": 5, "price": 180.0},
+    {"name": "Perfume Bottle", "image": "/nft_images/perfume_bottle.webp", "rarity": "uncommon", "chance": 5, "price": 95.0},
+    {"name": "Mighty Arm", "image": "/nft_images/mighty_arm.webp", "rarity": "rare", "chance": 4, "price": 150.0},
+    {"name": "Trapped Heart", "image": "/nft_images/trapped_heart.webp", "rarity": "rare", "chance": 4, "price": 18.0},
+    {"name": "Durovs Cap", "image": "/nft_images/durovs_cap.webp", "rarity": "epic", "chance": 3, "price": 463.0},
+    {"name": "Precious Peach", "image": "/nft_images/precious_peach.webp", "rarity": "epic", "chance": 2, "price": 295.0},
+    {"name": "Heroic Helmet", "image": "/nft_images/heroic_helmet.webp", "rarity": "epic", "chance": 2, "price": 231.0},
+    {"name": "Loot Bag", "image": "/nft_images/loot_bag.webp", "rarity": "legendary", "chance": 0.9, "price": 150.0},
+    {"name": "Scared Cat", "image": "/nft_images/scared_cat.webp", "rarity": "legendary", "chance": 0.08, "price": 299.0},
+    {"name": "Resistance Dogs", "image": "/nft_images/resistance_dog.webp", "rarity": "mythic", "chance": 0.015, "price": 569.0},
+    {"name": "Plush Pepe", "image": "/nft_images/plush_pepe.webp", "rarity": "mythic", "chance": 0.005, "price": 7950.0},
 ]
 
 FREE_CASE_POOL = [
