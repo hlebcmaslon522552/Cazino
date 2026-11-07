@@ -14,6 +14,7 @@ interface BetHistoryEntry {
   amount: number;
   item_name: string;
   timestamp: string;
+  kind: string; // 'bet' | 'win' | 'deposit'
 }
 
 interface UserStats {
@@ -30,6 +31,13 @@ const GAME_LABELS: Record<string, string> = {
   plinko: 'Плинко',
   mines: 'Бомбы',
   hockey: 'Хоккей',
+};
+
+const GAME_ICONS: Record<string, string> = {
+  crash: '💥',
+  plinko: '🔽',
+  mines: '💣',
+  hockey: '🏒',
 };
 
 const formatTime = (ts: string) => {
@@ -49,11 +57,21 @@ const formatTime = (ts: string) => {
    Страница «История ставок»
    =================================================================== */
 
+type FilterKind = 'all' | 'win' | 'bet' | 'deposit';
+
+const FILTER_BUTTONS: { key: FilterKind; label: string }[] = [
+  { key: 'all', label: 'Все' },
+  { key: 'win', label: 'Выигрыши' },
+  { key: 'bet', label: 'Проигрыши' },
+  { key: 'deposit', label: 'Пополнения' },
+];
+
 export function BetHistoryPage({ onBack }: Props) {
   const { user } = useTelegram();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [bets, setBets] = useState<BetHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<FilterKind>('all');
 
   const userId = String(user?.id ?? '6267608438');
 
@@ -81,6 +99,11 @@ export function BetHistoryPage({ onBack }: Props) {
 
     return () => { cancelled = true; };
   }, [userId]);
+
+  const filteredBets = bets.filter((b) => {
+    if (filter === 'all') return true;
+    return b.kind === filter;
+  });
 
   return (
     <div style={{ padding: '16px', color: '#fff', maxWidth: 500, margin: '0 auto', paddingBottom: 150 }}>
@@ -148,64 +171,104 @@ export function BetHistoryPage({ onBack }: Props) {
         </div>
       </div>
 
-      {/* ── Список последних ставок ─────────────────── */}
-      <div style={{ marginTop: 22 }}>
-        <div style={{ fontSize: 12, color: '#9ca3af', fontWeight: 'bold', letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' }}>
-          Последние ставки
-        </div>
+      {/* ── Фильтры ──────────────────────────────────── */}
+      <div className="flex gap-2 mt-4 mb-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        {FILTER_BUTTONS.map((btn) => (
+          <button
+            key={btn.key}
+            onClick={() => setFilter(btn.key)}
+            className={`px-4 py-2 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+              filter === btn.key
+                ? 'bg-purple-600 text-white shadow-lg'
+                : 'bg-[#1a1a2e] text-gray-400 border border-gray-800 hover:border-purple-500'
+            }`}
+          >
+            {btn.label}
+          </button>
+        ))}
+      </div>
 
-        {/* BET_LIST */}
+      {/* ── Список ставок ─────────────────────────────── */}
+      <div style={{ marginTop: 8 }}>
         {loading ? (
           <div style={{ textAlign: 'center', color: '#9ca3af', padding: 32, fontSize: 14 }}>
             Загрузка...
           </div>
-        ) : bets.length === 0 ? (
+        ) : filteredBets.length === 0 ? (
           <div style={{ textAlign: 'center', color: '#9ca3af', padding: 32, fontSize: 14 }}>
-            Пока нет ставок
+            Нет записей
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {bets.map((b) => (
-              <div
-                key={b.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '10px 14px',
-                  borderRadius: 12,
-                  background: '#1a1a2e',
-                  border: '1px solid #1f2937',
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {GAME_LABELS[b.game_type] || b.game_type}
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        background: b.bet_type === 'nft' ? 'rgba(168,85,247,0.25)' : 'rgba(59,130,246,0.25)',
-                        color: b.bet_type === 'nft' ? '#c084fc' : '#60a5fa',
-                      }}
-                    >
-                      {b.bet_type === 'nft' ? 'NFT' : 'TON'}
-                    </span>
+            {filteredBets.map((b) => {
+              const isWin = b.kind === 'win';
+              const isDeposit = b.kind === 'deposit';
+
+              let icon: string;
+              let colorClass: string;
+              let amountColor: string = '#4ade80';
+
+              if (isDeposit) {
+                icon = '💰';
+                colorClass = 'border-blue-500/30 bg-blue-500/5';
+                amountColor = '#60a5fa';
+              } else if (isWin) {
+                icon = '🏆';
+                colorClass = 'border-green-500/30 bg-green-500/5';
+                amountColor = '#4ade80';
+              } else {
+                icon = GAME_ICONS[b.game_type] || '💀';
+                colorClass = 'border-red-500/30 bg-red-500/5';
+                amountColor = '#f87171';
+              }
+
+              return (
+                <div
+                  key={b.id}
+                  className={`rounded-xl p-3 bg-[#1a1a2e] border ${colorClass}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  {/* Иконка слева */}
+                  <div style={{ fontSize: 24, flexShrink: 0, width: 32, textAlign: 'center' }}>
+                    {icon}
                   </div>
-                  {b.item_name ? (
-                    <div style={{ fontSize: 12, color: '#c084fc', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {b.item_name}
+
+                  {/* Центр: игра + время */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {GAME_LABELS[b.game_type] || b.game_type || (isDeposit ? 'Пополнение' : 'Ставка')}
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          background: b.bet_type === 'nft' ? 'rgba(168,85,247,0.25)' : 'rgba(59,130,246,0.25)',
+                          color: b.bet_type === 'nft' ? '#c084fc' : '#60a5fa',
+                        }}
+                      >
+                        {b.bet_type === 'nft' ? 'NFT' : 'TON'}
+                      </span>
                     </div>
-                  ) : null}
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{formatTime(b.timestamp)}</div>
+                    {b.item_name ? (
+                      <div style={{ fontSize: 12, color: '#c084fc', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {b.item_name}
+                      </div>
+                    ) : null}
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{formatTime(b.timestamp)}</div>
+                  </div>
+
+                  {/* Справа: сумма */}
+                  <div style={{ fontSize: 15, fontWeight: 900, color: amountColor, flexShrink: 0, textAlign: 'right' }}>
+                    {isDeposit || isWin ? '+' : ''}{Number(b.amount).toFixed(2)} TON
+                  </div>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 900, color: '#fbbf24', flexShrink: 0 }}>
-                  {Number(b.amount).toFixed(2)} TON
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

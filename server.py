@@ -2115,9 +2115,9 @@ def bet_history():
         c = conn.cursor()
         c.execute(
             """
-            SELECT id, user_id, game_type, bet_type, amount, item_name, timestamp
+            SELECT id, user_id, game_type, bet_type, amount, item_name, timestamp, kind
             FROM bet_history
-            WHERE user_id = ? AND kind = 'bet'
+            WHERE user_id = ?
             ORDER BY id DESC
             LIMIT 20
             """,
@@ -2133,6 +2133,7 @@ def bet_history():
                 "amount": r[4],
                 "item_name": r[5] or "",
                 "timestamp": r[6],
+                "kind": r[7] or "bet",
             }
             for r in rows
         ]
