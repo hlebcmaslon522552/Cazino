@@ -2704,6 +2704,83 @@ def handle_pvp_leave(data):
         print(f"[Hockey] Игрок {user_id} вышел из лобби. Осталось в пуле: {len(HOCKEY_PLAYERS)}")
 
 
+@socketio.on('pvp_cashout')
+def handle_pvp_cashout(data):
+    """Забор выигрыша во время раунда Hockey: начисляет выигрыш, удаляет игрока
+    из HOCKEY_PLAYERS и рассылает обновление."""
+    global HOCKEY_PLAYERS, ACTIVE_HOCKEY_BETS
+    data = data or {}
+    user_id = str(data.get('user_id', ''))
+    if not user_id:
+        return
+
+    win_amount = 0
+    with HOCKEY_LOCK:
+        for p in HOCKEY_PLAYERS:
+            if p.get('user_id') == user_id:
+                win_amount = p.get('bet', 0)
+                break
+        before = len(HOCKEY_PLAYERS)
+        HOCKEY_PLAYERS = [p for p in HOCKEY_PLAYERS if p.get('user_id') != user_id]
+        removed = len(HOCKEY_PLAYERS) != before
+        players_snapshot = [
+            {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
+            for p in HOCKEY_PLAYERS
+        ]
+
+    if win_amount > 0 and removed:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            balance_before = row[0] if row else 0
+            print(f"[Hockey] Кэшаут user={user_id} сумма={win_amount} баланс ДО={balance_before}")
+            c.execute(
+                "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+                (win_amount, user_id)
+            )
+            c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+            balance_after = c.fetchone()[0]
+            print(f"[Hockey] Кэшаут user={user_id} баланс ПОСЛЕ={balance_after}")
+            conn.commit()
+
+            # Уведомляем конкретного игрока об успешном кэшауте
+            socketio.emit('pvp_cashout_result', {
+                'success': True,
+                'user_id': user_id,
+                'win_amount': win_amount,
+                'balance_ton': balance_after,
+            })
+        except Exception as e:
+            print(f"[Hockey] DB error during cashout: {e}")
+            if conn:
+                conn.rollback()
+            socketio.emit('pvp_cashout_result', {
+                'success': False,
+                'user_id': user_id,
+                'win_amount': 0,
+            })
+        finally:
+            if conn:
+                conn.close()
+    elif not removed:
+        socketio.emit('pvp_cashout_result', {
+            'success': False,
+            'user_id': user_id,
+            'win_amount': 0,
+            'error': 'Player not found in pool',
+        })
+
+    # Рассылаем актуальный список ВСЕМ клиентам
+    socketio.emit('hockey_players_update', {'players': players_snapshot})
+    socketio.emit('pvp_players_update', {'players': players_snapshot})
+    if removed:
+        ACTIVE_HOCKEY_BETS.pop(user_id, None)
+        print(f"[Hockey] Кэшаут игрока {user_id}. Осталось в пуле: {len(HOCKEY_PLAYERS)}")
+
+
 @socketio.on('disconnect')
 def handle_disconnect():
     """При отключении сокета НЕ удаляем игрока из пулов — ставка остаётся.

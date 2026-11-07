@@ -282,6 +282,13 @@ const reset = () => {
           hasJoinedRef.current = true;
           placedBetRef.current = data.player.bet;
           userIdRef.current = data.player.user_id;
+          // Восстанавливаем территорию (shapes) для отображения в лобби
+          setShapes(generateShapesForPlayers([{
+            user_id: data.player.user_id,
+            username: data.player.username || user?.username || 'Игрок',
+            bet: data.player.bet,
+            color: '#a855f7',
+          }]));
           onToast?.('Ставка восстановлена', 'info');
         }
       } catch (e) {

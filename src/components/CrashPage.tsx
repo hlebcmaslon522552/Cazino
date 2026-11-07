@@ -56,6 +56,18 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const autoCashoutRef = useRef<number | null>(null);
   const boomLottieRef = useRef<any>(null);
 
+  // ── Переподключение сокета при возврате на вкладку ──
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && socketRef.current && !socketRef.current.connected) {
+        console.log('[Crash] Page visible, reconnecting socket');
+        socketRef.current.connect();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
   // ── Синхронизация состояния при входе в игру (позднее подключение) ──
   useEffect(() => {
     // Принудительный сброс состояния при монтировании
@@ -94,20 +106,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     (async () => {
       try {
         const res = await fetch(`${CONFIG.API_URL}/api/crash_state`);
-
-  // ── Переподключение сокета при возврате на вкладку ──
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && socketRef.current && !socketRef.current.connected) {
-        console.log('[Crash] Page visible, reconnecting socket');
-        socketRef.current.connect();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, []);
-
-
         const data = await res.json();
 
         if (data.state === 'flying') {
@@ -206,6 +204,18 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       }
     });
 
+    // Подтверждение ставки от сервера
+    socket.on('crash_bet_result', (data: { success: boolean; bet?: number }) => {
+      if (data.success) {
+        setHasBet(true);
+        hasBetRef.current = true;
+        console.log('[Crash] Ставка подтверждена сервером:', data.bet);
+      }
+    });
+
+    return () => { socket.disconnect(); };
+  }, []);
+
   // ── Сохранение ставки в sessionStorage при сворачивании вкладки ──
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -229,19 +239,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasBet, hasCashedOut, finalBet, betInput, gameState, cashedOutAt, autoCashoutEnabled, autoCashoutInput]);
-
-
-    // Подтверждение ставки от сервера
-    socket.on('crash_bet_result', (data: { success: boolean; bet?: number }) => {
-      if (data.success) {
-        setHasBet(true);
-        hasBetRef.current = true;
-        console.log('[Crash] Ставка подтверждена сервером:', data.bet);
-      }
-    });
-
-    return () => { socket.disconnect(); };
-  }, []);
 
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
 
