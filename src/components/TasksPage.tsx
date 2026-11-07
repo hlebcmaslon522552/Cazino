@@ -9,6 +9,10 @@ const TASK_ICONS: Record<string, React.ReactNode> = {
   daily_bet: <Gamepad2 size={22} />,
   daily_win: <Trophy size={22} />,
   daily_crash: <Target size={22} />,
+  daily_bet_5: <Gamepad2 size={22} />,
+  daily_crash_win_5x: <Target size={22} />,
+  daily_pvp_win: <Trophy size={22} />,
+  daily_case_open: <Gift size={22} />,
 };
 
 const TASK_COLORS: Record<string, string> = {
@@ -16,6 +20,10 @@ const TASK_COLORS: Record<string, string> = {
   daily_bet: '#3b82f6',
   daily_win: '#22c55e',
   daily_crash: '#ef4444',
+  daily_bet_5: '#3b82f6',
+  daily_crash_win_5x: '#ef4444',
+  daily_pvp_win: '#22c55e',
+  daily_case_open: '#a855f7',
 };
 
 interface Props {

@@ -139,10 +139,38 @@ FIELD_H = 300
 # ── Leaderboard / Prizes Config ─────────────────────────────────────
 # ── Daily Tasks Config ──────────────────────────────────────────────
 DAILY_TASKS = [
-    {"id": "daily_login", "title": "Зайти в бота", "goal": 1, "reward": 0.1},
-    {"id": "daily_bet",   "title": "Сделать 1 ставку", "goal": 1, "reward": 0.5},
-    {"id": "daily_win",   "title": "Выиграть 1 раз", "goal": 1, "reward": 1.0},
-    {"id": "daily_crash", "title": "Сыграть в Краш", "goal": 3, "reward": 0.3},
+    {
+        "id": "daily_bet_5",
+        "title": "Сделать 5 ставок (от 1 TON)",
+        "goal": 5,
+        "reward": 0.2,
+        "type": "bet_count",
+        "min_bet": 1.0
+    },
+    {
+        "id": "daily_crash_win_5x",
+        "title": "Выиграть в Краше x5 (ставка от 5 TON)",
+        "goal": 1,
+        "reward": 1.0,
+        "type": "crash_win",
+        "min_multiplier": 5.0,
+        "min_bet": 5.0
+    },
+    {
+        "id": "daily_pvp_win",
+        "title": "Выиграть в PvP 3 раза (ставка от 2 TON)",
+        "goal": 3,
+        "reward": 0.5,
+        "type": "pvp_win",
+        "min_bet": 2.0
+    },
+    {
+        "id": "daily_case_open",
+        "title": "Открыть 3 кейса (любых)",
+        "goal": 3,
+        "reward": 0.3,
+        "type": "case_open"
+    }
 ]
 
 LEADERBOARD_PRIZES = {
@@ -934,8 +962,6 @@ def get_balance():
     # ── Проверка/сброс ежедневных заданий при входе ──
     try:
         reset_user_tasks_if_new_day(user_id)
-        # Обновляем задание daily_login (заход в бота) при каждом запросе баланса
-        update_task_progress(user_id, "daily_login")
     except Exception as e:
         print(f"[get_balance] reset tasks error: {e}", flush=True)
 
@@ -1441,9 +1467,10 @@ def play_game():
 
     if game_type == "crash":
         crash_point = generate_crash_point()
-        # Обновляем задание daily_bet (ставка в краш)
+        # Обновляем задание daily_bet_5 (ставка от 1 TON)
         try:
-            update_task_progress(user_id, "daily_bet")
+            if bet_amount >= 1.0:
+                update_task_progress(user_id, "daily_bet_5")
         except Exception as e:
             print(f"[play_game] task progress error: {e}", flush=True)
         return jsonify({"crash_point": crash_point, "user_id": user_id})
@@ -1486,9 +1513,16 @@ def play_game():
             "user_id": user_id
         })
 
-    # Обновляем задание daily_bet для всех прочих game_type с bet_amount
+    # Обновляем задание daily_case_open (открытие кейса)
     try:
-        update_task_progress(user_id, "daily_bet")
+        update_task_progress(user_id, "daily_case_open")
+    except Exception as e:
+        print(f"[play_game] case task progress error: {e}", flush=True)
+
+    # Обновляем задание daily_bet_5 (ставка от 1 TON)
+    try:
+        if bet_amount >= 1.0:
+            update_task_progress(user_id, "daily_bet_5")
     except Exception as e:
         print(f"[play_game] task progress error: {e}", flush=True)
 
@@ -1540,11 +1574,12 @@ def plinko_drop():
     win_amount = round(bet_amount * multiplier, 2)
     print(f"[Plinko] Result: {multiplier}x, slotIndex={slot_index}, bet={bet_amount}, win={win_amount}")
 
-    # Обновляем задание daily_bet
+    # Обновляем задание daily_bet_5 (ставка от 1 TON)
     user_id = str(data.get("user_id", ""))
     if user_id:
         try:
-            update_task_progress(user_id, "daily_bet")
+            if bet_amount >= 1.0:
+                update_task_progress(user_id, "daily_bet_5")
         except Exception as e:
             print(f"[plinko_drop] task progress error: {e}", flush=True)
 
@@ -1622,6 +1657,13 @@ def open_case():
             return jsonify({"error": "Database error"}), 500
 
         print(f"[Case] Free case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}")
+
+        # Обновляем задание daily_case_open (открытие кейса)
+        try:
+            update_task_progress(user_id, "daily_case_open")
+        except Exception as e:
+            print(f"[open_case/free] task progress error: {e}", flush=True)
+
         return jsonify({"success": True, "item": {**item, "id": item_id}})
 
     # ── Платные кейсы ───────────────────────────────────────────────
@@ -1690,9 +1732,9 @@ def open_case():
 
     print(f"[Case] Paid case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}, case_id={case_id}")
 
-    # Обновляем задание daily_bet
+    # Обновляем задание daily_case_open (открытие кейса)
     try:
-        update_task_progress(user_id, "daily_bet")
+        update_task_progress(user_id, "daily_case_open")
     except Exception as e:
         print(f"[open_case] task progress error: {e}", flush=True)
 
@@ -2826,6 +2868,13 @@ def handle_spin_pvp(data):
 
         print(f"[PvP] Результат: комната {room_id}, победил {winner['username']}, банк {total_pot}")
 
+        # Обновляем задание daily_pvp_win (победа в PvP со ставкой от 2 TON)
+        try:
+            if winner['bet'] >= 2.0:
+                update_task_progress(winner['user_id'], "daily_pvp_win")
+        except Exception as e:
+            print(f"[PvP] task progress error: {e}", flush=True)
+
         # Удаляем комнату после завершения
         del PVP_ROOMS[room_id]
 
@@ -2871,9 +2920,10 @@ def handle_crash_bet(data):
     emit('crash_bet_result', {'success': True, 'bet': bet})
     print(f"[Crash] Подтверждение ставки отправлено {username} ({user_id})")
 
-    # Обновляем задание daily_crash (сыграть в краш)
+    # Обновляем задание daily_bet_5 (ставка от 1 TON)
     try:
-        update_task_progress(user_id, "daily_crash")
+        if bet >= 1.0:
+            update_task_progress(user_id, "daily_bet_5")
     except Exception as e:
         print(f"[Crash] task progress error: {e}", flush=True)
 
@@ -2967,9 +3017,10 @@ def handle_crash_cashout(data):
     })
     print(f"[CrashCashout] Успех: {username} ({user_id}) забрал {win_amount:.2f} TON по {multiplier}x")
 
-    # Обновляем задание daily_win
+    # Обновляем задание daily_crash_win_5x (выигрыш x5+ со ставкой от 5 TON)
     try:
-        update_task_progress(user_id, "daily_win")
+        if multiplier >= 5.0 and bet_amount >= 5.0:
+            update_task_progress(user_id, "daily_crash_win_5x")
     except Exception as e:
         print(f"[CrashCashout] task progress error: {e}", flush=True)
 
@@ -3047,9 +3098,10 @@ def handle_hockey_bet(data):
     emit('hockey_bet_result', {'success': True, 'bet': bet})
     print(f"[Hockey] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(HOCKEY_PLAYERS)}")
 
-    # Обновляем задание daily_bet
+    # Обновляем задание daily_bet_5 (ставка от 1 TON)
     try:
-        update_task_progress(user_id, "daily_bet")
+        if bet >= 1.0:
+            update_task_progress(user_id, "daily_bet_5")
     except Exception as e:
         print(f"[Hockey] task progress error: {e}", flush=True)
 
