@@ -20,6 +20,7 @@ interface Nft {
   image: string;
   collection?: string;
   floor: number;
+  status?: string;
 }
 
 // Курс для пересчета TON в звезды: 1 TON = 100 Stars
@@ -62,6 +63,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
               image: item.image || '',
               collection: item.collection,
               floor: floor,
+              status: item.status || 'available',
             } as Nft;
           })
         );
@@ -141,6 +143,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
+          inventory_id: selected.id,
           username: username,
           nft_name: selected.name,
           nft_price: selected.floor,
@@ -155,6 +158,12 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
 
       vibrate('success');
       onToast('Заявка на вывод отправлена администратору. Ожидайте.', 'success');
+      // Обновляем статус в локальном состоянии
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === selected.id ? { ...i, status: 'hold' } : i
+        )
+      );
       setSelected(null);
     } catch (err) {
       console.error('Ошибка при выводе:', err);
@@ -212,11 +221,27 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
         display: 'grid', gridTemplateColumns: '1fr 1fr',
         gap: 12, marginTop: spacing.md,
       }}>
-        {items.map((nft) => (
-          <Card key={nft.id} onClick={() => { haptic('light'); setSelected(nft); }}>
-            <img src={nft.image || publicUrl('NO_Inventory.png')} alt={nft.name} style={{
-              width: '100%', aspectRatio: '1', objectFit: 'contain', borderRadius: 12,
-            }} />
+        {items.map((nft) => {
+          const isHold = nft.status === 'hold';
+          return (
+          <Card key={nft.id} onClick={() => { if (!isHold) { haptic('light'); setSelected(nft); } }}
+            style={isHold ? { opacity: 0.5, pointerEvents: 'none' } : {}}
+          >
+            <div style={{ position: 'relative' }}>
+              <img src={nft.image || publicUrl('NO_Inventory.png')} alt={nft.name} style={{
+                width: '100%', aspectRatio: '1', objectFit: 'contain', borderRadius: 12,
+              }} />
+              {isHold && (
+                <div style={{
+                  position: 'absolute', top: 8, right: 8,
+                  background: 'rgba(255,165,0,0.9)', borderRadius: 8,
+                  padding: '4px 8px', fontSize: 11, fontWeight: 'bold',
+                  color: '#fff', display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  🔒 Ожидайте
+                </div>
+              )}
+            </div>
             <div style={{
               marginTop: 8, color: colors.accent,fontSize: 12, fontWeight: 'bold', letterSpacing: 1, textAlign: 'center',
             }}>
@@ -230,13 +255,15 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
                 size="sm"
                 fullWidth
                 variant="secondary"
+                disabled={isHold}
                 onClick={() => { haptic('light'); setSelected(nft); }}
               >
-                👁 Подробнее
+                {isHold ? '🔒 Ожидайте' : '👁 Подробнее'}
               </Button>
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {/* Модалка предмета */}
@@ -253,12 +280,23 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
             </div>
 
             <div style={{ marginTop: spacing.lg, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Button fullWidth variant="secondary" onClick={handleSell} disabled={isSelling}>
-                Продать за {selected.floor > 0 ? selected.floor.toFixed(2) : '—'} TON
-              </Button>
-              <Button fullWidth variant="danger" onClick={handleWithdraw} disabled={isWithdrawing}>
-                {isWithdrawing ? 'На проверке' : 'Вывести (холд 1 час)'}
-              </Button>
+              {selected.status === 'hold' ? (
+                <div style={{
+                  textAlign: 'center', color: '#FFA500', fontWeight: 'bold',
+                  padding: 12, background: 'rgba(255,165,0,0.1)', borderRadius: 8,
+                }}>
+                  🔒 Ожидайте проверки администратором
+                </div>
+              ) : (
+                <>
+                  <Button fullWidth variant="secondary" onClick={handleSell} disabled={isSelling}>
+                    Продать за {selected.floor > 0 ? selected.floor.toFixed(2) : '—'} TON
+                  </Button>
+                  <Button fullWidth variant="danger" onClick={handleWithdraw} disabled={isWithdrawing}>
+                    {isWithdrawing ? 'На проверке' : 'Вывести (холд)'}
+                  </Button>
+                </>
+              )}
               <Button fullWidth variant="ghost" onClick={() => setSelected(null)}>
                 Отмена
               </Button>

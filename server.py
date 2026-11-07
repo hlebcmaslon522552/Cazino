@@ -166,6 +166,8 @@ CHECK_INTERVAL_SEC = int(os.environ.get("LEADERBOARD_CHECK_INTERVAL", 3600))
 TG_BOT_TOKEN = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
 TG_ADMIN_CHAT_ID = os.environ.get("TG_ADMIN_CHAT_ID", "")
 
+ADMIN_ID = "6267608438"
+
 # Канал для проверки подписки (бонусный кейс) — бот должен быть в нём админом
 TG_SUBSCRIPTION_CHANNEL = os.environ.get("TG_SUBSCRIPTION_CHANNEL", "@Test_Erra")
 
@@ -223,9 +225,15 @@ def init_db():
             name TEXT,
             image TEXT,
             floor REAL,
+            status TEXT DEFAULT 'available',
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Добавляем колонку status, если её нет (для уже существующих БД)
+    try:
+        c.execute("ALTER TABLE inventory ADD COLUMN status TEXT DEFAULT 'available'")
+    except sqlite3.OperationalError:
+        pass  # колонка уже существует
 
     # 3. Таблица оборота (для лидерборда turnover)
     c.execute("""
@@ -1426,7 +1434,7 @@ def get_inventory():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("SELECT id, item_id, name, image, floor, timestamp FROM inventory WHERE user_id = ?", (user_id,))
+        c.execute("SELECT id, item_id, name, image, floor, status, timestamp FROM inventory WHERE user_id = ?", (user_id,))
         rows = c.fetchall()
     except Exception as e:
         print(f"[get_inventory] error: {e}")
@@ -1442,7 +1450,8 @@ def get_inventory():
             "name": row[2],
             "image": row[3],
             "floor": row[4],
-            "timestamp": row[5]
+            "status": row[5],
+            "timestamp": row[6]
         }
         for row in rows
     ]
@@ -1724,12 +1733,16 @@ def sell_nft():
 
         # 1. Проверяем, что NFT реально существует в инвентаре пользователя
         c.execute(
-            "SELECT id FROM inventory WHERE id = ? AND user_id = ?",
+            "SELECT id, status FROM inventory WHERE id = ? AND user_id = ?",
             (inventory_id, user_id)
         )
         nft_row = c.fetchone()
         if nft_row is None:
             return jsonify({"error": "NFT не найден"}), 404
+
+        # Не даём продать NFT, который на холде
+        if nft_row[1] == 'hold':
+            return jsonify({"error": "NFT на проверке, продажа недоступна"}), 400
 
         # 2. Удаляем NFT
         c.execute("DELETE FROM inventory WHERE id = ? AND user_id = ?",
@@ -1998,35 +2011,58 @@ def pvp_state():
         "in_pool": player_info is not None,
     })
 
-# ── Withdraw NFT (уведомление админу) ─────────────────────────────────
+# ── Withdraw NFT (холд для проверки админом) ────────────────────────────
 @app.route("/api/withdraw_nft", methods=["POST"])
 def withdraw_nft():
     """
-    Принимает заявку на вывод NFT и отправляет уведомление админу в Telegram.
+    Принимает заявку на вывод NFT:
+    - Ставит статус 'hold' в БД (не удаляет!)
+    - Отправляет уведомление админу в Telegram
     """
     data = request.get_json(force=True, silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON body"}), 400
 
     user_id = str(data.get("user_id", "unknown"))
+    inventory_id = data.get("inventory_id") or data.get("item_id")
     username = bleach.clean(str(data.get("username", "unknown")), tags=[], strip=True)
     nft_name = str(data.get("nft_name", "unknown"))
     nft_price = float(data.get("nft_price", 0))
 
-    # Формируем текст уведомления
+    # 1. Обновляем статус NFT на 'hold' в БД
+    if inventory_id:
+        conn = None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute(
+                "UPDATE inventory SET status = 'hold' WHERE id = ? AND user_id = ?",
+                (inventory_id, user_id)
+            )
+            if c.rowcount == 0:
+                print(f"[withdraw_nft] NFT {inventory_id} не найден у user={user_id}")
+            conn.commit()
+        except Exception as e:
+            print(f"[withdraw_nft] DB error: {e}")
+        finally:
+            if conn:
+                conn.close()
+
+    # 2. Формируем текст уведомления
     text = (
         "🔔 ЗАЯВКА НА ВЫВОД NFT!\n\n"
         "👤 Юзер: @{} (ID: {})\n"
         "🎁 NFT: {}\n"
-        "💰 Цена: {} TON\n\n"
-        "⚠️ Проверьте NFT и отправьте его юзеру."
-    ).format(username, user_id, nft_name, nft_price)
+        "💰 Цена: {} TON\n"
+        "🆔 ID заявки: {}\n\n"
+        "⚠️ Зайдите в панель администратора, чтобы подтвердить или отклонить вывод."
+    ).format(username, user_id, nft_name, nft_price, inventory_id or "—")
 
     try:
         bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
         url = f"https://stars.gleb0256149.workers.dev/bot{bot_token}/sendMessage"
         payload = {
-            "chat_id": 6267608438,
+            "chat_id": ADMIN_ID,
             "text": text,
         }
         resp = requests.post(url, json=payload, timeout=10)
@@ -2035,7 +2071,93 @@ def withdraw_nft():
     except Exception as e:
         print(f"[withdraw_nft] Request failed: {e}")
 
-    return jsonify({"success": True})
+    return jsonify({"success": True, "status": "hold"})
+
+
+# ── Admin Panel ────────────────────────────────────────────────────────────
+
+@app.route("/admin", methods=["GET"])
+def admin_panel():
+    """Отдаёт панель администратора (admin.html)."""
+    user_id = request.args.get("user_id", "")
+    if user_id != ADMIN_ID:
+        return jsonify({"error": "Forbidden"}), 403
+    return app.send_static_file("admin.html")
+
+
+@app.route("/api/admin/requests", methods=["GET"])
+def admin_requests():
+    """Возвращает список всех NFT со статусом 'hold'."""
+    user_id = request.args.get("user_id", "")
+    if user_id != ADMIN_ID:
+        return jsonify({"error": "Forbidden"}), 403
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, user_id, name, image, floor, timestamp FROM inventory WHERE status = 'hold' ORDER BY timestamp DESC"
+        )
+        rows = c.fetchall()
+    except Exception as e:
+        print(f"[admin_requests] error: {e}")
+        return jsonify([])
+    finally:
+        if conn:
+            conn.close()
+
+    items = [
+        {
+            "id": row[0],
+            "user_id": row[1],
+            "name": row[2],
+            "image": row[3],
+            "floor": row[4],
+            "timestamp": row[5],
+        }
+        for row in rows
+    ]
+    return jsonify(items)
+
+
+@app.route("/api/admin/action", methods=["POST"])
+def admin_action():
+    """Обрабатывает решение админа: approve (выдано) или reject (отказано)."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    admin_id = data.get("admin_id", "")
+    if admin_id != ADMIN_ID:
+        return jsonify({"error": "Forbidden"}), 403
+
+    inventory_id = data.get("inventory_id")
+    action = data.get("action", "").strip().lower()
+
+    if not inventory_id or action not in ("approve", "reject"):
+        return jsonify({"error": "Invalid parameters"}), 400
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+
+        if action == "approve":
+            c.execute("UPDATE inventory SET status = 'sold' WHERE id = ?", (inventory_id,))
+            print(f"[admin_action] NFT {inventory_id} — ВЫДАНО (sold)", flush=True)
+        elif action == "reject":
+            c.execute("UPDATE inventory SET status = 'available' WHERE id = ?", (inventory_id,))
+            print(f"[admin_action] NFT {inventory_id} — ОТКАЗАНО (available)", flush=True)
+
+        conn.commit()
+        return jsonify({"success": True, "status": "sold" if action == "approve" else "available"})
+    except Exception as e:
+        print(f"[admin_action] error: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 # ── Turnover Leaderboard ──────────────────────────────────────────────
