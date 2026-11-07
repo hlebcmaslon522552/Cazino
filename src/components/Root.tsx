@@ -15,6 +15,7 @@ import { CrashPage } from './CrashPage';
 import { PvP2Page } from './PvP2Page';
 import { ProfilePage } from './ProfilePage';
 import { InventoryPage } from './InventoryPage';
+import { TasksPage } from './TasksPage';
 import { GiftShop } from './GiftShop';
 import { TopUpPage } from './TopUpPage';
 import { NewsPage } from './NewsPage';
@@ -27,7 +28,7 @@ import { publicUrl } from '../helpers/publicUrl';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
 
-export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory' | 'bet_history';
+export type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory' | 'bet_history' | 'tasks';
 export type GameScreen = 'menu' | 'upgrader' | 'case' | 'cases' | 'mines' | 'pvp' | 'plinko' | 'crash';
 
 export function Root() {
@@ -142,6 +143,9 @@ export function Root() {
       )}
       {activeTab === 'inventory' && (
         <InventoryPage onToast={showToast} onBalanceChange={refreshBalance} />
+      )}
+      {activeTab === 'tasks' && (
+        <TasksPage balance={balance} onUpdateBalance={handleUpdateBalance} onToast={showToast} />
       )}
       {activeTab === 'profile' && <ProfilePage onNavigate={handleTabChange} balance={balance} />}
       {activeTab === 'market' && (

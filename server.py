@@ -137,6 +137,14 @@ FIELD_H = 300
 
 
 # ── Leaderboard / Prizes Config ─────────────────────────────────────
+# ── Daily Tasks Config ──────────────────────────────────────────────
+DAILY_TASKS = [
+    {"id": "daily_login", "title": "Зайти в бота", "goal": 1, "reward": 0.1},
+    {"id": "daily_bet",   "title": "Сделать 1 ставку", "goal": 1, "reward": 0.5},
+    {"id": "daily_win",   "title": "Выиграть 1 раз", "goal": 1, "reward": 1.0},
+    {"id": "daily_crash", "title": "Сыграть в Краш", "goal": 3, "reward": 0.3},
+]
+
 LEADERBOARD_PRIZES = {
     1: 500.0,
     2: 250.0,
@@ -291,6 +299,18 @@ def init_db():
         )
     """)
 
+    # 7. Таблица ежедневных заданий
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS user_tasks (
+            user_id TEXT,
+            task_id TEXT,
+            progress INTEGER DEFAULT 0,
+            claimed BOOLEAN DEFAULT 0,
+            last_reset TEXT,
+            PRIMARY KEY (user_id, task_id)
+        )
+    """)
+
     # Инициализация времени последнего сброса
     c.execute("INSERT OR IGNORE INTO config (key, value) VALUES ('last_reset', datetime('now'))")
 
@@ -341,6 +361,70 @@ def sanitize_turnover():
 
 
 sanitize_turnover()
+
+
+# ── Daily Tasks Helpers ────────────────────────────────────────────
+
+def reset_user_tasks_if_new_day(user_id):
+    """Сбрасывает progress и claimed для всех задач пользователя, если наступил новый день."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        # Проверяем last_reset для любой задачи пользователя
+        c.execute("SELECT last_reset FROM user_tasks WHERE user_id = ? LIMIT 1", (user_id,))
+        row = c.fetchone()
+        last_reset = row[0] if row else None
+        if last_reset is None or last_reset != today:
+            # Новый день — сбрасываем все задачи пользователя
+            for task in DAILY_TASKS:
+                c.execute(
+                    "INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
+                    (user_id, task["id"], today)
+                )
+            conn.commit()
+            print(f"[DailyTasks] Сброс задач для user={user_id} на дату {today}", flush=True)
+        else:
+            # Убеждаемся, что все задачи существуют (для новых добавленных задач)
+            for task in DAILY_TASKS:
+                c.execute(
+                    "INSERT OR IGNORE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
+                    (user_id, task["id"], today)
+                )
+            conn.commit()
+    except Exception as e:
+        print(f"[DailyTasks] reset_user_tasks_if_new_day error: {e}", flush=True)
+    finally:
+        if conn:
+            conn.close()
+    return today
+
+def update_task_progress(user_id, task_id, increment=1):
+    """Увеличивает прогресс задачи (если не забрана и не новый день)."""
+    today = reset_user_tasks_if_new_day(user_id)
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        # Убеждаемся, что задача существует
+        c.execute(
+            "INSERT OR IGNORE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
+            (user_id, task_id, today)
+        )
+        # Увеличиваем progress только если не claimed
+        c.execute(
+            "UPDATE user_tasks SET progress = progress + ? WHERE user_id = ? AND task_id = ? AND claimed = 0",
+            (increment, user_id, task_id)
+        )
+        conn.commit()
+        print(f"[DailyTasks] Обновлён прогресс user={user_id} task={task_id} +{increment}", flush=True)
+    except Exception as e:
+        print(f"[DailyTasks] update_task_progress error: {e}", flush=True)
+    finally:
+        if conn:
+            conn.close()
+
 
 def verify_init_data(init_data):
     """Проверяет подпись Telegram initData с использованием HMAC-SHA256.
@@ -813,6 +897,15 @@ def get_balance():
 
     user_id = request.args.get("user_id", "6267608438")
     print(f"REQUEST: /api/balance user_id={user_id}", flush=True)
+
+    # ── Проверка/сброс ежедневных заданий при входе ──
+    try:
+        reset_user_tasks_if_new_day(user_id)
+        # Обновляем задание daily_login (заход в бота) при каждом запросе баланса
+        update_task_progress(user_id, "daily_login")
+    except Exception as e:
+        print(f"[get_balance] reset tasks error: {e}", flush=True)
+
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -840,6 +933,133 @@ def get_balance():
         if conn:
             conn.close()
     return jsonify({"balance_ton": 15.0, "balance_stars": 0.0})
+
+
+# ── Daily Tasks API ────────────────────────────────────────────────
+
+@app.route("/api/tasks", methods=["GET"])
+def get_tasks():
+    """Возвращает список заданий с прогрессом и флагом claimed для пользователя."""
+    user_id = request.args.get("user_id", "6267608438")
+
+    # Проверка/сброс нового дня
+    try:
+        reset_user_tasks_if_new_day(user_id)
+    except Exception as e:
+        print(f"[get_tasks] reset error: {e}", flush=True)
+
+    tasks_response = []
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        for task in DAILY_TASKS:
+            c.execute(
+                "SELECT progress, claimed, last_reset FROM user_tasks WHERE user_id = ? AND task_id = ?",
+                (user_id, task["id"])
+            )
+            row = c.fetchone()
+            progress = row[0] if row else 0
+            claimed = bool(row[1]) if row else False
+            tasks_response.append({
+                "id": task["id"],
+                "title": task["title"],
+                "goal": task["goal"],
+                "reward": task["reward"],
+                "progress": progress,
+                "claimed": claimed,
+            })
+    except Exception as e:
+        print(f"[get_tasks] error: {e}", flush=True)
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+    return jsonify({"tasks": tasks_response})
+
+
+@app.route("/api/tasks/claim", methods=["POST"])
+def claim_task_reward():
+    """Принимает { user_id, task_id }, проверяет условие и начисляет награду."""
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    user_id = str(data.get("user_id", ""))
+    task_id = str(data.get("task_id", ""))
+
+    if not user_id or not task_id:
+        return jsonify({"error": "user_id and task_id are required"}), 400
+
+    # Проверяем, что task_id существует
+    task_config = None
+    for t in DAILY_TASKS:
+        if t["id"] == task_id:
+            task_config = t
+            break
+    if not task_config:
+        return jsonify({"error": f"Unknown task_id: {task_id}"}), 400
+
+    # Проверка/сброс нового дня
+    try:
+        reset_user_tasks_if_new_day(user_id)
+    except Exception as e:
+        print(f"[claim_task] reset error: {e}", flush=True)
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+
+        # Читаем текущий прогресс
+        c.execute(
+            "SELECT progress, claimed FROM user_tasks WHERE user_id = ? AND task_id = ?",
+            (user_id, task_id)
+        )
+        row = c.fetchone()
+        if not row:
+            return jsonify({"error": "Task not found for user"}), 404
+
+        progress = row[0]
+        claimed = bool(row[1])
+
+        if claimed:
+            return jsonify({"error": "Reward already claimed"}), 400
+
+        if progress < task_config["goal"]:
+            return jsonify({"error": "Task not completed yet"}), 400
+
+        # Начисляем награду
+        reward = task_config["reward"]
+        c.execute(
+            "UPDATE users SET balance_ton = COALESCE(balance_ton, 0) + ? WHERE id = ?",
+            (reward, user_id)
+        )
+        # Помечаем как забранное
+        c.execute(
+            "UPDATE user_tasks SET claimed = 1 WHERE user_id = ? AND task_id = ?",
+            (user_id, task_id)
+        )
+        conn.commit()
+
+        # Получаем новый баланс
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        new_balance = round(c.fetchone()[0], 4)
+
+        print(f"[DailyTasks] Награда выдана user={user_id} task={task_id} reward={reward} TON", flush=True)
+
+        return jsonify({
+            "success": True,
+            "reward": reward,
+            "balance_ton": new_balance,
+        })
+    except Exception as e:
+        print(f"[claim_task] error: {e}", flush=True)
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 # ── Referral: установить реферера ─────────────────────────────────────
@@ -1188,6 +1408,11 @@ def play_game():
 
     if game_type == "crash":
         crash_point = generate_crash_point()
+        # Обновляем задание daily_bet (ставка в краш)
+        try:
+            update_task_progress(user_id, "daily_bet")
+        except Exception as e:
+            print(f"[play_game] task progress error: {e}", flush=True)
         return jsonify({"crash_point": crash_point, "user_id": user_id})
 
     elif game_type == "case":
@@ -1227,6 +1452,12 @@ def play_game():
             },
             "user_id": user_id
         })
+
+    # Обновляем задание daily_bet для всех прочих game_type с bet_amount
+    try:
+        update_task_progress(user_id, "daily_bet")
+    except Exception as e:
+        print(f"[play_game] task progress error: {e}", flush=True)
 
     else:
         return jsonify({"error": f"Unknown game_type: {game_type}"}), 400
@@ -1275,6 +1506,15 @@ def plinko_drop():
 
     win_amount = round(bet_amount * multiplier, 2)
     print(f"[Plinko] Result: {multiplier}x, slotIndex={slot_index}, bet={bet_amount}, win={win_amount}")
+
+    # Обновляем задание daily_bet
+    user_id = str(data.get("user_id", ""))
+    if user_id:
+        try:
+            update_task_progress(user_id, "daily_bet")
+        except Exception as e:
+            print(f"[plinko_drop] task progress error: {e}", flush=True)
+
     return jsonify({
         "slotIndex": slot_index,
         "multiplier": multiplier,
@@ -1416,6 +1656,13 @@ def open_case():
         return jsonify({"error": "Database error"}), 500
 
     print(f"[Case] Paid case rolled: item_id={item_id}, name={item['name']}, rarity={item.get('rarity', '?')}, case_id={case_id}")
+
+    # Обновляем задание daily_bet
+    try:
+        update_task_progress(user_id, "daily_bet")
+    except Exception as e:
+        print(f"[open_case] task progress error: {e}", flush=True)
+
     return jsonify({"success": True, "item": {**item, "id": item_id}})
 
 
@@ -2591,6 +2838,12 @@ def handle_crash_bet(data):
     emit('crash_bet_result', {'success': True, 'bet': bet})
     print(f"[Crash] Подтверждение ставки отправлено {username} ({user_id})")
 
+    # Обновляем задание daily_crash (сыграть в краш)
+    try:
+        update_task_progress(user_id, "daily_crash")
+    except Exception as e:
+        print(f"[Crash] task progress error: {e}", flush=True)
+
     socketio.emit('crash_players_update', {'players': players_snapshot})
     print(f"[Crash] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(CRASH_PLAYERS)}")
 
@@ -2681,6 +2934,12 @@ def handle_crash_cashout(data):
     })
     print(f"[CrashCashout] Успех: {username} ({user_id}) забрал {win_amount:.2f} TON по {multiplier}x")
 
+    # Обновляем задание daily_win
+    try:
+        update_task_progress(user_id, "daily_win")
+    except Exception as e:
+        print(f"[CrashCashout] task progress error: {e}", flush=True)
+
 
 # ── Hockey WebSocket Handlers ───────────────────────────────────────────
 @socketio.on('hockey_bet')
@@ -2754,6 +3013,12 @@ def handle_hockey_bet(data):
     # Отправляем подтверждение ставки конкретному игроку
     emit('hockey_bet_result', {'success': True, 'bet': bet})
     print(f"[Hockey] Ставка {username} ({user_id}): {bet} TON. Игроков в пуле: {len(HOCKEY_PLAYERS)}")
+
+    # Обновляем задание daily_bet
+    try:
+        update_task_progress(user_id, "daily_bet")
+    except Exception as e:
+        print(f"[Hockey] task progress error: {e}", flush=True)
 
 
 @socketio.on('connect')

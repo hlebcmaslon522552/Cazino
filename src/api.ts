@@ -193,3 +193,71 @@ export const getFloorPrice = async (collectionName: string) => {
   }
   return res.json();
 };
+
+// ── Daily Tasks API ────────────────────────────────────────────────
+
+export interface DailyTask {
+  id: string;
+  title: string;
+  goal: number;
+  reward: number;
+  progress: number;
+  claimed: boolean;
+}
+
+export interface TasksResponse {
+  tasks: DailyTask[];
+}
+
+export const fetchTasks = async (userId: string): Promise<DailyTask[]> => {
+  const url = `${CONFIG.API_URL}/api/tasks?user_id=${userId}`;
+  console.log('FETCH:', url);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+    });
+    if (!res.ok) {
+      console.warn('fetchTasks failed:', res.status, res.statusText);
+      return [];
+    }
+    const data: TasksResponse = await res.json();
+    return data.tasks || [];
+  } catch (err) {
+    console.warn('fetchTasks error:', err);
+    return [];
+  }
+};
+
+export interface ClaimTaskResult {
+  success: boolean;
+  reward: number;
+  balance_ton: number;
+}
+
+export const claimTask = async (userId: string, taskId: string): Promise<ClaimTaskResult | null> => {
+  const url = `${CONFIG.API_URL}/api/tasks/claim`;
+  console.log('FETCH:', url);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+      },
+      body: JSON.stringify({ user_id: userId, task_id: taskId }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.warn('claimTask failed:', res.status, errData);
+      return null;
+    }
+    const data: ClaimTaskResult = await res.json();
+    return data;
+  } catch (err) {
+    console.warn('claimTask error:', err);
+    return null;
+  }
+};

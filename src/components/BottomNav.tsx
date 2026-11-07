@@ -1,7 +1,6 @@
-import { ASSETS } from '../assets';
-import { ShoppingBag, Swords, User, Trophy, Backpack } from 'lucide-react';
+import { Swords, User, Trophy, Backpack, ListChecks } from 'lucide-react';
 
-type Tab = 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory';
+type Tab = 'home' | 'game' | 'profile' | 'market' | 'topup' | 'news' | 'referral' | 'leaderboard' | 'inventory' | 'bet_history' | 'tasks';
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -10,7 +9,7 @@ interface BottomNavProps {
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs: { id: Tab; icon: React.ReactNode }[] = [
-    { id: 'market',      icon: <ShoppingBag size={20} /> },
+    { id: 'tasks',       icon: <ListChecks size={20} /> },
     { id: 'game',        icon: <Swords size={20} /> },
     { id: 'inventory',   icon: <Backpack size={20} /> },
     { id: 'leaderboard', icon: <Trophy size={20} /> },
@@ -18,6 +17,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   ];
 
   const labelMap: Record<string, string> = {
+    tasks: 'Задания',
     market: 'Маркет',
     game: 'Игры',
     inventory: 'Инвентарь',
