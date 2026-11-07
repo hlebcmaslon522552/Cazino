@@ -34,6 +34,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   const [items, setItems] = useState<Nft[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSelling, setIsSelling] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const { haptic, vibrate, initData, user } = useTelegram();
 
   // Загружаем инвентарь с сервера
@@ -123,6 +124,8 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
 
   const handleWithdraw = async () => {
     if (!selected) return;
+    if (isWithdrawing) return;
+    setIsWithdrawing(true);
     haptic('medium');
 
     try {
@@ -152,6 +155,8 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     } catch (err) {
       console.error('Ошибка при выводе:', err);
       onToast('Ошибка при отправке заявки', 'error');
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -233,24 +238,22 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
       {/* Модалка предмета */}
       <Modal open={!!selected} onClose={() => setSelected(null)}>
         {selected && (
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <img src={selected.image || publicUrl('NO_Inventory.png')} alt={selected.name} style={{
               width: '80%', maxWidth: '200px', borderRadius: 12, marginBottom: 12,
+              transform: ['Fine Pens', 'Resistance Dogs', 'Lucky Lockets', 'Mirage Lamps'].includes(selected.name) ? 'scale(1.3)' : 'none',
             }} />
             <div style={{ fontWeight: 'bold', fontSize: 18 }}>{selected.name}</div>
             <div style={{ color: colors.accent, marginTop: 4, fontWeight: 'bold', fontSize: 16 }}>
               {selected.floor > 0 ? `${selected.floor.toFixed(2)} TON` : '— TON'}
             </div>
-            <div style={{ color: colors.textMuted, marginTop: 2, fontSize: 14 }}>
-              ≈ {selected.floor > 0 ? calcStars(selected.floor).toLocaleString() : '—'} ⭐
-            </div>
 
             <div style={{ marginTop: spacing.lg, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <Button fullWidth variant="secondary" onClick={handleSell} disabled={isSelling}>
-                💎 Продать за {selected.floor > 0 ? selected.floor.toFixed(2) : '—'} TON
+                Продать за {selected.floor > 0 ? selected.floor.toFixed(2) : '—'} TON
               </Button>
-              <Button fullWidth variant="danger" onClick={handleWithdraw}>
-                📤 Вывести (холд 1 час)
+              <Button fullWidth variant="danger" onClick={handleWithdraw} disabled={isWithdrawing}>
+                {isWithdrawing ? 'На проверке' : 'Вывести (холд 1 час)'}
               </Button>
               <Button fullWidth variant="ghost" onClick={() => setSelected(null)}>
                 Отмена

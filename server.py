@@ -1518,6 +1518,53 @@ def get_floor():
     return jsonify({"error": "Collection not found"}), 404
 
 
+# ── Auto-update NFT floors ─────────────────────────────────────────────────
+def update_nft_floors():
+    """Читает my_nfts.json, для каждого NFT запрашивает актуальную floor-цену
+    через api.changes.tg и обновляет поле floor. При ошибке API оставляет старую цену."""
+    nft_path = os.path.join(os.path.dirname(__file__), "public", "my_nfts.json")
+    if not os.path.exists(nft_path):
+        print("[NFT Update] Файл my_nfts.json не найден")
+        return
+
+    try:
+        with open(nft_path, "r", encoding="utf-8") as f:
+            nfts = json.load(f)
+    except Exception as e:
+        print(f"[NFT Update] Ошибка чтения JSON: {e}")
+        return
+
+    updated = 0
+    for nft in nfts:
+        name = nft.get("name", "").strip()
+        if not name:
+            continue
+        slug = name.lower().replace(" ", "-")
+        url = f"https://api.changes.tg/collection/{slug}"
+        try:
+            resp = requests.get(url, timeout=10)
+            if resp.ok:
+                data = resp.json()
+                floor_price = data.get("floor_price")
+                if floor_price is not None:
+                    nft["floor"] = float(floor_price)
+                    updated += 1
+                    print(f"[NFT Update] {name}: floor = {floor_price}")
+                else:
+                    print(f"[NFT Update] {name}: нет floor_price в ответе")
+            else:
+                print(f"[NFT Update] {name}: API вернул {resp.status_code}")
+        except Exception as e:
+            print(f"[NFT Update] {name}: ошибка сети/API — {e}")
+
+    try:
+        with open(nft_path, "w", encoding="utf-8") as f:
+            json.dump(nfts, f, indent=2, ensure_ascii=False)
+        print(f"[NFT Update] Обновлено {updated} / {len(nfts)} предметов")
+    except Exception as e:
+        print(f"[NFT Update] Ошибка записи JSON: {e}")
+
+
 # ── Buy NFT (Market) ─────────────────────────────────────────────────────
 @app.route("/api/buy_nft", methods=["POST"])
 def buy_nft():
@@ -2805,6 +2852,20 @@ hockey_thread = threading.Thread(target=hockey_game_loop, daemon=True)
 hockey_thread.start()
 print("[Server] Фоновый поток Hockey запущен.")
 
+
+# ── Фоновый поток обновления floor-цен ────────────────────────────────────
+def update_floors_loop():
+    while True:
+        try:
+            update_nft_floors()
+        except Exception as e:
+            print(f"[NFT Update] Ошибка: {e}")
+        time.sleep(3600)  # раз в час
+
+
+nft_update_thread = threading.Thread(target=update_floors_loop, daemon=True)
+nft_update_thread.start()
+print("[Server] Фоновый поток обновления floor-цен запущен.")
 
 
 
