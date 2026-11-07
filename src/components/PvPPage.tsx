@@ -78,7 +78,9 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
   };
 
   useEffect(() => {
-    const socket = io(CONFIG.API_URL, {
+    const socketUrl = CONFIG.API_URL || window.location.origin;
+    console.log('SOCKET URL:', socketUrl);
+    const socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
     });
 

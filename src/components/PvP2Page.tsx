@@ -356,7 +356,9 @@ const reset = () => {
     animFrameRef.current = requestAnimationFrame(animate);
   };
   useEffect(() => {
-    const socket = io(CONFIG.API_URL, { transports: ['websocket', 'polling'] });
+    const socketUrl = CONFIG.API_URL || window.location.origin;
+    console.log('SOCKET URL:', socketUrl);
+    const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
     socket.on('connect', () => {
       console.log('[PvP2] Socket connected');
       // userIdRef хранит ТОЛЬКО реальный Telegram ID (заполняется в createGame из useTelegram).

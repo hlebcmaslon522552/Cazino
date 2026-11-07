@@ -139,8 +139,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
   // ── Сокеты ──
   useEffect(() => {
-    console.log('SOCKET URL:', CONFIG.API_URL);
-    const socket = io(CONFIG.API_URL, { transports: ['websocket', 'polling'] });
+    const socketUrl = CONFIG.API_URL || window.location.origin;
+    console.log('SOCKET URL:', socketUrl);
+    const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
     socket.on('connect', () => console.log('SOCKET CONNECTED'));
