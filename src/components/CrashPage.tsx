@@ -201,10 +201,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         // Сервер подтвердил забор — показываем тост
         onToast?.(`Вы забрали ${data.win_amount.toFixed(2)} TON по ${data.multiplier.toFixed(2)}x`, 'success');
 
-        // Синхронизируем баланс с сервером (на случай расхождений)
-        if (data.new_balance > 0) {
-          onUpdateBalance(data.new_balance - balanceRef.current);
-        }
+        // Синхронизируем баланс с сервером: new_balance — это уже итоговый баланс в БД,
+        // который = (баланс_до_ставки - bet) + win_amount
+        onUpdateBalance(data.new_balance - balanceRef.current);
 
         // Крупный занос (>= 10 TON и множитель >= 25x) — отправляем скриншот админу.
         // record_win на сервере выполняется ДО этого события (crash_cashout_result),
@@ -313,8 +312,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     if (m >= 93) return;
     const winAmount = finalBet * m;
     
-    // Оптимистично обновляем баланс (выигрыш)
-    onUpdateBalance(winAmount);
+    // Баланс синхронизируется с сервера в crash_cashout_result
     
     setCashedOutAt(m);
     setHasCashedOut(true);
