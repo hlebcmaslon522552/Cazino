@@ -503,6 +503,26 @@ def record_win(user_id, game_type, amount, bet_type="ton", item_name=""):
             conn.close()
 
 
+def add_bet_history(user_id, game_type, bet_type, amount, item_name, kind):
+    """Записывает запись в bet_history."""
+    if amount <= 0:
+        return
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO bet_history (user_id, game_type, bet_type, amount, item_name, kind) VALUES (?, ?, ?, ?, ?, ?)",
+            (str(user_id), str(game_type), str(bet_type), float(amount), str(item_name), str(kind)),
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[add_bet_history] error: {e}", flush=True)
+    finally:
+        if conn:
+            conn.close()
+
+
 def record_loss(user_id, game_type, amount, bet_type="ton", item_name=""):
     """Записывает проигрыш в историю ставок (kind='bet' — вкладка «Проигрыши»).
 
@@ -1901,7 +1921,6 @@ def open_case():
                     "INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, ?)",
                     (user_id, item["price"])
                 )
-                # Бесплатный кейс (цена 0) в bet_history НЕ записываем.
             else:
                 # Добавляем предмет в инвентарь
                 c.execute(
@@ -1915,6 +1934,11 @@ def open_case():
                 (user_id, today)
             )
             conn.commit()
+            # После успешного commit'а — записываем в историю
+            if item.get("type") == "ton":
+                add_bet_history(user_id, "case_free", "ton", item['price'], item['name'], "win")
+            else:
+                add_bet_history(user_id, "case_free", "nft", item['price'], item['name'], "win")
             if conn:
                 conn.close()
         except Exception as e:
@@ -2039,7 +2063,7 @@ def get_inventory():
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute("SELECT id, item_id, name, image, floor, status, timestamp FROM inventory WHERE user_id = ?", (user_id,))
+        c.execute("SELECT id, item_id, name, image, floor, status, timestamp FROM inventory WHERE user_id = ? AND status != 'sold'", (user_id,))
         rows = c.fetchall()
     except Exception as e:
         print(f"[get_inventory] error: {e}")
@@ -2932,12 +2956,13 @@ def telegram_polling():
                     if action == "approve":
                         c.execute("UPDATE inventory SET status = 'sold' WHERE id = ?", (inv_id,))
                         status_text = "✅ ВЫДАНО"
-                        print(f"[Polling] NFT {inv_id} — ВЫДАНО (sold)", flush=True)
+                        print(f"[Polling] approve для inventory_id={inv_id} — статус → sold", flush=True)
                     else:
                         c.execute("UPDATE inventory SET status = 'available' WHERE id = ?", (inv_id,))
                         status_text = "❌ ОТКАЗАНО"
-                        print(f"[Polling] NFT {inv_id} — ОТКАЗАНО (available)", flush=True)
+                        print(f"[Polling] reject для inventory_id={inv_id} — статус → available", flush=True)
 
+                    print(f"[Polling] {action} для inventory_id={inv_id} — коммит...", flush=True)
                     conn.commit()
                 except Exception as e:
                     print(f"[Polling] DB error: {e}", flush=True)
@@ -3412,6 +3437,27 @@ def handle_crash_bet(data):
         emit('crash_error', {'error': 'Invalid bet data'})
         return
 
+    # ── Проверка баланса и списание ──
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT balance_ton FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if not row or row[0] < bet:
+            if conn: conn.close()
+            emit('crash_error', {'error': 'Insufficient balance'})
+            return
+        c.execute("UPDATE users SET balance_ton = COALESCE(balance_ton, 0) - ? WHERE id = ?", (bet, user_id))
+        conn.commit()
+    except Exception as e:
+        print(f"[CrashBet] DB error: {e}", flush=True)
+        if conn: conn.close()
+        emit('crash_error', {'error': 'Internal error'})
+        return
+    finally:
+        if conn: conn.close()
+
     with CRASH_LOCK:
         # Если игрок уже в списке — обновляем его ставку вместо дубля
         CRASH_PLAYERS = [p for p in CRASH_PLAYERS if p['user_id'] != user_id]
@@ -3469,6 +3515,9 @@ def handle_crash_cashout(data):
     with CRASH_LOCK:
         for p in CRASH_PLAYERS:
             if p['user_id'] == user_id:
+                if p.get('cashed_out', False):
+                    emit('crash_error', {'error': 'Already cashed out'})
+                    return
                 bet_amount = p['bet']
                 username = p['username']
                 p['cashed_out'] = True
@@ -3633,14 +3682,22 @@ def handle_hockey_bet(data):
 
 @socketio.on('connect')
 def handle_connect():
-    """При подключении просто отправляем актуальный список игроков, не восстанавливая никого.
-    Игрок попадает в пул только через явное событие hockey_bet."""
+    """При подключении отправляем актуальные списки игроков для всех игр."""
+    # Отправляем список для Hockey
     with HOCKEY_LOCK:
-        players_snapshot = [
+        hockey_snapshot = [
             {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet'], 'color': '#a855f7'}
             for p in HOCKEY_PLAYERS
         ]
-    emit('hockey_players_update', {'players': players_snapshot})
+    emit('hockey_players_update', {'players': hockey_snapshot})
+
+    # Отправляем список для Crash
+    with CRASH_LOCK:
+        crash_snapshot = [
+            {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet']}
+            for p in CRASH_PLAYERS
+        ]
+    emit('crash_players_update', {'players': crash_snapshot})
 
 
 @socketio.on('pvp_leave')
