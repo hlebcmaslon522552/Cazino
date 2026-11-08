@@ -152,20 +152,12 @@ DAILY_TASKS = [
     },
     {
         "id": "daily_crash_win_5x",
-        "title": "Выиграть в Краше x5 (ставка от 5 TON)",
+        "title": "Выиграть в Краше x4 (ставка от 5 TON)",
         "goal": 1,
         "reward": 1.0,
         "type": "crash_win",
-        "min_multiplier": 5.0,
+        "min_multiplier": 4.0,
         "min_bet": 5.0
-    },
-    {
-        "id": "daily_pvp_win",
-        "title": "Выиграть в PvP 3 раза (ставка от 2 TON)",
-        "goal": 3,
-        "reward": 0.5,
-        "type": "pvp_win",
-        "min_bet": 2.0
     },
     {
         "id": "daily_case_open",
@@ -397,18 +389,32 @@ sanitize_turnover()
 # ── Daily Tasks Helpers ────────────────────────────────────────────
 
 def reset_user_tasks_if_new_day(user_id):
-    """Сбрасывает progress и claimed для всех задач пользователя, если наступил новый день."""
+    """Сбрасывает progress и claimed для всех задач пользователя, если наступил новый день.
+
+    Проверяем last_reset ПО КАЖДОЙ задаче из DAILY_TASKS (а не «любую строку
+    пользователя через LIMIT 1»). Если в БД остались строки удалённых/старых
+    заданий (например, daily_login или daily_pvp_win), они НЕ должны вызывать
+    ложный сброс. Если день не сменился — прогресс не трогается.
+    """
     today = datetime.utcnow().strftime("%Y-%m-%d")
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        # Проверяем last_reset для любой задачи пользователя
-        c.execute("SELECT last_reset FROM user_tasks WHERE user_id = ? LIMIT 1", (user_id,))
-        row = c.fetchone()
-        last_reset = row[0] if row else None
-        if last_reset is None or last_reset != today:
-            # Новый день — сбрасываем все задачи пользователя
+        # Читаем last_reset только по текущим задачам из DAILY_TASKS
+        existing = {}
+        for task in DAILY_TASKS:
+            c.execute(
+                "SELECT last_reset FROM user_tasks WHERE user_id = ? AND task_id = ?",
+                (user_id, task["id"])
+            )
+            row = c.fetchone()
+            existing[task["id"]] = row[0] if row else None
+
+        # Новый день — если хотя бы одна текущая задача имеет устаревший last_reset
+        needs_reset = any(last is not None and last != today for last in existing.values())
+
+        if needs_reset:
             for task in DAILY_TASKS:
                 c.execute(
                     "INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
@@ -417,12 +423,13 @@ def reset_user_tasks_if_new_day(user_id):
             conn.commit()
             print(f"[DailyTasks] Сброс задач для user={user_id} на дату {today}", flush=True)
         else:
-            # Убеждаемся, что все задачи существуют (для новых добавленных задач)
+            # Текущий день: создаём только недостающие задачи (прогресс НЕ трогаем)
             for task in DAILY_TASKS:
-                c.execute(
-                    "INSERT OR IGNORE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
-                    (user_id, task["id"], today)
-                )
+                if existing.get(task["id"]) is None:
+                    c.execute(
+                        "INSERT OR IGNORE INTO user_tasks (user_id, task_id, progress, claimed, last_reset) VALUES (?, ?, 0, 0, ?)",
+                        (user_id, task["id"], today)
+                    )
             conn.commit()
     except Exception as e:
         print(f"[DailyTasks] reset_user_tasks_if_new_day error: {e}", flush=True)
@@ -436,7 +443,7 @@ def update_task_progress(user_id, task_id, increment=1):
     today = reset_user_tasks_if_new_day(user_id)
     conn = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, timeout=10)
         c = conn.cursor()
         # Убеждаемся, что задача существует
         c.execute(
@@ -794,6 +801,14 @@ def crash_game_loop():
                                 # получив crash_cashout_result, сразу шлёт картинку
                                 # админу, поэтому запись должна быть уже в БД.
                                 record_win(p['user_id'], 'crash', win_amount)
+
+                                # Обновляем задание daily_crash_win_5x (выигрыш x4+ со ставкой от 5 TON)
+                                try:
+                                    if p['auto_cashout'] >= 4.0 and p['bet'] >= 5.0:
+                                        update_task_progress(p['user_id'], "daily_crash_win_5x")
+                                except Exception as task_err:
+                                    print(f"[AutoCashout] task progress error: {task_err}", flush=True)
+
                                 # Отправляем результат конкретному клиенту
                                 socketio.emit('crash_cashout_result', {
                                     'success': True,
@@ -1657,6 +1672,13 @@ def play_game():
         if not (0.0 <= chance <= 1.0):
             return jsonify({"error": "chance is out of range"}), 400
 
+        # Обновляем задание daily_bet_5 (ставка от 1 TON) — апгрейд считается ставкой
+        try:
+            if start_price >= 1.0:
+                update_task_progress(user_id, "daily_bet_5")
+        except Exception as e:
+            print(f"[play_game upgrade] task progress error: {e}", flush=True)
+
         # Единственный источник правды — сервер.
         # success = random.random() < chance  (именно '<', никогда '>').
         success = random.random() < chance
@@ -1988,6 +2010,14 @@ def open_case():
     # Обновляем задание daily_case_open (открытие кейса)
     try:
         update_task_progress(user_id, "daily_case_open")
+    except Exception as e:
+        print(f"[open_case] task progress error: {e}", flush=True)
+
+    # Обновляем задание daily_bet_5 (ставка от 1 TON) — открытие платного кейса
+    # считается ставкой (бесплатный кейс ценой 0 не учитывается).
+    try:
+        if case_price >= 1.0:
+            update_task_progress(user_id, "daily_bet_5")
     except Exception as e:
         print(f"[open_case] task progress error: {e}", flush=True)
 
@@ -2377,6 +2407,14 @@ def mines_start():
     total_cells = size * size
     if mines_count >= total_cells:
         return jsonify({"error": "Too many mines"}), 400
+
+    # Обновляем задание daily_bet_5 (ставка от 1 TON) — старт игры в Mines считается ставкой
+    if user_id and user_id != "unknown":
+        try:
+            if bet >= 1.0:
+                update_task_progress(user_id, "daily_bet_5")
+        except Exception as e:
+            print(f"[mines_start] task progress error: {e}", flush=True)
 
     cells = list(range(total_cells))
     for i in range(len(cells) - 1, 0, -1):
@@ -3460,9 +3498,9 @@ def handle_crash_cashout(data):
     })
     print(f"[CrashCashout] Успех: {username} ({user_id}) забрал {win_amount:.2f} TON по {multiplier}x")
 
-    # Обновляем задание daily_crash_win_5x (выигрыш x5+ со ставкой от 5 TON)
+    # Обновляем задание daily_crash_win_5x (выигрыш x4+ со ставкой от 5 TON)
     try:
-        if multiplier >= 5.0 and bet_amount >= 5.0:
+        if multiplier >= 4.0 and bet_amount >= 5.0:
             update_task_progress(user_id, "daily_crash_win_5x")
     except Exception as e:
         print(f"[CrashCashout] task progress error: {e}", flush=True)
