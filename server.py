@@ -523,6 +523,13 @@ def record_loss(user_id, game_type, amount, bet_type="ton", item_name=""):
             conn.close()
 
 
+def record_bet(user_id, game_type, amount, bet_type="ton", item_name=""):
+    """Записывает ставку в историю (kind='bet')."""
+    # Делегирует record_loss — они пишут одну и ту же запись kind='bet'.
+    # Выделено в отдельное имя для читаемости: «ставка» вместо «проигрыш».
+    record_loss(user_id, game_type, amount, bet_type=bet_type, item_name=item_name)
+
+
 def verify_init_data(init_data):
     """Проверяет подпись Telegram initData с использованием HMAC-SHA256.
     
@@ -1872,7 +1879,7 @@ def open_case():
                     "INSERT OR IGNORE INTO users (id, balance_ton) VALUES (?, ?)",
                     (user_id, item["price"])
                 )
-                record_win(user_id, 'case', item['price'], item_name=item.get('name', ''))
+                # Бесплатный кейс (цена 0) в bet_history НЕ записываем.
             else:
                 # Добавляем предмет в инвентарь
                 c.execute(
@@ -1941,6 +1948,9 @@ def open_case():
         item = pick_case_item(case_id)
         item_id = str(uuid.uuid4())
 
+        # Ставка (списание цены кейса) — в историю ВСЕГДА: kind='bet'.
+        record_bet(user_id, 'case', case_price, item_name=item.get('name', ''))
+
         # Если выпал TON — начисляем на баланс, а не в инвентарь
         if item.get("type") == "ton":
             new_balance = round(balance - case_price + item["price"], 2)
@@ -1948,6 +1958,7 @@ def open_case():
                 "UPDATE users SET balance_ton = ? WHERE id = ?",
                 (new_balance, user_id)
             )
+            # Выигрыш TON — в историю kind='win'.
             record_win(user_id, 'case', item['price'], item_name=item.get('name', ''))
         else:
             # Добавляем предмет в отдельную таблицу инвентаря
@@ -1960,9 +1971,8 @@ def open_case():
                 "UPDATE users SET balance_ton = ? WHERE id = ?",
                 (new_balance, user_id)
             )
-            # Проигрыш: выпал не-TON предмет — деньги за кейс потрачены
-            # (предмет ушёл в инвентарь, но ставка case_price сгорела).
-            record_loss(user_id, 'case', case_price, item_name=item.get('name', ''))
+            # NFT ушёл в инвентарь — выигрыш в bet_history НЕ пишем.
+            # Ставка (kind='bet') уже записана выше для любого исхода.
         conn.commit()
         if conn:
             conn.close()
@@ -3823,22 +3833,39 @@ def pvp_room_cleanup_loop():
             print(f"[PvP] Ошибка очистки комнат: {e}")
 
 
-pvp_cleanup_thread = threading.Thread(target=pvp_room_cleanup_loop, daemon=True)
-pvp_cleanup_thread.start()
-print("[Server] Фоновый поток очистки PvP-комнат запущен.")
+def _should_start_background_threads() -> bool:
+    """True — если это процесс, который реально обслуживает сервер.
 
-crash_thread = threading.Thread(target=crash_game_loop, daemon=True)
-crash_thread.start()
-print("[Server] Фоновый поток Crash запущен.")
+    При DEBUG=true Flask/Werkzeug включает reloader: модуль исполняется в
+    двух процессах (родитель-супервизор и рабочий дочерний процесс с
+    WERKZEUG_RUN_MAIN='true'). Фоновые потоки (telegram_polling и др.)
+    нужно стартовать ТОЛЬКО в рабочем процессе, иначе получим два инстанса
+    polling и ошибку Telegram 409 Conflict.
+    В проде (DEBUG=false) reloader выключен — стартуем всегда.
+    """
+    debug = os.environ.get("DEBUG", "false").lower() == "true"
+    if not debug:
+        return True
+    return os.environ.get("WERKZEUG_RUN_MAIN") == "true"
 
-hockey_thread = threading.Thread(target=hockey_game_loop, daemon=True)
-hockey_thread.start()
-print("[Server] Фоновый поток Hockey запущен.")
 
-# ── Фоновый поток Telegram Polling ──────────────────────────────────────
-telegram_thread = threading.Thread(target=telegram_polling, daemon=True)
-telegram_thread.start()
-print("[Server] Фоновый поток Telegram-ботов запущен.")
+if _should_start_background_threads():
+    pvp_cleanup_thread = threading.Thread(target=pvp_room_cleanup_loop, daemon=True)
+    pvp_cleanup_thread.start()
+    print("[Server] Фоновый поток очистки PvP-комнат запущен.")
+
+    crash_thread = threading.Thread(target=crash_game_loop, daemon=True)
+    crash_thread.start()
+    print("[Server] Фоновый поток Crash запущен.")
+
+    hockey_thread = threading.Thread(target=hockey_game_loop, daemon=True)
+    hockey_thread.start()
+    print("[Server] Фоновый поток Hockey запущен.")
+
+    # ── Фоновый поток Telegram Polling ────────────────────────────────
+    telegram_thread = threading.Thread(target=telegram_polling, daemon=True)
+    telegram_thread.start()
+    print("[Server] Фоновый поток Telegram-ботов запущен.")
 
 # ── Фоновый поток обновления floor-цен ────────────────────────────────────
 def update_floors_loop():
@@ -3850,9 +3877,10 @@ def update_floors_loop():
         time.sleep(3600)  # раз в час
 
 
-nft_update_thread = threading.Thread(target=update_floors_loop, daemon=True)
-nft_update_thread.start()
-print("[Server] Фоновый поток обновления floor-цен запущен.")
+if _should_start_background_threads():
+    nft_update_thread = threading.Thread(target=update_floors_loop, daemon=True)
+    nft_update_thread.start()
+    print("[Server] Фоновый поток обновления floor-цен запущен.")
 
 
 

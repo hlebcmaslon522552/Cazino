@@ -703,33 +703,26 @@ return (
           onClick={closeResult}
           style={{
             position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100vw',
-            height: '100vh',
+            top: 0, left: 0, right: 0, bottom: 0,
+            width: '100vw', height: '100vh',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             zIndex: 99999,
-            background: 'rgba(0,0,0,0.85)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-            margin: 0,
-            boxSizing: 'border-box',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            margin: 0, padding: 0,
             animation: 'ug-fade 0.3s ease',
           }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
+              position: 'relative',
+              margin: 'auto',
+              maxWidth: 320,
+              width: '90%',
               background: '#1c1c1e',
               borderRadius: 20,
-              padding: '32px 24px',
+              padding: 24,
               textAlign: 'center',
-              maxWidth: 320,
-              width: '100%',
-              margin: '0 auto',
               border: `2px solid ${rarityColor(wonItem.rarity)}`,
             }}
           >
