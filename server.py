@@ -2389,6 +2389,45 @@ def sell_nft():
     return jsonify({"success": True, "new_balance": new_balance})
 
 
+def calculate_mines_multiplier(total_cells, mines_count, safe_count, house_edge=0.05, max_multiplier=100.0):
+    """Честный множитель Mines = (1 / вероятность) * (1 - маржа казино), с капом.
+
+    При открытии safe_count безопасных клеток вероятность дожить до этого шага:
+    prob = Π (safe_total - i) / (total_cells - i), i = 0..safe_count-1.
+    Множитель ограничивается сверху max_multiplier (по умолчанию 100x),
+    чтобы казино не разорилось на маловероятных верхних шагах.
+    """
+    if safe_count == 0:
+        return 1.0
+
+    safe_total = total_cells - mines_count
+    prob = 1.0
+    for i in range(safe_count):
+        prob *= (safe_total - i) / (total_cells - i)
+
+    # Честный множитель * (1 - маржа)
+    multiplier = (1.0 / prob) * (1.0 - house_edge)
+
+    # Ограничиваем максимальный икс (cap), чтобы не разорить казино
+    return round(min(multiplier, max_multiplier), 2)
+
+
+def calculate_mines_chance_percent(total_cells, mines_count, safe_count):
+    """Шанс выживания (%) после safe_count открытых безопасных клеток.
+
+    Тот же расчёт вероятности, что и в calculate_mines_multiplier, но без маржи —
+    используется для показа игроку честного шанса рядом с множителем.
+    """
+    safe_total = total_cells - mines_count
+    if safe_count == 0:
+        # Ещё не открыли ни одной клетки — шанс первой безопасной
+        return round(safe_total / total_cells * 100.0, 1)
+    prob = 1.0
+    for i in range(safe_count):
+        prob *= (safe_total - i) / (total_cells - i)
+    return round(prob * 100.0, 1)
+
+
 # Mines endpoints
 @app.route("/api/mines_start", methods=["POST"])
 def mines_start():
@@ -2399,14 +2438,16 @@ def mines_start():
     user_id = str(data.get("user_id", "unknown"))
     bet = float(data.get("bet", 0))
     size = int(data.get("size", 5))
-    mines_count = int(data.get("mines_count", 3))
+    # Количество мин определяет СЕРВЕР (клиенту не доверяем): 25% от всех
+    # клеток с округлением вниз — 3x3 → 2, 6x6 → 9, 9x9 → 20.
+    total_cells = size * size
+    mines_count = total_cells // 4
 
     if bet <= 0:
         return jsonify({"error": "Bet must be > 0"}), 400
 
-    total_cells = size * size
-    if mines_count >= total_cells:
-        return jsonify({"error": "Too many mines"}), 400
+    if mines_count <= 0 or mines_count >= total_cells:
+        return jsonify({"error": "Invalid board size"}), 400
 
     # Обновляем задание daily_bet_5 (ставка от 1 TON) — старт игры в Mines считается ставкой
     if user_id and user_id != "unknown":
@@ -2437,6 +2478,7 @@ def mines_start():
         "status": "started",
         "total_cells": total_cells,
         "mines": mines_count,
+        "chance_percent": calculate_mines_chance_percent(total_cells, mines_count, 0),
         "user_id": user_id
     })
 
@@ -2471,13 +2513,15 @@ def mines_click():
     else:
         game["safe_revealed"].append(cell_index)
         safe_count = len(game["safe_revealed"])
-        new_multiplier = round(1.0 + safe_count * 0.2, 2)
+        new_multiplier = calculate_mines_multiplier(game["total_cells"], game["mines_count"], safe_count)
+        chance_percent = calculate_mines_chance_percent(game["total_cells"], game["mines_count"], safe_count)
         game["multiplier"] = new_multiplier
         return jsonify({
             "status": "safe",
             "cell_index": cell_index,
             "safe_count": safe_count,
             "new_multiplier": new_multiplier,
+            "chance_percent": chance_percent,
             "user_id": user_id
         })
 

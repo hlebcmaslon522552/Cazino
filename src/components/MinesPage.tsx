@@ -19,9 +19,9 @@ interface Difficulty {
 }
 
 const DIFFICULTIES: Difficulty[] = [
-  { id: '3x3', label: '3 × 3', size: 3, mines: 2 },   // было 3, −5% → 2.85 → 2
-  { id: '6x6', label: '6 × 6', size: 6, mines: 10 },  // было 11, −5% → 10.45 → 10
-  { id: '9x9', label: '9 × 9', size: 9, mines: 22 },  // было 24, −5% → 22.8 → 22
+  { id: '3x3', label: '3 × 3', size: 3, mines: 2 },   // 25% от 9 = 2
+  { id: '6x6', label: '6 × 6', size: 6, mines: 9 },   // 25% от 36 = 9
+  { id: '9x9', label: '9 × 9', size: 9, mines: 20 },  // 25% от 81 = 20
 ];
 
 /* ===================================================================
@@ -49,8 +49,14 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
   const [fadeOut, setFadeOut] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
 
+  // Реальное количество мин задаёт СЕРВЕР при старте (25% от клеток).
+  // Начальное значение — из выбранной сложности (для показа в setup).
+  const [minesCount, setMinesCount] = useState<number>(difficulty.mines);
+  // Шанс выживания (%) — приходит с сервера вместе с множителем.
+  const [chance, setChance] = useState(0);
+
   const totalCells = difficulty.size * difficulty.size;
-  const safeTotal = totalCells - difficulty.mines;
+  const safeTotal = totalCells - minesCount;
   const stakePrice = Math.max(0.1, parseFloat(betAmount) || 0);
   const [currentMultiplier, setCurrentMultiplier] = useState(1.0);
   const potentialWin = stakePrice * currentMultiplier;
@@ -102,6 +108,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
     setIsGameOver(false);
     setRevealedMines([]);
     setCurrentMultiplier(1.0);
+    setChance(0);
 
     try {
       const minesStartUrl = `${CONFIG.API_URL}/api/mines_start`;
@@ -117,6 +124,10 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
       });
       const data = await res.json();
       if (data.status === 'started') {
+        // Сервер авторитетен: берём реальное количество мин (25% клеток)
+        // и стартовый шанс для честного отображения.
+        if (typeof data.mines === 'number') setMinesCount(data.mines);
+        if (typeof data.chance_percent === 'number') setChance(data.chance_percent);
         setPhase('playing');
       } else {
         onToast('Ошибка при старте игры', 'error');
@@ -155,6 +166,8 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
         const updated = [...openSafe, index];
         setOpenSafe(updated);
         setCurrentMultiplier(data.new_multiplier ?? currentMultiplier);
+        // Шанс выживания показывает сервер (математически точный).
+        if (typeof data.chance_percent === 'number') setChance(data.chance_percent);
 
         if (updated.length >= safeTotal) {
           setPhase('won');
@@ -245,6 +258,8 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
     setFadeOut(false);
     setIsGameOver(false);
     setCurrentMultiplier(1.0);
+    setChance(0);
+    setMinesCount(difficulty.mines);
     setPhase('setup');
   };
 
@@ -278,7 +293,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
               {DIFFICULTIES.map((d) => (
                 <button
                   key={d.id}
-                  onClick={() => setDifficulty(d)}
+                  onClick={() => { setDifficulty(d); setMinesCount(d.mines); setChance(0); }}
                   disabled={phase === 'playing'}
                   style={{
                     flex: 1, padding: '12px 8px', fontSize: 14, fontWeight: 'bold',
@@ -330,6 +345,9 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
               <div style={{ fontSize: 11, color: colors.textMuted }}>Множитель</div>
               <div style={{ fontSize: 15, fontWeight: 'bold', color: colors.gold }}>
                 ×{currentMultiplier.toFixed(2)}
+              </div>
+              <div style={{ fontSize: 10, color: colors.textMuted }}>
+                шанс {chance.toFixed(1)}%
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -405,7 +423,7 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
                 Забрать {potentialWin.toFixed(2)} TON
               </button>
               <div style={{ fontSize: 11, color: colors.textMuted, textAlign: 'center', marginTop: 6 }}>
-                Каждая безопасная клетка даёт +0.2x к множителю
+                Множитель растёт честно: 1/шанс выживания, маржа 5%, максимум 100x
               </div>
             </div>
           )}
