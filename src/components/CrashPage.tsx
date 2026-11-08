@@ -225,6 +225,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     // Подтверждение ставки от сервера
     socket.on('crash_bet_result', (data: { success: boolean; bet?: number }) => {
       if (data.success) {
+        // Сервер уже списал ставку — синхронизируем локальный баланс
+        onUpdateBalance(-(data.bet ?? 0));
         setHasBet(true);
         hasBetRef.current = true;
       }
@@ -279,7 +281,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   // ── Ставка ──
   const placeBet = () => {
     if (gameState !== 'waiting' || finalBet > balance || finalBet <= 0) return;
-    onUpdateBalance(-finalBet);
     
     if (autoCashoutEnabled && autoCashoutInput) {
       const target = parseFloat(autoCashoutInput);
