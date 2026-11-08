@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle } from 'lucide-react';
 import { colors, spacing } from '../theme';
@@ -87,7 +87,10 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
   const [subscribed, setSubscribed] = useState(false);
   const checkingSub = useRef(false);
   const shareListenerRegistered = useRef(false);
-  const conditionsMet = !isFree || (shareDone && subscribed);
+  const conditionsMet = useMemo(() => {
+    if (!isFree) return true;
+    return shareDone && subscribed;
+  }, [isFree, shareDone, subscribed]);
 
   const stripRef = useRef<HTMLDivElement>(null);
   const animationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -187,6 +190,8 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
   /* ─── Открытие кейса ─── */
   const handleOpenCase = async () => {
     if (isSpinning) return;
+    setIsSpinning(true);
+    haptic('medium');
 
     const currentBalance = Number(balance);
     const price = Number(caseData.price);
@@ -194,11 +199,11 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     if (isNaN(currentBalance) || currentBalance < price) {
       onToast('Недостаточно TON на балансе!', 'error');
       vibrate('error');
+      setIsSpinning(false);
       return;
     }
 
     /* 1. Запрос на сервер — открытие кейса (списание + выбор предмета) */
-    setIsSpinning(true);
 
     try {
       const userId = String(user?.id ?? '6267608438');
@@ -257,7 +262,6 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       if (serverItem.type === 'ton') {
         onUpdateBalance(serverItem.price);
       }
-      haptic('medium');
 
       /* 3.1 Сервер уже сам записал предмет в inventory при вызове /api/open_case.
            Клиент НЕ вызывает addToInventory — это предотвращает рассинхрон
@@ -567,7 +571,7 @@ return (
       </div>
 
       {/* ─── Кнопка открытия ─── */}
-      <div style={{ marginTop: spacing.lg }}>
+      <div style={{ marginTop: spacing.lg, position: 'relative', zIndex: 10 }}>
         <Button size="lg" fullWidth onClick={handleOpenCase} disabled={!conditionsMet || isSpinning}>
           {isSpinning
             ? '🎲 Открываем...'
@@ -601,9 +605,10 @@ return (
           </div>
         ) : (
           <>
-        {/* Сетка карточек как в Маркете: grid-cols-2 (2 равные колонки), gap-2 — равномерное распределение */}
+        {/* Сортировка от дорогих к дешевым */}
+        {(() => { const sortedPool = [...pool].sort((a, b) => b.price - a.price); return (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {pool.map((p, i) => (
+          {sortedPool.map((p, i) => (
             <div
               key={`${p.name}-${i}`}
               onClick={() => setSelectedItem(p)}
@@ -673,6 +678,7 @@ return (
             </div>
           ))}
         </div>
+        ); })()}
       </>
       )}
       </div>
@@ -682,13 +688,20 @@ return (
           onClick={closeResult}
           style={{
             position: 'fixed',
-            inset: 0,
-            zIndex: 9998,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            zIndex: 99999,
             background: 'rgba(0,0,0,0.85)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: 20,
+            margin: 0,
+            boxSizing: 'border-box',
             animation: 'ug-fade 0.3s ease',
           }}
         >
@@ -701,6 +714,7 @@ return (
               textAlign: 'center',
               maxWidth: 320,
               width: '100%',
+              margin: '0 auto',
               border: `2px solid ${rarityColor(wonItem.rarity)}`,
             }}
           >
