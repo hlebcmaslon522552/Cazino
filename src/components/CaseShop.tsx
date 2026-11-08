@@ -22,7 +22,7 @@ export interface CaseItem {
 const CASES_RAW: { id: string; name: string; price: number; image: string; isFree?: boolean }[] = [
   { id: "case_free", name: "Бонусный кейс", image: "NO_Inventory.png", price: 0, isFree: true },
   { id: "case_wood", name: "Деревянный кейс", image: "CaseWOOD.png", price: 1.00 },
-  { id: "case_copper", name: "Медный кейс", image: "CASE_COPPER.png", price: 7.77 },
+  { id: "case_copper", name: "Медный кейс", image: "CASE_COPPR.png", price: 7.77 },
   { id: "case_silver", name: "Серебряный кейс", image: "Silver.png", price: 52.00 },
   { id: "case_gold", name: "Золотой кейс", image: "GOLD.png", price: 222.00 }
 ];

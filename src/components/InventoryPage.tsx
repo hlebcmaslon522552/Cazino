@@ -229,16 +229,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
               <img src={nft.image || publicUrl('NO_Inventory.png')} alt={nft.name} style={{
                 width: '100%', aspectRatio: '1', objectFit: 'contain', borderRadius: 12,
               }} />
-              {isHold && (
-                <div style={{
-                  position: 'absolute', top: 8, right: 8,
-                  background: 'rgba(255,165,0,0.9)', borderRadius: 8,
-                  padding: '4px 8px', fontSize: 11, fontWeight: 'bold',
-                  color: '#fff', display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  🔒 Ожидайте
-                </div>
-              )}
+              {/* Оранжевая плашка удалена — статус отображается в кнопке под карточкой */}
             </div>
             <div style={{
               marginTop: 8, color: colors.accent,fontSize: 12, fontWeight: 'bold', letterSpacing: 1, textAlign: 'center',

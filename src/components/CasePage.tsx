@@ -708,8 +708,9 @@ return (
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 99999,
+            margin: 0,
+            padding: 0,
             backgroundColor: 'rgba(0,0,0,0.85)',
-            margin: 0, padding: 0,
             boxSizing: 'border-box',
             animation: 'ug-fade 0.3s ease',
           }}
@@ -719,7 +720,7 @@ return (
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'relative',
-              margin: '0 auto',
+              margin: 'auto',
               maxWidth: 320,
               width: '90%',
               background: '#1c1c1e',
