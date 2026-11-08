@@ -1572,9 +1572,39 @@ def play_game():
         if not target_name:
             return jsonify({"error": "target_name is required"}), 400
 
-        # Шанс успеха — нормирован к диапазону 0..1:
-        #   (start_price / end_price), потолок 0.75 (75%).
-        chance = min(start_price / end_price, 0.75)
+        # Защита от hold/sold: проверяем, что все начальные NFT принадлежат игроку
+        # и имеют статус 'available' (не 'hold' — на выводе, не 'sold').
+        start_ids = data.get("start_ids") or []
+        if start_ids:
+            ids = [int(s) if str(s).lstrip('-').isdigit() else str(s) for s in start_ids]
+            conn = None
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                c = conn.cursor()
+                placeholders = ",".join("?" * len(ids))
+                c.execute(
+                    f"SELECT id, status FROM inventory WHERE id IN ({placeholders}) AND user_id = ?",
+                    (*ids, user_id)
+                )
+                rows = c.fetchall()
+            except Exception as e:
+                print(f"[play_game upgrade] inventory check error: {e}")
+                return jsonify({"error": "Database error"}), 500
+            finally:
+                if conn:
+                    conn.close()
+
+            found_ids = {str(row[0]) for row in rows}
+            for sid in start_ids:
+                if str(sid) not in found_ids:
+                    return jsonify({"error": "Некоторые NFT не найдены в вашем инвентаре"}), 400
+            for row in rows:
+                if row[1] != "available":
+                    return jsonify({"error": "Один из NFT недоступен (находится на выводе или уже продан)"}), 400
+
+        # Шанс игрока с учётом комиссии казино 4% (House Edge):
+        #   шанс = (start_price / end_price) * 0.96, потолок 0.96 (96%).
+        chance = min(start_price / end_price, 1.0) * 0.96
 
         # Жёсткая проверка диапазона: 0 <= chance <= 1.
         if not (0.0 <= chance <= 1.0):
@@ -2558,12 +2588,24 @@ def withdraw_nft():
     ).format(username, user_id, nft_name, nft_price, inventory_id or "—")
 
     try:
-        bot_token = "8837626872:AAEEqnmT-hEKwMOhTfZ9LDLmOu7AHi88Pzw"
-        url = f"https://stars.gleb0256149.workers.dev/bot{bot_token}/sendMessage"
+        bot_token = TG_BOT_TOKEN
+        url = f"{TG_API_BASE}/bot{bot_token}/sendMessage"
         payload = {
             "chat_id": ADMIN_ID,
             "text": text,
         }
+        # Inline-кнопки для админа: Одобрить / Отклонить.
+        # callback_data = "approve_{inventory_id}" / "reject_{inventory_id}"
+        if inventory_id is not None:
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {"text": "✅ Одобрить", "callback_data": f"approve_{inventory_id}"},
+                        {"text": "❌ Отклонить", "callback_data": f"reject_{inventory_id}"},
+                    ]
+                ]
+            }
+            payload["reply_markup"] = keyboard
         resp = requests.post(url, json=payload, timeout=10)
         if not resp.ok:
             print(f"[withdraw_nft] Telegram API error: {resp.status_code} {resp.text}")

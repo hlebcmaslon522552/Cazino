@@ -19,6 +19,7 @@ interface Nft {
   name: string;
   floor: number;
   image: string;
+  status?: string; // 'available' | 'hold' (на выводе) | 'sold'
 }
 
 /* ===================================================================
@@ -99,7 +100,6 @@ function NftGridCard({
    Константы игры
    =================================================================== */
 
-const MAX_CHANCE = 75;    // потолок шанса (%)
 const MAX_START_NFTS = 4; // макс. количество начальных NFT для мультиставки
 const STROKE = 16;        // толщина чёрной обводки (строго 16px)
 
@@ -149,12 +149,13 @@ function Ticks() {
    =================================================================== */
 
 interface WheelProps {
-  chance: number;           // шанс в % (0..75)
+  chance: number;           // шанс в % (0..96) — только для геометрии дуги
   angle: number;            // текущий угол вращения дуги (град)
   spinning: boolean;
+  chancePercent: string;    // точный процент для отображения в центре колеса ("3.37")
 }
 
-function Wheel({ chance, angle, spinning }: WheelProps) {
+function Wheel({ chance, angle, spinning, chancePercent }: WheelProps) {
   const dash = (chance / 100) * CIRC;
 
   return (
@@ -218,7 +219,7 @@ function Wheel({ chance, angle, spinning }: WheelProps) {
         }}
       >
         <div style={{ fontSize: 44, fontWeight: 'bold', color: colors.text, lineHeight: 1 }}>
-          {Math.round(chance)}
+          {chancePercent}
           <span style={{ fontSize: 22 }}>%</span>
         </div>
         <div style={{ fontSize: 11, color: colors.textMuted, letterSpacing: 3, marginTop: 4 }}>ШАНС</div>
@@ -301,6 +302,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           name: item.model,
           floor: item.floor,
           image: item.image,
+          status: item.status,
         }));
         setInventoryNfts(mapped);
         setLoadingNfts(false);
@@ -349,9 +351,15 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const startPrice = startNfts.reduce((sum, n) => sum + n.floor, 0);
   const targetPrice = targetNft?.floor ?? 0;
 
-  // Шанс: (цена начального NFT / цена конечного NFT) * 100, потолок 75%.
-  const rawChance = targetPrice > 0 ? (startPrice / targetPrice) * 100 : 0;
-  const chance = Math.min(rawChance, MAX_CHANCE);
+  // Шанс игрока с учётом комиссии казино 4% (House Edge):
+  //   шанс = (ставка / цель) * 0.96, в долях 0..1, потолок 0.96 (96%).
+  const rawChance = targetPrice > 0 ? startPrice / targetPrice : 0;
+  const chance = Math.min(rawChance * 0.96, 0.96);
+  // Точный процент для отображения (Math.round округлял 3.5 → 4).
+  const chancePercent = (chance * 100).toFixed(2); // "3.37"
+
+  // NFT со статусом 'hold' (на выводе) или 'sold' (продан) запрещены для апгрейда
+  const availableNfts = inventoryNfts.filter((item) => item.status !== 'hold' && item.status !== 'sold');
 
   const priceError = startNfts.length > 0 && !!targetNft && startPrice >= targetPrice;
   const startOkay = startNfts.length > 0 && !!targetNft && targetPrice > startPrice;
@@ -448,7 +456,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         const wonNft = data.item;
 
         // Анимация: угол остановки стрелки — по серверному результату
-        const winArc = (chance / 100) * 360;
+        const winArc = chance * 360;
         const finalDeg = serverWin
           ? (360 - winArc) + Math.random() * winArc
           : Math.random() * (360 - winArc);
@@ -511,6 +519,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
               name: item.model,
               floor: item.floor,
               image: item.image,
+              status: item.status,
             }));
             setInventoryNfts(freshMapped);
           } catch (e) {
@@ -550,13 +559,13 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
       {/* Круг с оранжевой дугой */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: spacing.sm }}>
-        <Wheel chance={chance} angle={angle} spinning={spinning} />
+        <Wheel chance={chance * 100} angle={angle} spinning={spinning} chancePercent={chancePercent} />
       </div>
 
       {/* Подпись шанса */}
       <div style={{ textAlign: 'center', marginBottom: spacing.lg }}>
         <div style={{ fontSize: 13, color: colors.textMuted }}>
-          Шанс получения: <b style={{ color: colors.accent }}>{chance.toFixed(1)}%</b>
+          Шанс получения: <b style={{ color: colors.accent }}>{chancePercent}%</b>
         </div>
         {targetNft && startNfts.length > 0 && targetPrice < startPrice && (
           <div style={{ fontSize: 12, color: colors.danger, marginTop: 4 }}>
@@ -699,7 +708,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           disabled={!canUpgrade}
           loading={spinning}
         >
-          {spinning ? 'Крутится...' : `🎰 Апгрейд${chance ? ` • ${chance.toFixed(1)}%` : ''}`}
+          {spinning ? 'Крутится...' : `🎰 Апгрейд${chance ? ` • ${chancePercent}%` : ''}`}
         </Button>
       </div>
 </div>
@@ -713,13 +722,13 @@ export function UpgraderPage({ onBack, onToast }: Props) {
               Выбрано: <b style={{ color: colors.accent }}>{startNfts.length}/{MAX_START_NFTS}</b>
             </div>
           )}
-          {inventoryNfts.length === 0 ? (
+          {availableNfts.length === 0 ? (
             <p style={{ color: colors.textMuted, textAlign: 'center', marginTop: 20 }}>
               У вас нет NFT. Купите в Маркете
             </p>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, maxHeight: '50vh', overflowY: 'auto', padding: '2px 0' }}>
-              {inventoryNfts.map((nft) => {
+              {availableNfts.map((nft) => {
                 const alreadyAdded = startNfts.some((s) => s.id === nft.id);
                 const limitReached = startNfts.length >= MAX_START_NFTS;
                 return (

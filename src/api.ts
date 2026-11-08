@@ -15,6 +15,7 @@ export interface InventoryItem {
   model: string;
   image: string;
   floor: number;
+  status?: string; // 'available' | 'hold' (на выводе) | 'sold'
 }
 
 
