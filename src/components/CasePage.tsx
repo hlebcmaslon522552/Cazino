@@ -700,23 +700,26 @@ return (
 {/* ─── Модальное окно результата ─── */}
       {showResult && wonItem && createPortal(
         <div
-          onClick={closeResult}
           style={{
             position: 'fixed',
             top: 0, left: 0, right: 0, bottom: 0,
             width: '100vw', height: '100vh',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 99999,
             backgroundColor: 'rgba(0,0,0,0.85)',
             margin: 0, padding: 0,
+            boxSizing: 'border-box',
             animation: 'ug-fade 0.3s ease',
           }}
+          onClick={closeResult}
         >
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'relative',
-              margin: 'auto',
+              margin: '0 auto',
               maxWidth: 320,
               width: '90%',
               background: '#1c1c1e',
@@ -724,6 +727,7 @@ return (
               padding: 24,
               textAlign: 'center',
               border: `2px solid ${rarityColor(wonItem.rarity)}`,
+              boxShadow: '0 0 30px rgba(0,0,0,0.5)',
             }}
           >
             <div style={{ marginBottom: 8 }} />
@@ -776,7 +780,7 @@ return (
       )}
 
       {/* ─── Модальное окно предмета ─── */}
-      {selectedItem && (
+      {selectedItem && createPortal(
         <div
           onClick={() => setSelectedItem(null)}
           style={{
@@ -789,6 +793,8 @@ return (
             background: 'rgba(0,0,0,0.6)',
             backdropFilter: 'blur(4px)',
             padding: 16,
+            margin: 0,
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -901,11 +907,11 @@ return (
               </div>
             </div>
           </div>
-        </div>
+        </div>, document.body
       )}
 
       {/* ─── Условия бесплатного кейса (модалка) ─── */}
-      {isFree && !conditionsMet && (
+      {isFree && !conditionsMet && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -917,6 +923,8 @@ return (
             alignItems: 'center',
             justifyContent: 'center',
             padding: 16,
+            margin: 0,
+            boxSizing: 'border-box',
             animation: 'ug-fade 0.3s ease',
           }}
         >
@@ -1046,7 +1054,7 @@ return (
               ✅ Выполнить условия
             </button>
           </div>
-        </div>
+        </div>, document.body
       )}
     </div>
   );
