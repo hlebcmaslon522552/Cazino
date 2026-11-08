@@ -7,6 +7,7 @@ import { CONFIG } from '../config';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import flyAnim from '../animations/fly.json';
 import boomAnim from '../animations/BOOMnoBOMB.json';
+import { sendWinImage } from '../utils/sendWinImage';
 
 interface CrashPageProps {
   balance: number;
@@ -188,6 +189,21 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
         // Сервер подтвердил забор — обновляем баланс из данных сервера
         onUpdateBalance(data.win_amount);
         onToast?.(`Вы забрали ${data.win_amount.toFixed(2)} TON по ${data.multiplier.toFixed(2)}x`, 'success');
+
+        // Крупный занос (>= 10 TON и множитель >= 25x) — отправляем скриншот админу.
+        // record_win на сервере выполняется ДО этого события (crash_cashout_result),
+        // поэтому запись в bet_history уже есть при отправке картинки.
+        if (data.win_amount >= 10 && data.multiplier >= 25) {
+          const winBet = data.win_amount / data.multiplier; // ставка, подтверждённая сервером
+          sendWinImage({
+            user_id: String(user?.id ?? 'unknown'),
+            gameType: 'crash',
+            username: user?.username || user?.first_name || 'Player',
+            multiplier: data.multiplier,
+            winAmount: data.win_amount,
+            betAmount: winBet,
+          }).catch(console.error);
+        }
       }
     });
 

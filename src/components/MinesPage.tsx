@@ -5,6 +5,7 @@ import { colors, radius, spacing } from '../theme';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 import { useTelegram } from '../hooks/useTelegram';
+import { sendWinImage } from '../utils/sendWinImage';
 
 /* ===================================================================
    Константы
@@ -158,20 +159,37 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
         if (updated.length >= safeTotal) {
           setPhase('won');
           onToast('🎉 Вы открыли все клетки!', 'success');
-          // Записываем выигрыш в историю (для статистики max_win)
+          // Записываем выигрыш в историю (для статистики max_win) — сначала в bet_history,
+          // потом (если крупный занос) отправляем скриншот админу.
           const autoWin = stakePrice * (data.new_multiplier ?? currentMultiplier);
-          fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-            body: JSON.stringify({
-              user_id: user?.id ?? 'unknown',
-              game_type: 'mines',
-              bet_type: 'ton',
-              amount: autoWin,
-              item_name: '',
-              kind: 'win',
-            }),
-          }).catch(() => {});
+          try {
+            await fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+              body: JSON.stringify({
+                user_id: user?.id ?? 'unknown',
+                game_type: 'mines',
+                bet_type: 'ton',
+                amount: autoWin,
+                item_name: '',
+                kind: 'win',
+              }),
+            });
+          } catch (e) {
+            console.error('add_bet_history error:', e);
+          }
+
+          const finalMult = data.new_multiplier ?? currentMultiplier;
+          if (autoWin >= 10 && finalMult >= 25) {
+            sendWinImage({
+              user_id: String(user?.id ?? 'unknown'),
+              gameType: 'mines',
+              username: user?.username || user?.first_name || 'Player',
+              multiplier: finalMult,
+              winAmount: autoWin,
+              betAmount: stakePrice,
+            }).catch(console.error);
+          }
         }
       }
     } catch (e) {
@@ -181,24 +199,41 @@ export function MinesPage({ onBack, onToast, balance, onUpdateBalance }: Props) 
   };
 
   /* ── Забрать ─────────────────────────────── */
-  const cashout = () => {
+  const cashout = async () => {
     if (!canCashout) return;
     onUpdateBalance(potentialWin);
     setPhase('won');
     onToast(`💰 Вы забрали ${potentialWin.toFixed(2)} TON!`, 'success');
-    // Записываем выигрыш в историю (для статистики max_win)
-    fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({
-        user_id: user?.id ?? 'unknown',
-        game_type: 'mines',
-        bet_type: 'ton',
-        amount: potentialWin,
-        item_name: '',
-        kind: 'win',
-      }),
-    }).catch(() => {});
+    // Записываем выигрыш в историю (для статистики max_win) — сначала в bet_history,
+    // потом (если крупный занос) отправляем скриншот админу.
+    try {
+      await fetch(`${CONFIG.API_URL}/api/add_bet_history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          user_id: user?.id ?? 'unknown',
+          game_type: 'mines',
+          bet_type: 'ton',
+          amount: potentialWin,
+          item_name: '',
+          kind: 'win',
+        }),
+      });
+    } catch (e) {
+      console.error('add_bet_history error:', e);
+    }
+
+    // Крупный занос (>= 10 TON и множитель >= 25x)
+    if (potentialWin >= 10 && currentMultiplier >= 25) {
+      sendWinImage({
+        user_id: String(user?.id ?? 'unknown'),
+        gameType: 'mines',
+        username: user?.username || user?.first_name || 'Player',
+        multiplier: currentMultiplier,
+        winAmount: potentialWin,
+        betAmount: stakePrice,
+      }).catch(console.error);
+    }
   };
 
   /* ── Возврат в настройки с чистой сеткой ── */

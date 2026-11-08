@@ -10,6 +10,8 @@ import sys
 import threading
 import time
 import uuid
+import base64
+import io
 from datetime import datetime, timedelta
 import hmac
 import hashlib
@@ -742,6 +744,10 @@ def crash_game_loop():
                                 new_bal = c2.fetchone()[0]
                                 conn2.close()
 
+                                # Сначала записываем выигрыш в bet_history — клиент,
+                                # получив crash_cashout_result, сразу шлёт картинку
+                                # админу, поэтому запись должна быть уже в БД.
+                                record_win(p['user_id'], 'crash', win_amount)
                                 # Отправляем результат конкретному клиенту
                                 socketio.emit('crash_cashout_result', {
                                     'success': True,
@@ -750,7 +756,6 @@ def crash_game_loop():
                                     'new_balance': round(new_bal, 2),
                                 }, to=p['sid'])
                                 print(f"[AutoCashout] Отправлен результат клиенту {p['user_id']} (sid={p['sid']})")
-                                record_win(p['user_id'], 'crash', win_amount)
                             except Exception as db_err:
                                 print(f"[AutoCashout] DB error: {db_err}")
                             print(f"[AutoCashout] Игрок {p['user_id']} ({p['username']}) забрал на {p['auto_cashout']}x, выигрыш {win_amount:.2f} TON")
@@ -847,6 +852,95 @@ def send_telegram_notification(message: str):
     except Exception as e:
         print(f"[TG] Error: {e}")
         return False
+
+
+# ── Win Screenshot to Admin ────────────────────────────────────────
+@app.route("/api/send_win_image", methods=["POST"])
+def send_win_image():
+    """Принимает картинку-скриншот выигрыша от клиента, проверяет данные
+    по последнему выигрышу в bet_history и отправляет картинку админу.
+
+    Если картинка не сгенерировалась на клиенте (image_base64 пуст) —
+    отправляем админу текстовое уведомление (резервный режим).
+    """
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    user_id = str(data.get("user_id", "")).strip()
+    game_type = str(data.get("game_type", "game")).strip()
+    try:
+        multiplier = float(data.get("multiplier", 0) or 0)
+    except (TypeError, ValueError):
+        multiplier = 0.0
+    try:
+        win_amount = float(data.get("win_amount", 0) or 0)
+    except (TypeError, ValueError):
+        win_amount = 0.0
+    image_base64 = str(data.get("image_base64", "") or "").strip()
+
+    if not user_id or win_amount <= 0:
+        return jsonify({"error": "Missing data"}), 400
+
+    # ── Проверка на подделку: сверяем с последним выигрышем в БД ──
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute(
+            "SELECT amount FROM bet_history "
+            "WHERE user_id = ? AND kind = 'win' "
+            "ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        )
+        row = c.fetchone()
+    except Exception as e:
+        print(f"[send_win_image] DB error: {e}", flush=True)
+        return jsonify({"error": "DB error"}), 500
+    finally:
+        if conn:
+            conn.close()
+
+    if not row:
+        return jsonify({"error": "No win found"}), 400
+
+    real_win_amount = float(row[0])
+
+    # Допустимая погрешность 0.1 TON
+    if abs(real_win_amount - win_amount) > 0.1:
+        print(f"[send_win_image] Отклонено: клиент={win_amount}, сервер={real_win_amount}", flush=True)
+        return jsonify({"error": "Data mismatch"}), 400
+
+    caption = (
+        f"🔥 <b>КРУПНЫЙ ЗАНОС!</b>\n\n"
+        f"👤 Игрок: <code>{user_id}</code>\n"
+        f"🎮 Игра: <b>{game_type.upper()}</b>\n"
+        f"📈 Множитель: <b>{multiplier:g}x</b>\n"
+        f"💰 Выигрыш: <b>{win_amount:.2f} TON</b>"
+    )
+
+    # ── Отправляем админу ──
+    try:
+        if image_base64:
+            img_bytes = base64.b64decode(image_base64, validate=True)
+            files = {"photo": ("win.png", io.BytesIO(img_bytes), "image/png")}
+            data_payload = {"chat_id": ADMIN_ID, "caption": caption, "parse_mode": "HTML"}
+            url = f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/sendPhoto"
+            resp = requests.post(url, data=data_payload, files=files, timeout=15)
+        else:
+            # Резерв: изображение не сгенерировалось — шлём текст
+            data_payload = {"chat_id": ADMIN_ID, "text": caption, "parse_mode": "HTML"}
+            url = f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/sendMessage"
+            resp = requests.post(url, json=data_payload, timeout=15)
+
+        if not resp.ok:
+            print(f"[send_win_image] TG error: {resp.status_code} {resp.text}", flush=True)
+            return jsonify({"error": "TG send failed"}), 500
+
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"[send_win_image] error: {e}", flush=True)
+        return jsonify({"error": "Internal error"}), 500
 
 
 # ── Leaderboard Reset ──────────────────────────────────────────────
@@ -3108,6 +3202,11 @@ def handle_crash_cashout(data):
 
     socketio.emit('crash_players_update', {'players': players_snapshot})
 
+    # ── Сначала записываем выигрыш в bet_history — клиент, получив
+    # crash_cashout_result, сразу шлёт картинку админу, поэтому запись
+    # должна быть уже в БД (иначе анти-подделка отклонит запрос). ──
+    record_win(user_id, 'crash', win_amount)
+
     # ── Отправляем результат конкретному клиенту ──
     emit('crash_cashout_result', {
         'success': True,
@@ -3116,7 +3215,6 @@ def handle_crash_cashout(data):
         'new_balance': round(balance_after, 2),
     })
     print(f"[CrashCashout] Успех: {username} ({user_id}) забрал {win_amount:.2f} TON по {multiplier}x")
-    record_win(user_id, 'crash', win_amount)
 
     # Обновляем задание daily_crash_win_5x (выигрыш x5+ со ставкой от 5 TON)
     try:

@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
+import { sendWinImage } from '../utils/sendWinImage';
 
 /* ===================================================================
    Интерфейсы
@@ -281,7 +282,8 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             haptic('medium');
             setLastWin({ id: b.id, multiplier: b.multiplier, win, won: true });
             onToast(`🎉 Выигрыш +${win.toFixed(2)} TON (${b.multiplier.toFixed(2)}x)`, 'success');
-            // Записываем выигрыш в историю (для статистики max_win)
+            // Записываем выигрыш в историю (для статистики max_win) — сначала в bet_history,
+            // потом (если крупный занос) отправляем скриншот админу.
             const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
             fetch(betHistUrl, {
               method: 'POST',
@@ -294,7 +296,22 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
                 item_name: '',
                 kind: 'win',
               }),
-            }).catch(() => {});
+            })
+              .catch(() => {})
+              // Крупный занос (>= 10 TON и множитель >= 25x)
+              .then(() => {
+                if (win >= 10 && winMultiplier >= 25) {
+                  return sendWinImage({
+                    user_id: String(user?.id ?? 'unknown'),
+                    gameType: 'plinko',
+                    username: user?.username || user?.first_name || 'Player',
+                    multiplier: winMultiplier,
+                    winAmount: win,
+                    betAmount: b.bet,
+                  }).catch(console.error);
+                }
+                return undefined;
+              });
           } else {
             haptic('light');
           }
@@ -358,7 +375,7 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
           return fetch(dropUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bet_amount: stake, rows }),
+            body: JSON.stringify({ bet_amount: stake, rows, user_id: user?.id ?? 'unknown' }),
           }).then(r => r.json());
         })
       );

@@ -7,6 +7,7 @@ import { useTelegram } from '../hooks/useTelegram';
 import type { CaseItem } from './CaseShop';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
+import { sendWinImage } from '../utils/sendWinImage';
 
 /* ─── Константы условий бесплатного кейса ─── */
 const TG_CHANNEL = '@Test_Erra';
@@ -274,6 +275,24 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
 
       setWonItem(serverItem);
       setShowResult(true);
+
+      /* 6. Крупный выигрыш из кейса — отправляем скриншот админу.
+            Только для TON-призов: именно их сервер записывает в bet_history
+            (kind='win') через record_win на этапе /api/open_case, поэтому
+            проверка на подделку на сервере корректно сработает. */
+      if (serverItem.type === 'ton' && Number(serverItem.price) >= 10) {
+        const casePrice = Number(caseData.price);
+        const caseMult = casePrice > 0 ? Number(serverItem.price) / casePrice : 1;
+        sendWinImage({
+          user_id: userId,
+          gameType: 'case',
+          username: user?.username || user?.first_name || 'Player',
+          multiplier: caseMult,
+          winAmount: Number(serverItem.price),
+          betAmount: casePrice,
+          extraInfo: serverItem.name ? `Награда: ${serverItem.name}` : undefined,
+        }).catch(console.error);
+      }
     } catch (e: any) {
       console.error(e);
       onToast(e.message || 'Ошибка сети', 'error');
