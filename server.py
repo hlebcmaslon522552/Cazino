@@ -2690,6 +2690,140 @@ def admin_action():
         if conn:
             conn.close()
 
+# ── Telegram Polling (обработка нажатий кнопок) ──────────────────────────────
+TELEGRAM_LAST_UPDATE_ID = 0
+
+def telegram_polling():
+    global TELEGRAM_LAST_UPDATE_ID
+    print("[Polling] Поток telegram_polling запущен.", flush=True)
+
+    while True:
+        try:
+            params = {
+                "offset": TELEGRAM_LAST_UPDATE_ID + 1,
+                "timeout": 30,
+                "allowed_updates": ["callback_query"],
+            }
+            url = f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/getUpdates"
+            print("[Polling] Ждём обновления...", flush=True)
+            resp = requests.post(url, json=params, timeout=35)
+
+            if not resp.ok:
+                print(f"[Polling] HTTP {resp.status_code}: {resp.text}", flush=True)
+                time.sleep(5)
+                continue
+
+            data = resp.json()
+            if not data.get("ok"):
+                print(f"[Polling] API error: {data}", flush=True)
+                time.sleep(5)
+                continue
+
+            updates = data.get("result", [])
+            if updates:
+                print(f"[Polling] Получено обновлений: {len(updates)}", flush=True)
+
+            for update in updates:
+                print(f"[Polling] Update: {update}", flush=True)
+                update_id = update.get("update_id", 0)
+                if update_id > TELEGRAM_LAST_UPDATE_ID:
+                    TELEGRAM_LAST_UPDATE_ID = update_id
+
+                callback = update.get("callback_query")
+                if not callback:
+                    continue
+
+                callback_id = callback.get("id", "")
+                chat_id = callback.get("message", {}).get("chat", {}).get("id", "")
+                message_id = callback.get("message", {}).get("message_id", "")
+                data_raw = callback.get("data", "")
+                from_user_id = str(callback.get("from", {}).get("id", ""))
+
+                print(f"[Polling] Нажата кнопка: {data_raw} (from_user={from_user_id})", flush=True)
+
+                if from_user_id != ADMIN_ID:
+                    print(f"[Polling] Игнорируем: нажал не админ ({from_user_id})", flush=True)
+                    try:
+                        answer_url = f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/answerCallbackQuery"
+                        requests.post(answer_url, json={
+                            "callback_query_id": callback_id,
+                            "text": "❌ Только администратор может подтверждать вывод.",
+                            "show_alert": True,
+                        }, timeout=5)
+                    except Exception as e:
+                        print(f"[Polling] answerCallbackQuery error: {e}", flush=True)
+                    continue
+
+                # Парсим callback_data: "approve_123" или "reject_123"
+                if data_raw.startswith("approve_"):
+                    action = "approve"
+                    inv_id = data_raw.replace("approve_", "")
+                elif data_raw.startswith("reject_"):
+                    action = "reject"
+                    inv_id = data_raw.replace("reject_", "")
+                else:
+                    print(f"[Polling] Неизвестный callback: {data_raw}", flush=True)
+                    continue
+
+                try:
+                    inv_id = int(inv_id)
+                except ValueError:
+                    print(f"[Polling] Некорректный inventory_id: {inv_id}", flush=True)
+                    continue
+
+                # Обновляем БД
+                conn = None
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    c = conn.cursor()
+
+                    if action == "approve":
+                        c.execute("UPDATE inventory SET status = 'sold' WHERE id = ?", (inv_id,))
+                        status_text = "✅ ВЫДАНО"
+                        print(f"[Polling] NFT {inv_id} — ВЫДАНО (sold)", flush=True)
+                    else:
+                        c.execute("UPDATE inventory SET status = 'available' WHERE id = ?", (inv_id,))
+                        status_text = "❌ ОТКАЗАНО"
+                        print(f"[Polling] NFT {inv_id} — ОТКАЗАНО (available)", flush=True)
+
+                    conn.commit()
+                except Exception as e:
+                    print(f"[Polling] DB error: {e}", flush=True)
+                    status_text = "⚠️ Ошибка БД"
+                finally:
+                    if conn:
+                        conn.close()
+
+                # Редактируем сообщение в Telegram (убираем кнопки, пишем результат)
+                try:
+                    edit_url = f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/editMessageText"
+                    edit_payload = {
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "text": f"🔔 ЗАЯВКА НА ВЫВОД NFT — {status_text}",
+                        "parse_mode": "HTML",
+                    }
+                    edit_resp = requests.post(edit_url, json=edit_payload, timeout=10)
+                    if not edit_resp.ok:
+                        print(f"[Polling] editMessageText error: {edit_resp.status_code} {edit_resp.text}", flush=True)
+                except Exception as e:
+                    print(f"[Polling] editMessageText exception: {e}", flush=True)
+
+                # Отвечаем на callback (убираем "часики" на кнопке)
+                try:
+                    answer_url = f"{TG_API_BASE}/bot{TG_BOT_TOKEN}/answerCallbackQuery"
+                    requests.post(answer_url, json={
+                        "callback_query_id": callback_id,
+                        "text": status_text,
+                    }, timeout=5)
+                except Exception as e:
+                    print(f"[Polling] answerCallbackQuery error: {e}", flush=True)
+
+        except requests.exceptions.Timeout:
+            pass
+        except Exception as e:
+            print(f"[Polling] Ошибка: {e}", flush=True)
+            time.sleep(5)
 
 # ── Turnover Leaderboard ──────────────────────────────────────────────
 @app.route("/api/add_turnover", methods=["POST"])
@@ -3642,6 +3776,10 @@ hockey_thread = threading.Thread(target=hockey_game_loop, daemon=True)
 hockey_thread.start()
 print("[Server] Фоновый поток Hockey запущен.")
 
+# ── Фоновый поток Telegram Polling ──────────────────────────────────────
+telegram_thread = threading.Thread(target=telegram_polling, daemon=True)
+telegram_thread.start()
+print("[Server] Фоновый поток Telegram-ботов запущен.")
 
 # ── Фоновый поток обновления floor-цен ────────────────────────────────────
 def update_floors_loop():
