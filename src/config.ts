@@ -1,7 +1,11 @@
 export const CONFIG = {
   APP_NAME: "Cazino Mini App",
-  APP_URL: "https://cazino-indol.vercel.app", // Твой Vercel URL
-  TON_WALLET: "UQDCdiEod_rpEB063gGxu3t55w1IKI6yN6NVhAxI5SLPY0_O", // Твой кошелек
-  TOP_UP_AMOUNT_TON: 1, // Сколько TON начислять за 1 клик (для теста)
-  API_URL: "" // API сервера (тот же домен, что и фронтенд)
+  // URL приложения (для продакшена задается через VITE_APP_URL, локально - пусто)
+  APP_URL: import.meta.env.VITE_APP_URL || "", 
+  // TON кошелек для приема платежей (задается через VITE_TON_WALLET)
+  TON_WALLET: import.meta.env.VITE_TON_WALLET || "", 
+  // Сумма пополнения за 1 клик (для теста)
+  TOP_UP_AMOUNT_TON: 1, 
+  // URL API сервера (если пусто, будет использоваться текущий домен)
+  API_URL: import.meta.env.VITE_API_URL || "" 
 };
