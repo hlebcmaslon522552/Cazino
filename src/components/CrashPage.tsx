@@ -51,6 +51,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   const hasCashedOutRef = useRef(false);
   const autoCashoutRef = useRef<number | null>(null);
   const boomLottieRef = useRef<any>(null);
+  const balanceRef = useRef(balance);
 
   // ── Переподключение сокета при возврате на вкладку ──
   useEffect(() => {
@@ -167,6 +168,15 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       hasBetRef.current = false;
       autoCashoutRef.current = null;
       setPlayers([]); // Очищаем таблицу игроков после краша
+
+      // Синхронизируем баланс с сервером после раунда
+      fetch(`${CONFIG.API_URL}/api/balance?user_id=${String(user?.id ?? '6267608438')}`)
+        .then(res => res.json())
+        .then(data => {
+          const serverBalance = Number(data.balance_ton ?? data.balance ?? 0);
+          if (serverBalance > 0) onUpdateBalance(serverBalance - balanceRef.current);
+        })
+        .catch(() => {});
     });
 
     socket.on('crash_players_update', (data: { players: CrashPlayer[] }) => {
@@ -188,9 +198,13 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     socket.on('crash_cashout_result', (data: { success: boolean; win_amount: number; multiplier: number; new_balance: number }) => {
       if (data.success) {
-        // Сервер подтвердил забор — обновляем баланс из данных сервера
-        onUpdateBalance(data.win_amount);
+        // Сервер подтвердил забор — показываем тост
         onToast?.(`Вы забрали ${data.win_amount.toFixed(2)} TON по ${data.multiplier.toFixed(2)}x`, 'success');
+
+        // Синхронизируем баланс с сервером (на случай расхождений)
+        if (data.new_balance > 0) {
+          onUpdateBalance(data.new_balance - balanceRef.current);
+        }
 
         // Крупный занос (>= 10 TON и множитель >= 25x) — отправляем скриншот админу.
         // record_win на сервере выполняется ДО этого события (crash_cashout_result),
@@ -219,6 +233,8 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
 
     return () => { socket.disconnect(); };
   }, []);
+
+  useEffect(() => { balanceRef.current = balance; }, [balance]);
 
   // ── Сохранение ставки в sessionStorage при сворачивании вкладки ──
   useEffect(() => {
@@ -296,6 +312,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     // Защита: не даём забрать, если множитель уже на хард-капе
     if (m >= 93) return;
     const winAmount = finalBet * m;
+    
+    // Оптимистично обновляем баланс (выигрыш)
+    onUpdateBalance(winAmount);
     
     setCashedOutAt(m);
     setHasCashedOut(true);

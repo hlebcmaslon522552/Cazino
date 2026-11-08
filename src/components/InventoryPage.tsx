@@ -39,45 +39,55 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
   const { haptic, vibrate, initData, user } = useTelegram();
 
   // Загружаем инвентарь с сервера
-  useEffect(() => {
-    const loadNfts = async () => {
-      try {
-        const userId = String(user?.id ?? '6267608438');
-        const data = await fetchInventory(initData, userId);
+  const loadNfts = async () => {
+    try {
+      const userId = String(user?.id ?? '6267608438');
+      const data = await fetchInventory(initData, userId);
 
-        // Для каждого NFT: если floor === null — запрашиваем цену с сервера
-        const itemsWithPrices = await Promise.all(
-          data.map(async (item: any) => {
-            let floor = item.floor ?? item.price ?? 0;
-            if (floor === 0 && item.collection) {
-              try {
-                const priceData = await getFloorPrice(item.collection);
-                floor = priceData.floor_price ?? priceData.price ?? 0;
-              } catch (err) {
-                // Флор не критичен — оставляем 0 и показываем как есть
-              }
+      // Для каждого NFT: если floor === null — запрашиваем цену с сервера
+      const itemsWithPrices = await Promise.all(
+        data.map(async (item: any) => {
+          let floor = item.floor ?? item.price ?? 0;
+          if (floor === 0 && item.collection) {
+            try {
+              const priceData = await getFloorPrice(item.collection);
+              floor = priceData.floor_price ?? priceData.price ?? 0;
+            } catch (err) {
+              // Флор не критичен — оставляем 0 и показываем как есть
             }
-            return {
-              id: String(item.id ?? Date.now() + Math.random()),
-              name: item.name || 'Unknown',
-              image: item.image || '',
-              collection: item.collection,
-              floor: floor,
-              status: item.status || 'available',
-            } as Nft;
-          })
-        );
+          }
+          return {
+            id: String(item.id ?? Date.now() + Math.random()),
+            name: item.name || 'Unknown',
+            image: item.image || '',
+            collection: item.collection,
+            floor: floor,
+            status: item.status || 'available',
+          } as Nft;
+        })
+      );
 
-        setItems(itemsWithPrices);
-        setLoading(false);
-      } catch (err) {
-        console.error('Ошибка загрузки инвентаря:', err);
-        onToast('Не удалось загрузить инвентарь', 'error');
-        setLoading(false);
-      }
-    };
+      setItems(itemsWithPrices);
+      setLoading(false);
+    } catch (err) {
+      console.error('Ошибка загрузки инвентаря:', err);
+      onToast('Не удалось загрузить инвентарь', 'error');
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadNfts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Автоматически обновляем инвентарь при фокусе страницы (например, после одобрения в админке)
+  useEffect(() => {
+    const handleFocus = () => {
+      loadNfts();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -210,16 +220,19 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
     );
   }
 
+  // Фильтруем NFT со статусом 'sold' — они не должны показываться в инвентаре
+  const visibleItems = items.filter(item => item.status !== 'sold');
+
   return (
     <div style={{ padding: spacing.md, color: colors.text }}>
       <h1 style={{ marginTop: 0 }}>🎒 Инвентарь</h1>
-      <p style={{ color: colors.textMuted, marginTop: -8 }}>{items.length} NFT</p>
+      <p style={{ color: colors.textMuted, marginTop: -8 }}>{visibleItems.length} NFT</p>
 
       <div style={{
         display: 'grid', gridTemplateColumns: '1fr 1fr',
         gap: 12, marginTop: spacing.md,
       }}>
-        {items.map((nft) => {
+        {visibleItems.map((nft) => {
           const isHold = nft.status === 'hold';
           return (
           <Card key={nft.id} onClick={() => { if (!isHold) { haptic('light'); setSelected(nft); } }}

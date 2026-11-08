@@ -24,6 +24,7 @@ import { ReferralPage } from './ReferralPage';
 import { LeaderboardPage } from './LeaderboardPage';
 import { BetHistoryPage } from './BetHistoryPage';
 import { BottomNav } from './BottomNav';
+import { AdminWithdrawPanel } from './AdminWithdrawPanel';
 import { publicUrl } from '../helpers/publicUrl';
 import { useTelegram } from '../hooks/useTelegram';
 import { CONFIG } from '../config';
@@ -37,6 +38,7 @@ export function Root() {
   const [caseData, setCaseData] = useState<CaseItem | null>(null);
   const [refreshVersion] = useState(0);
   const { user } = useTelegram();
+  const [showAdmin, setShowAdmin] = useState(false);
   const userId = String(user?.id ?? '6267608438');
   const [balance, setBalance] = useState(0);
   const balanceRef = useRef(0);
@@ -76,13 +78,9 @@ export function Root() {
   const handleUpdateBalance = (amount: number) => {
     // Сумма используется ТОЛЬКО для мгновенного оптимистичного отклика UI.
     // Деньги в базе двигают исключительно серверные обработчики
-    // (победа в игре, депозит, вывод), а баланс всегда перечитывается
-    // с сервера через GET /api/balance.
+    // (победа в игре, депозит, вывод).
     balanceRef.current = balanceRef.current + amount;
     setBalance(balanceRef.current);
-
-    // После завершения операции синхронизируем баланс с сервером
-    loadBalance();
   };
 
   const { render: renderToast, show: showToast } = useToast();
@@ -166,6 +164,23 @@ export function Root() {
       )}
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Кнопка админа — только для ID 6267608438 */}
+      {String(user?.id) === '6267608438' && (
+        <button onClick={() => setShowAdmin(true)}
+          style={{
+            position: 'fixed', bottom: 80, right: 16,
+            background: '#a855f7', color: '#fff',
+            border: 'none', borderRadius: '50%',
+            width: 56, height: 56, fontSize: 24,
+            boxShadow: '0 4px 12px rgba(168, 85, 247, 0.5)',
+            zIndex: 9999, cursor: 'pointer',
+          }}
+        >
+          🛠️
+        </button>
+      )}
+      {showAdmin && <AdminWithdrawPanel onClose={() => setShowAdmin(false)} />}
       </AppRoot>
     </TonConnectUIProvider>
   );

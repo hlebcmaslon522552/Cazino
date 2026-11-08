@@ -720,7 +720,6 @@ return (
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'relative',
-              margin: 'auto',
               maxWidth: 320,
               width: '90%',
               background: '#1c1c1e',
