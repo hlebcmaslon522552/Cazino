@@ -284,6 +284,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
   const [targetModalOpen, setTargetModalOpen] = useState(false);
 
   const [spinning, setSpinning] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const [result, setResult] = useState<'win' | 'lose' | null>(null);
   const [resultDisplayName, setResultDisplayName] = useState('');
   const [resultDisplayImage, setResultDisplayImage] = useState('');
@@ -354,7 +355,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
   const priceError = startNfts.length > 0 && !!targetNft && startPrice >= targetPrice;
   const startOkay = startNfts.length > 0 && !!targetNft && targetPrice > startPrice;
-  const canUpgrade = startOkay && !spinning;
+  const canUpgrade = startOkay && !spinning && !isUpgrading;
 
   /* ── Сброс ─────────────────────────────────────── */
 
@@ -402,10 +403,12 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
   const upgrade = () => {
     if (!canUpgrade) return;
+    if (isUpgrading) return;
 
     haptic('medium');
     resetGame();
     setSpinning(true);
+    setIsUpgrading(true);
 
     const userId = String(user?.id ?? '6267608438');
     // Копируем ID всех startNfts до setTimeout (массив может измениться)
@@ -501,12 +504,30 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             }
             return updated;
           });
+
+          // 6. Принудительный перезапрос инвентаря с сервера
+          try {
+            const freshData = await fetchInventory(getInitData(), userId);
+            const freshMapped: Nft[] = freshData.map((item) => ({
+              id: item.id,
+              name: item.model,
+              floor: item.floor,
+              image: item.image,
+            }));
+            setInventoryNfts(freshMapped);
+          } catch (e) {
+            console.error('Inventory re-fetch after upgrade error:', e);
+          }
+
+          // 7. Снимаем блокировку isUpgrading через 1.5 сек
+          setTimeout(() => setIsUpgrading(false), 1500);
         }, 3000);
       })
       .catch((err) => {
         console.error('Upgrade error:', err);
         setSpinning(false);
         onToast('Ошибка сервера при синхронизации, попробуйте позже', 'error');
+        setTimeout(() => setIsUpgrading(false), 1500);
       });
   };
 
@@ -521,7 +542,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
 
       {/* Навигация: ← Назад */}
       <div style={{ marginBottom: spacing.md, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Button variant="ghost" size="sm" onClick={onBack}>← Назад</Button>
+        <Button variant="ghost" size="sm" disabled={isUpgrading} onClick={onBack}>← Назад</Button>
       </div>
 
       {/* Заголовок */}
@@ -562,8 +583,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         <NftSlot
           label="Начальный NFT"
           nft={null}
-          disabled={spinning}
-          onClick={() => { if (!spinning) { haptic('light'); setStartModalOpen(true); } }}
+          disabled={spinning || isUpgrading}
+          onClick={() => { if (!spinning && !isUpgrading) { haptic('light'); setStartModalOpen(true); } }}
         />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(startNfts.length + 1, MAX_START_NFTS)}, 1fr)`, gap: 8, marginBottom: spacing.md }}>
@@ -586,7 +607,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             >
               <button
                 type="button"
-                disabled={spinning}
+                disabled={spinning || isUpgrading}
                 onClick={() => removeStartNft(nft.id)}
                 aria-label="Удалить NFT"
                 style={{
@@ -601,12 +622,12 @@ export function UpgraderPage({ onBack, onToast }: Props) {
                   color: '#ffffff',
                   fontSize: 12,
                   lineHeight: 1,
-                  cursor: spinning ? 'not-allowed' : 'pointer',
+                  cursor: spinning || isUpgrading ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: 0,
-                  opacity: spinning ? 0.5 : 1,
+                  opacity: spinning || isUpgrading ? 0.5 : 1,
                 }}
               >
                 ✕
@@ -623,7 +644,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           ))}
           {startNfts.length < MAX_START_NFTS && (
             <div
-              onClick={spinning ? undefined : () => { haptic('light'); setStartModalOpen(true); }}
+              onClick={(!spinning && !isUpgrading) ? () => { haptic('light'); setStartModalOpen(true); } : undefined}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -633,8 +654,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
                 border: '1.5px dashed rgba(255,255,255,0.2)',
                 borderRadius: 12,
                 color: colors.textMuted,
-                cursor: spinning ? 'not-allowed' : 'pointer',
-                opacity: spinning ? 0.5 : 1,
+                cursor: spinning || isUpgrading ? 'not-allowed' : 'pointer',
+                opacity: spinning || isUpgrading ? 0.5 : 1,
                 textAlign: 'center',
               }}
             >
@@ -651,8 +672,8 @@ export function UpgraderPage({ onBack, onToast }: Props) {
         <NftSlot
           label="Конечный NFT"
           nft={targetNft}
-          disabled={spinning}
-          onClick={() => { if (!spinning) { haptic('light'); setTargetModalOpen(true); } }}
+          disabled={spinning || isUpgrading}
+          onClick={() => { if (!spinning && !isUpgrading) { haptic('light'); setTargetModalOpen(true); } }}
         />
       </div>
 
@@ -708,7 +729,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
                     key={nft.id}
                     nft={nft}
                     selected={alreadyAdded}
-                    disabled={alreadyAdded || (limitReached && !alreadyAdded)}
+                    disabled={alreadyAdded || (limitReached && !alreadyAdded) || isUpgrading}
                     onClick={() => addStartNft(nft)}
                   />
                 );
@@ -740,6 +761,7 @@ export function UpgraderPage({ onBack, onToast }: Props) {
                     key={nft.id}
                     nft={nft}
                     selected={targetNft?.id === nft.id}
+                    disabled={isUpgrading}
                     onClick={() => {
                       setTargetNft(nft);
                       setTargetModalOpen(false);
