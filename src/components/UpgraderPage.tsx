@@ -420,7 +420,6 @@ export function UpgraderPage({ onBack, onToast }: Props) {
     // НЕ определяет победу — иначе у клиента и сервера два НЕЗАВИСИМЫХ
     // исхода, и NFT может «прилететь» игроку при проигрыше (и наоборот).
     const playGameUrl = `${CONFIG.API_URL}/api/play_game`;
-    console.log('FETCH:', playGameUrl);
     fetch(playGameUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -485,7 +484,6 @@ export function UpgraderPage({ onBack, onToast }: Props) {
           for (const nftId of removedNftIds) {
             try {
               const invRemoveUrl = `${CONFIG.API_URL}/api/inventory/remove`;
-              console.log('FETCH:', invRemoveUrl);
               await fetch(invRemoveUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

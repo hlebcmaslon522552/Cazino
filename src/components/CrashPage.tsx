@@ -27,12 +27,6 @@ interface CrashPlayer {
 export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, onToast }) => {
   const { user } = useTelegram();
 
-  // ── Логи загрузки анимаций ──
-  console.log('FLY ANIM LOADED:', flyAnim ? 'YES' : 'NO');
-  console.log('BOOM ANIM LOADED:', boomAnim ? 'YES' : 'NO');
-  if (flyAnim && typeof flyAnim === 'object') console.log('flyAnim.tgs:', (flyAnim as any).tgs);
-  if (boomAnim && typeof boomAnim === 'object') console.log('boomAnim.tgs:', (boomAnim as any).tgs);
-  
   // ── Стейты ──
   const [betInput, setBetInput] = useState<string>('1.0');
   const finalBet = parseFloat(betInput) || 0;
@@ -60,7 +54,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && socketRef.current && !socketRef.current.connected) {
-        console.log('[Crash] Page visible, reconnecting socket');
         socketRef.current.connect();
       }
     };
@@ -106,7 +99,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     (async () => {
       try {
         const crashStateUrl = `${CONFIG.API_URL}/api/crash_state`;
-        console.log('FETCH:', crashStateUrl);
         const res = await fetch(crashStateUrl);
         const data = await res.json();
 
@@ -124,7 +116,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
           setShowBoom(true);
         }
       } catch (err) {
-        console.warn('Failed to fetch crash_state, falling back to defaults:', err);
         setMultiplier(1.00);
         setGameState('waiting');
         setCountdown(15);
@@ -140,12 +131,9 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
   // ── Сокеты ──
   useEffect(() => {
     const socketUrl = CONFIG.API_URL || window.location.origin;
-    console.log('SOCKET URL:', socketUrl);
     const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
-    socket.on('connect', () => console.log('SOCKET CONNECTED'));
-    socket.on('connect_error', (err) => console.log('SOCKET ERROR:', err.message));
 
     socket.on('crash_timer', (data: { timer: number }) => setCountdown(data.timer));
 
@@ -208,7 +196,6 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       if (data.success) {
         setHasBet(true);
         hasBetRef.current = true;
-        console.log('[Crash] Ставка подтверждена сервером:', data.bet);
       }
     });
 

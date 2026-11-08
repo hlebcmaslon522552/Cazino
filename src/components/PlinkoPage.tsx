@@ -264,15 +264,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
           // Используем множитель слота, куда физически упал шарик
           const winMultiplier = multipliers[slotIndex];
 
-          // Серверный множитель — только для проверки (логируем рассинхрон)
-          if (b.serverMultiplier !== null && b.serverMultiplier !== undefined) {
-            console.log(
-              "Шарик упал в слот:", slotIndex,
-              "Физ. множитель:", winMultiplier,
-              "Серверный:", b.serverMultiplier,
-              "Рассинхрон:", winMultiplier !== b.serverMultiplier
-            );
-          }
 
           b.slot = slotIndex;
           b.multiplier = winMultiplier;
@@ -280,7 +271,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
           b.vy = 0;
           b.vx = 0;
 
-          console.log("Шарик упал в слот:", slotIndex, "Множитель:", winMultiplier);
 
           // ② Затем начисляем выигрыш по физическому слоту
           ballsFinishedRef.current++;
@@ -293,7 +283,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
             onToast(`🎉 Выигрыш +${win.toFixed(2)} TON (${b.multiplier.toFixed(2)}x)`, 'success');
             // Записываем выигрыш в историю (для статистики max_win)
             const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
-            console.log('FETCH:', betHistUrl);
             fetch(betHistUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
@@ -366,7 +355,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
       const results = await Promise.all(
         Array.from({ length: ballsCount }, () => {
           const dropUrl = `${CONFIG.API_URL}/api/plinko_drop`;
-          console.log('FETCH:', dropUrl);
           return fetch(dropUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -397,7 +385,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     // Отправляем оборот
     if (totalStake > 0) {
       const turnoverUrl = `${CONFIG.API_URL}/api/add_turnover`;
-      console.log('FETCH:', turnoverUrl);
       fetch(turnoverUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
@@ -412,7 +399,6 @@ export function PlinkoPage({ balance, onUpdateBalance, onBack, onToast }: Props)
     // Записываем ставку в историю
     if (totalStake > 0) {
       const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
-      console.log('FETCH:', betHistUrl);
       fetch(betHistUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },

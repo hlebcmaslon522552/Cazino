@@ -208,7 +208,6 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     try {
       const userId = String(user?.id ?? '6267608438');
       const openCaseUrl = `${CONFIG.API_URL}/api/open_case`;
-      console.log('FETCH:', openCaseUrl);
       const res = await fetch(openCaseUrl, {
         method: 'POST',
         headers: {
@@ -223,7 +222,6 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       });
 
       const rawText = await res.text();
-      console.log('RAW CASE:', rawText);
       let data;
       try { data = JSON.parse(rawText); } catch(e) { throw new Error('Invalid JSON from server'); }
 
@@ -235,7 +233,6 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
       // Отправляем оборот
       if (price > 0) {
         const turnoverUrl = `${CONFIG.API_URL}/api/add_turnover`;
-        console.log('FETCH:', turnoverUrl);
         fetch(turnoverUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
@@ -339,7 +336,6 @@ export function CasePage({ caseData, onBack, onToast, onUpdateBalance, balance }
     checkingSub.current = true;
     try {
       const subUrl = `${CONFIG.API_URL}/api/check_subscription`;
-      console.log('FETCH:', subUrl);
       const res = await fetch(subUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },

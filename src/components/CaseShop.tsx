@@ -124,7 +124,6 @@ export function CaseShop({ onBack, onOpenCase, onToast }: Props) {
     checkingSub.current = true;
     try {
       const subUrl = `${CONFIG.API_URL}/api/check_subscription`;
-      console.log('FETCH:', subUrl);
       const res = await fetch(subUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },

@@ -34,7 +34,6 @@ export const getInitData = (): string => {
  */
 export const fetchUserData = async (userId: string) => {
   const url = `${CONFIG.API_URL}/api/balance?user_id=${userId}`;
-  console.log('FETCH:', url);
   const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -50,7 +49,6 @@ export const fetchUserData = async (userId: string) => {
 export async function fetchInventory(initData: string, userId: string): Promise<InventoryItem[]> {
   try {
     const url = `${CONFIG.API_URL}/api/inventory?user_id=${userId}`;
-    console.log('FETCH:', url);
 
     // Отправляем X-Init-Data ТОЛЬКО если он реально доступен.
     // Если initData пуст/невалиден — сервер может вернуть 403,
@@ -71,7 +69,6 @@ export async function fetchInventory(initData: string, userId: string): Promise<
     // 403 (нет/невалидный initData) НЕ ломает интерфейс:
     // просто показываем пустой инвентарь (или сообщение «Нет данных»).
     if (res.status === 403) {
-      console.warn('fetchInventory: 403 Forbidden (initData), возвращаем пустой инвентарь');
       return [];
     }
     if (!res.ok) {
@@ -80,26 +77,22 @@ export async function fetchInventory(initData: string, userId: string): Promise<
     const data: InventoryItem[] = await res.json();
     return data;
   } catch (err) {
-    console.warn('fetchInventory error:', err);
     return [];
   }
 }
 
-export async function topUpTon(_initData: string, amount: number): Promise<boolean> {
+export async function topUpTon(_initData: string, _amount: number): Promise<boolean> {
   // ЗАГЛУШКА
-  console.log('topUpTon', amount);
   return new Promise((resolve) => setTimeout(() => resolve(true), 500));
 }
 
-export async function topUpStars(_initData: string, amount: number): Promise<boolean> {
-  console.log('topUpStars', amount);
+export async function topUpStars(_initData: string, _amount: number): Promise<boolean> {
   return new Promise((resolve) => setTimeout(() => resolve(true), 500));
 }
 
 export const addToInventory = async (item: any, userId: string): Promise<boolean> => {
   try {
     const url = `${CONFIG.API_URL}/api/inventory/add`;
-    console.log('FETCH:', url);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 
@@ -134,7 +127,6 @@ export async function sellNft(
   userId: string,
 ): Promise<{ success: boolean; new_balance: number }> {
   const url = `${CONFIG.API_URL}/api/sell_nft`;
-  console.log('FETCH:', url);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -152,7 +144,6 @@ export async function sellNft(
 
 export async function withdrawNft(itemId: number, initData: string): Promise<boolean> {
   const url = `${CONFIG.API_URL}/api/withdraw_nft`;
-  console.log('FETCH:', url);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -181,7 +172,6 @@ export const getBalance = async (): Promise<number> => {
 
 export const getFloorPrice = async (collectionName: string) => {
   const url = `${CONFIG.API_URL}/api/get_floor?collection=${collectionName}`;
-  console.log('FETCH:', url);
   const res = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -211,7 +201,6 @@ export interface TasksResponse {
 
 export const fetchTasks = async (userId: string): Promise<DailyTask[]> => {
   const url = `${CONFIG.API_URL}/api/tasks?user_id=${userId}`;
-  console.log('FETCH:', url);
   try {
     const res = await fetch(url, {
       headers: {
@@ -220,13 +209,11 @@ export const fetchTasks = async (userId: string): Promise<DailyTask[]> => {
       },
     });
     if (!res.ok) {
-      console.warn('fetchTasks failed:', res.status, res.statusText);
       return [];
     }
     const data: TasksResponse = await res.json();
     return data.tasks || [];
   } catch (err) {
-    console.warn('fetchTasks error:', err);
     return [];
   }
 };
@@ -239,7 +226,6 @@ export interface ClaimTaskResult {
 
 export const claimTask = async (userId: string, taskId: string): Promise<ClaimTaskResult | null> => {
   const url = `${CONFIG.API_URL}/api/tasks/claim`;
-  console.log('FETCH:', url);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -250,14 +236,11 @@ export const claimTask = async (userId: string, taskId: string): Promise<ClaimTa
       body: JSON.stringify({ user_id: userId, task_id: taskId }),
     });
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      console.warn('claimTask failed:', res.status, errData);
       return null;
     }
     const data: ClaimTaskResult = await res.json();
     return data;
   } catch (err) {
-    console.warn('claimTask error:', err);
     return null;
   }
 };

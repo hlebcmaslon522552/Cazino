@@ -50,8 +50,6 @@ export function Root() {
   // на сервер, иначе любой мог бы «накрутить» себе миллион TON.
   const loadBalance = () => {
     const url = `${CONFIG.API_URL}/api/balance?user_id=${userId}`;
-    console.log('BALANCE USER ID:', userId);
-    console.log('FETCH:', url);
     fetch(url, {
       headers: {
         'Content-Type': 'application/json',
@@ -60,7 +58,6 @@ export function Root() {
     })
       .then(res => res.text())
       .then(text => {
-        console.log('RAW BALANCE:', text);
         let data;
         try { data = JSON.parse(text); } catch(e) { return; }
         setBalance(Number(data.balance_ton ?? data.balance ?? 0));

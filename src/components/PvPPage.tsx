@@ -79,14 +79,10 @@ export const PvPPage = ({ balance, onUpdateBalance, onToast }: PvPPageProps) => 
 
   useEffect(() => {
     const socketUrl = CONFIG.API_URL || window.location.origin;
-    console.log('SOCKET URL:', socketUrl);
     const socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
     });
 
-    socket.on('connect', () => {
-      console.log('[PvP] Socket connected');
-    });
 
     socket.on('pvp_waiting', (data: { room_id: string; message: string }) => {
       setRoomId(data.room_id);

@@ -81,8 +81,6 @@ export function BetHistoryPage({ onBack }: Props) {
 
     const urlStats = `${CONFIG.API_URL}/api/user_stats?user_id=${userId}`;
     const urlHistory = `${CONFIG.API_URL}/api/bet_history?user_id=${userId}`;
-    console.log('FETCH:', urlStats);
-    console.log('FETCH:', urlHistory);
     Promise.all([
       fetch(urlStats, { headers })
         .then((res) => res.json())

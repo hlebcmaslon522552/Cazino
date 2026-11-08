@@ -316,10 +316,8 @@ const reset = () => {
   };
   useEffect(() => {
     const socketUrl = CONFIG.API_URL || window.location.origin;
-    console.log('SOCKET URL:', socketUrl);
     const socket = io(socketUrl, { transports: ['websocket', 'polling'] });
     socket.on('connect', () => {
-      console.log('[PvP2] Socket connected');
       // userIdRef хранит ТОЛЬКО реальный Telegram ID (заполняется в createGame из useTelegram).
       // Не перезаписываем его socket.id, иначе в hockey_result не совпадёт победитель.
     });
@@ -383,7 +381,6 @@ const reset = () => {
         // Записываем выигрыш в историю (для статистики max_win)
         const winHistoryUserId = String(user?.id ?? data.winner_id);
         const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
-        console.log('FETCH:', betHistUrl);
         fetch(betHistUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
@@ -404,9 +401,6 @@ const reset = () => {
     // ВАЖНО: disconnect НЕ очищает players — таблица игроков должна жить до следующего
     // hockey_players_update от сервера. Сервер сам не удаляет игрока из пула при дисконнекте
     // (см. handle_disconnect в server.py), поэтому клиент тоже НЕ должен этого делать.
-    socket.on('disconnect', () => {
-      console.log('[PvP2] Socket disconnected — players сохранён, очистка НЕ выполняется');
-    });
     socketRef.current = socket;
     return () => {
       // При размонтировании компонента (уход со страницы) — отправляем pvp_leave,
@@ -517,7 +511,6 @@ useEffect(() => {
       // Записываем ставку в историю
       const historyUserId = String(user?.id ?? uid);
       const betHistUrl = `${CONFIG.API_URL}/api/add_bet_history`;
-      console.log('FETCH:', betHistUrl);
       fetch(betHistUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },

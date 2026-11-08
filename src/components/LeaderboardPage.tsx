@@ -13,7 +13,6 @@ export function LeaderboardPage() {
 
   useEffect(() => {
     const lbUrl = `${CONFIG.API_URL}/api/leaderboard_turnover`;
-    console.log('FETCH:', lbUrl);
     fetch(lbUrl, {
       headers: { 'ngrok-skip-browser-warning': 'true' },
     })

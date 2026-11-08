@@ -54,7 +54,7 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
                 const priceData = await getFloorPrice(item.collection);
                 floor = priceData.floor_price ?? priceData.price ?? 0;
               } catch (err) {
-                console.warn('Не удалось получить флор для', item.collection, err);
+                // Флор не критичен — оставляем 0 и показываем как есть
               }
             }
             return {
@@ -92,7 +92,6 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
       // Отправляем item_id, чтобы сервер СРАЗУ удалил предмет из инвентаря
       // (иначе можно продавать один и тот же NFT бесконечно)
       const sellUrl = `${CONFIG.API_URL}/api/sell_nft`;
-      console.log('FETCH:', sellUrl);
       const res = await fetch(sellUrl, {
         method: 'POST',
         headers: {
@@ -137,7 +136,6 @@ export function InventoryPage({ onToast, onBalanceChange }: Props) {
       const username = user?.username || 'unknown';
 
       const withdrawUrl = `${CONFIG.API_URL}/api/withdraw_nft`;
-      console.log('FETCH:', withdrawUrl);
       const res = await fetch(withdrawUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
