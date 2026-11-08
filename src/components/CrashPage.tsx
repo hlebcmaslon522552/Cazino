@@ -20,6 +20,7 @@ type ServerRoundState = 'waiting' | 'flying' | 'crashed';
 interface CrashPlayer {
   user_id: string;
   username: string;
+  photo_url?: string;
   bet: number;
   multiplier?: number;
   cashed_out?: boolean;
@@ -165,6 +166,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
       setHasBet(false);
       hasBetRef.current = false;
       autoCashoutRef.current = null;
+      setPlayers([]); // Очищаем таблицу игроков после краша
     });
 
     socket.on('crash_players_update', (data: { players: CrashPlayer[] }) => {
@@ -280,6 +282,7 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
     socketRef.current?.emit('crash_bet', {
       user_id: String(user?.id ?? 'unknown'),
       username: user?.first_name || 'Игрок',
+      photo_url: user?.photo_url || '',
       bet: finalBet,
       auto_cashout: autoCashoutRef.current,
     });
@@ -457,8 +460,12 @@ export const CrashPage: React.FC<CrashPageProps> = ({ balance, onUpdateBalance, 
               return (
                 <div key={p.user_id} className="flex items-center justify-between gap-3 bg-[#0f0f13] rounded-xl px-3 py-2 border border-gray-800">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0">
-                      {(p.username || 'Игрок').trim().charAt(0).toUpperCase()}
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-black text-sm shrink-0 overflow-hidden">
+                      {p.photo_url ? (
+                        <img src={p.photo_url} alt={p.username || 'Игрок'} className="w-full h-full object-cover rounded-full" />
+                      ) : (
+                        (p.username || 'Игрок').trim().charAt(0).toUpperCase()
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1">

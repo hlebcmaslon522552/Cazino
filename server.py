@@ -766,6 +766,7 @@ def crash_game_loop():
                             {
                                 'user_id': p['user_id'],
                                 'username': p['username'],
+                                'photo_url': p.get('photo_url', ''),
                                 'bet': p['bet'],
                                 'multiplier': p.get('multiplier'),
                                 'cashed_out': p.get('cashed_out', False),
@@ -780,21 +781,10 @@ def crash_game_loop():
                 CRASH_TIMER = 15
                 final_crash_point = CRASH_POINT
                 CRASH_POINT = 1.00
-                # Рассылаем финальный список игроков перед очисткой
-                final_players = [
-                    {
-                        'user_id': p['user_id'],
-                        'username': p['username'],
-                        'bet': p['bet'],
-                        'multiplier': p.get('multiplier'),
-                        'cashed_out': p.get('cashed_out', False),
-                    }
-                    for p in CRASH_PLAYERS
-                ]
                 CRASH_PLAYERS = []
 
-            if final_players:
-                socketio.emit('crash_players_update', {'players': final_players})
+            # Отправляем пустой список игроков — очищаем таблицу на фронте
+            socketio.emit('crash_players_update', {'players': []})
 
             print(f"[CrashLoop] КРАШ! {final_crash_point}x")
             print(f"[SERVER] END. Sending crash_ended with crash_point={final_crash_point}")
@@ -3123,6 +3113,7 @@ def handle_crash_bet(data):
     global CRASH_PLAYERS
     user_id = str(data.get('user_id', ''))
     username = str(data.get('username', 'Игрок'))
+    photo_url = str(data.get('photo_url', ''))  # может быть пустой строкой
     bet = float(data.get('bet', 0))
     auto_cashout = data.get('auto_cashout', None)
     if auto_cashout is not None:
@@ -3141,6 +3132,7 @@ def handle_crash_bet(data):
         CRASH_PLAYERS.append({
             'user_id': user_id,
             'username': username,
+            'photo_url': photo_url,
             'bet': bet,
             'sid': request.sid,
             'auto_cashout': auto_cashout,
@@ -3148,7 +3140,12 @@ def handle_crash_bet(data):
             'multiplier': None,
         })
         players_snapshot = [
-            {'user_id': p['user_id'], 'username': p['username'], 'bet': p['bet']}
+            {
+                'user_id': p['user_id'],
+                'username': p['username'],
+                'photo_url': p.get('photo_url', ''),
+                'bet': p['bet'],
+            }
             for p in CRASH_PLAYERS
         ]
 
@@ -3235,6 +3232,7 @@ def handle_crash_cashout(data):
             {
                 'user_id': p['user_id'],
                 'username': p['username'],
+                'photo_url': p.get('photo_url', ''),
                 'bet': p['bet'],
                 'multiplier': p.get('multiplier'),
                 'cashed_out': p.get('cashed_out', False),
