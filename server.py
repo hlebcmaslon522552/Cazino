@@ -663,6 +663,18 @@ CASE_POOLS = {
     "case_free": FREE_CASE_POOL,
 }
 
+# Авторитетные цены кейсов (TON). Сервер списывает именно эту цену при
+# открытии кейса — она перекрывает цену, присланную клиентом, чтобы старая
+# версия приложения не смогла открыть кейс по устаревшей цене.
+# Актуальные цены: copper 7.77 TON, silver 52 TON, gold 222 TON.
+CASE_PRICES = {
+    "case_free": 0.0,
+    "case_wood": 1.0,
+    "case_copper": 7.77,
+    "case_silver": 52.0,
+    "case_gold": 222.0,
+}
+
 # Минимальная точка краша: сервер гарантирует, что раунд не крашится
 # мгновенно (1.00/1.01x) — график всегда успевает отрисоваться.
 MIN_CRASH_POINT = 1.05
@@ -1827,6 +1839,9 @@ def open_case():
     user_id = str(data.get("user_id", "unknown"))
     case_price = float(data.get("case_price", 0))
     case_id = str(data.get("case_id", "")).strip()
+    # Авторитетная цена кейса на сервере — клиент не может открыть кейс
+    # по устаревшей цене (сервер списывает CASE_PRICES).
+    case_price = CASE_PRICES.get(case_id, case_price)
     if not user_id or user_id == "unknown":
         return jsonify({"error": "user_id is required"}), 400
 

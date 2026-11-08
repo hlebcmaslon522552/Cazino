@@ -17,7 +17,7 @@ interface Case {
 const CASES: Case[] = [
   { id: 1, title: 'Villian Box',  price: 222.0, image: '/GOLD.png' },
   { id: 2, title: "Animal's Box", price: 7.77, image: '/CASE_COPPER.png' },
-  { id: 3, title: 'Lovely',       price: 50.0, image: '/Silver.png' },
+  { id: 3, title: 'Lovely',       price: 52.0, image: '/Silver.png' },
   { id: 4, title: 'Bloom',        price: 1.0,  image: '/CaseWOOD.png' },
 ];
 
