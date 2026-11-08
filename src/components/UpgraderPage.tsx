@@ -8,6 +8,7 @@ import { useTelegram } from '../hooks/useTelegram';
 import { publicUrl } from '../helpers/publicUrl';
 import { CONFIG } from '../config';
 import { getInitData, fetchInventory } from '../api';
+import { generateWinImage } from '../utils/generateWinImage';
 
 /* ===================================================================
    NFT данные (из all_gifts.json)
@@ -485,6 +486,33 @@ export function UpgraderPage({ onBack, onToast }: Props) {
             onToast('🎉 Апгрейд успешен!', 'success');
           } else {
             onToast('💀 Неудача! Начальные NFT сгорели.', 'error');
+          }
+
+          // 8. Отправляем админу скриншот победы
+          if (serverWin) {
+            try {
+              const winMultiplier = Number((targetPrice / startPrice).toFixed(2));
+              const imageBase64 = await generateWinImage({
+                gameType: 'upgrade',
+                username: user?.username || 'Player',
+                multiplier: winMultiplier,
+                winAmount: targetPrice,
+                extraInfo: `Предмет: ${savedName}`,
+              });
+              fetch(`${CONFIG.API_URL}/api/send_win_image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  user_id: userId,
+                  game_type: 'upgrade',
+                  multiplier: winMultiplier,
+                  win_amount: targetPrice,
+                  image_base64: imageBase64,
+                }),
+              }).catch(console.error);
+            } catch (err) {
+              console.error('[Upgrader] Не удалось отправить скриншот победы:', err);
+            }
           }
 
           // 4. Удаляем ВСЕ начальные NFT с сервера (асинхронно, не ломает UI).
