@@ -1949,7 +1949,7 @@ def open_case():
         item_id = str(uuid.uuid4())
 
         # Ставка (списание цены кейса) — в историю ВСЕГДА: kind='bet'.
-        record_bet(user_id, 'case', case_price, item_name=item.get('name', ''))
+        record_bet(user_id, 'case', case_price)
 
         # Если выпал TON — начисляем на баланс, а не в инвентарь
         if item.get("type") == "ton":
@@ -1958,7 +1958,7 @@ def open_case():
                 "UPDATE users SET balance_ton = ? WHERE id = ?",
                 (new_balance, user_id)
             )
-            # Выигрыш TON — в историю kind='win'.
+            # Выигрыш TON — в историю kind='win' (bet_type='ton').
             record_win(user_id, 'case', item['price'], item_name=item.get('name', ''))
         else:
             # Добавляем предмет в отдельную таблицу инвентаря
@@ -1971,8 +1971,9 @@ def open_case():
                 "UPDATE users SET balance_ton = ? WHERE id = ?",
                 (new_balance, user_id)
             )
-            # NFT ушёл в инвентарь — выигрыш в bet_history НЕ пишем.
-            # Ставка (kind='bet') уже записана выше для любого исхода.
+            # NFT (type != 'ton'): предмет ушёл в инвентарь, но в историю пишем
+            # выигрыш с названием предмета (kind='win', bet_type='nft').
+            record_win(user_id, 'case', item['price'], bet_type='nft', item_name=item.get('name', ''))
         conn.commit()
         if conn:
             conn.close()
