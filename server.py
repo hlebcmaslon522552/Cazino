@@ -496,6 +496,33 @@ def record_win(user_id, game_type, amount, bet_type="ton", item_name=""):
             conn.close()
 
 
+def record_loss(user_id, game_type, amount, bet_type="ton", item_name=""):
+    """Записывает проигрыш в историю ставок (kind='bet' — вкладка «Проигрыши»).
+
+    Вызывается, когда ставка сгорела: краш без кэшаута, неудачный апгрейд,
+    открытие кейса с не-TON предметом и т.п. Только запись в bet_history —
+    балансы и оборот не затрагиваются.
+    """
+    if amount <= 0:
+        return
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+
+        # 1. Запись в историю (kind='bet' — проигрыш для статистики/истории)
+        c.execute(
+            "INSERT INTO bet_history (user_id, game_type, bet_type, amount, item_name, kind) VALUES (?, ?, ?, ?, ?, 'bet')",
+            (str(user_id), str(game_type), str(bet_type), float(amount), str(item_name)),
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"[record_loss] error: {e}", flush=True)
+    finally:
+        if conn:
+            conn.close()
+
+
 def verify_init_data(init_data):
     """Проверяет подпись Telegram initData с использованием HMAC-SHA256.
     
@@ -781,7 +808,18 @@ def crash_game_loop():
                 CRASH_TIMER = 15
                 final_crash_point = CRASH_POINT
                 CRASH_POINT = 1.00
+                # Сохраняем снимок игроков ДО очистки списка — по нему записываем
+                # проигрыши тем, кто не успел забрать выигрыш до краша.
+                crash_players_snapshot = list(CRASH_PLAYERS)
                 CRASH_PLAYERS = []
+
+            # ── 4.1 Записываем проигрыши (ставка сгорела) ──
+            try:
+                for p in crash_players_snapshot:
+                    if not p.get('cashed_out', False):
+                        record_loss(p['user_id'], 'crash', p['bet'])
+            except Exception as loss_err:
+                print(f"[CrashLoop] record_loss error: {loss_err}", flush=True)
 
             # Отправляем пустой список игроков — очищаем таблицу на фронте
             socketio.emit('crash_players_update', {'players': []})
@@ -1635,6 +1673,9 @@ def play_game():
                 "floor": end_price,
                 "image": target_image
             }
+        else:
+            # Проигрыш: начальные NFT сгорели — сумма start_price ушла казино.
+            record_loss(user_id, 'upgrade', start_price, bet_type='nft', item_name=target_name)
 
         return jsonify({"success": success, "item": item, "user_id": user_id})
 
@@ -1904,6 +1945,9 @@ def open_case():
                 "UPDATE users SET balance_ton = ? WHERE id = ?",
                 (new_balance, user_id)
             )
+            # Проигрыш: выпал не-TON предмет — деньги за кейс потрачены
+            # (предмет ушёл в инвентарь, но ставка case_price сгорела).
+            record_loss(user_id, 'case', case_price, item_name=item.get('name', ''))
         conn.commit()
         if conn:
             conn.close()
