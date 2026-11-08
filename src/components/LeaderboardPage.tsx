@@ -7,24 +7,55 @@ interface LeaderboardEntry {
   prize?: number;
 }
 
+interface LeaderboardResponse {
+  leaderboard: LeaderboardEntry[];
+  next_reset_at: number;
+  days_left: number;
+}
+
 export function LeaderboardPage() {
   const [leaders, setLeaders] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nextResetAt, setNextResetAt] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState('');
 
+  // Загрузка данных лидерборда
   useEffect(() => {
     const lbUrl = `${CONFIG.API_URL}/api/leaderboard_turnover`;
     fetch(lbUrl, {
       headers: { 'ngrok-skip-browser-warning': 'true' },
     })
       .then(res => res.json())
-      .then((data: LeaderboardEntry[]) => {
-        setLeaders(data);
+      .then((data: LeaderboardResponse) => {
+        setLeaders(data.leaderboard);
+        setNextResetAt(data.next_reset_at);
         setLoading(false);
       })
       .catch(() => {
         setLoading(false);
       });
   }, []);
+
+  // Таймер обратного отсчета до сброса лидерборда
+  useEffect(() => {
+    if (!nextResetAt) return;
+
+    const updateTimer = () => {
+      const diff = nextResetAt - Date.now();
+      if (diff <= 0) {
+        setTimeLeft('Сброс...');
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      setTimeLeft(`${days} дн. ${hours} ч. ${minutes} мин.`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 60000); // Каждую минуту
+    return () => clearInterval(interval);
+  }, [nextResetAt]);
 
   const renderMedal = (rank: number) => {
     const icons: Record<number, string> = {
@@ -42,6 +73,34 @@ export function LeaderboardPage() {
       maxWidth: 500,
       margin: '0 auto',
     }}>
+      {/* Timer block — в самом верху */}
+      <div style={{
+        marginBottom: 20,
+        padding: 16,
+        background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(59, 130, 246, 0.2))',
+        borderRadius: 16,
+        textAlign: 'center',
+        border: '1px solid rgba(168, 85, 247, 0.5)',
+      }}>
+        <div style={{
+          fontSize: 14,
+          color: '#e5e7eb',
+          marginBottom: 8,
+          textTransform: 'uppercase',
+          letterSpacing: 1,
+        }}>
+          До сброса лидерборда
+        </div>
+        <div style={{
+          fontSize: 32,
+          fontWeight: 'bold',
+          color: '#fff',
+          textShadow: '0 0 10px rgba(168, 85, 247, 0.8)',
+        }}>
+          {timeLeft || 'Загрузка...'}
+        </div>
+      </div>
+
       {/* Header */}
       <div style={{
         textAlign: 'center',

@@ -2605,7 +2605,7 @@ def add_turnover():
 
 @app.route("/api/leaderboard_turnover", methods=["GET"])
 def leaderboard_turnover():
-    """Возвращает топ-15 юзеров по сумме оборота."""
+    """Возвращает топ-15 юзеров по сумме оборота + время до сброса."""
     conn = None
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -2618,6 +2618,18 @@ def leaderboard_turnover():
             LIMIT 15
         """)
         rows = c.fetchall()
+
+        # Получаем дату последнего сброса из config
+        c.execute("SELECT value FROM config WHERE key = 'last_reset'")
+        row = c.fetchone()
+        last_reset = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S") if row else datetime.now()
+        next_reset = last_reset + timedelta(days=RESET_INTERVAL_DAYS)
+        # Если next_reset в прошлом — сдвигаем на следующий периоод
+        while next_reset < datetime.now():
+            next_reset += timedelta(days=RESET_INTERVAL_DAYS)
+
+        days_left = (next_reset - datetime.now()).days
+
         leaderboard = [
             {
                 "username": row[0] or "Unknown",
@@ -2626,10 +2638,15 @@ def leaderboard_turnover():
             }
             for i, row in enumerate(rows)
         ]
-        return jsonify(leaderboard)
+
+        return jsonify({
+            "leaderboard": leaderboard,
+            "next_reset_at": int(next_reset.timestamp() * 1000),
+            "days_left": days_left,
+        })
     except Exception as e:
         print(f"[leaderboard_turnover] error: {e}")
-        return jsonify([])
+        return jsonify({"leaderboard": [], "next_reset_at": 0, "days_left": 0})
     finally:
         if conn:
             conn.close()
